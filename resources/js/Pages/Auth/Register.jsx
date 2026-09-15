@@ -12,8 +12,8 @@ import PasswordStrength from '@/Components/auth/PasswordStrength';
    Register brand panel content
    ───────────────────────────────────────────────────────────────────────── */
 const BENEFITS = [
-    { Icon: Library,  text: 'Akses koleksi digital modul dan kurikulum yang terpusat.' },
-    { Icon: Users,    text: 'Materi yang tersedia sesuai peran Anda di PERKEMI.' },
+    { Icon: Library, text: 'Akses koleksi digital modul dan kurikulum yang terpusat.' },
+    { Icon: Users, text: 'Materi yang tersedia sesuai peran Anda di PERKEMI.' },
     { Icon: BookOpen, text: 'Referensi yang mudah ditemukan dan dibaca kapan saja.' },
 ];
 
@@ -36,22 +36,22 @@ function RegisterBrandContent() {
    Register Page
    ───────────────────────────────────────────────────────────────────────── */
 const ROLES = [
-    { value: 'Peserta',       label: 'Peserta Penataran / Kenshi' },
-    { value: 'Pelatih',       label: 'Pelatih PERKEMI' },
-    { value: 'Penguji',       label: 'Penguji Kenaikan Tingkat' },
-    { value: 'Wasit',         label: 'Wasit Pertandingan' },
-    { value: 'Pemateri',      label: 'Pemateri / Narasumber' },
+    { value: 'Peserta', label: 'Peserta Penataran / Kenshi' },
+    { value: 'Pelatih', label: 'Pelatih PERKEMI' },
+    { value: 'Penguji', label: 'Penguji Kenaikan Tingkat' },
+    { value: 'Wasit', label: 'Wasit Pertandingan' },
+    { value: 'Pemateri', label: 'Pemateri / Narasumber' },
     { value: 'Penyelenggara', label: 'Penyelenggara Kegiatan' },
 ];
 
 export default function Register() {
     const { data, setData, post, processing, errors, reset } = useForm({
-        name:                  '',
-        email:                 '',
-        role:                  'Peserta',
-        password:              '',
+        name: '',
+        email: '',
+        role: 'Peserta',
+        password: '',
         password_confirmation: '',
-        terms:                 false,
+        terms: false,
     });
 
     const handleSubmit = (e) => {
@@ -112,7 +112,7 @@ export default function Register() {
                             name="name"
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
-                            placeholder="Contoh: Budi Santoso"
+                            placeholder="Contoh: Andy Pratama"
                             autoComplete="name"
                             required
                             aria-invalid={errors.name ? 'true' : 'false'}

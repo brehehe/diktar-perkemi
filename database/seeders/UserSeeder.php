@@ -22,7 +22,7 @@ class UserSeeder extends Seeder
                 'email_verified_at' => now(),
             ],
             [
-                'name' => 'Budi Santoso',
+                'name' => 'Andy Pratama',
                 'email' => 'demo@portal.test',
                 'role' => 'Peserta',
                 'password' => Hash::make('password'),

@@ -43,10 +43,10 @@ export default function FeaturedCollection({ materials = [] }) {
                             <div className="space-y-5">
                                 {/* Top badges */}
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-[#0E2747] text-white">
+                                    {/* <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-[#0E2747] text-white">
                                         <Sparkles className="w-3 h-3 text-[#EE9B25]" />
                                         {isPrimaryFeatured ? 'Sorotan Utama' : 'Pilihan Terbaru'}
-                                    </span>
+                                    </span> */}
                                     {primaryItem.category && (
                                         <span className="text-xs font-semibold text-[#112743] flex items-center gap-1.5">
                                             <span

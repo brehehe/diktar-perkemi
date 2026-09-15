@@ -26,6 +26,11 @@ import {
     BookOpen,
     AlertCircle,
     CheckCircle2,
+    Plus,
+    Trash2,
+    ListOrdered,
+    Target,
+    BookOpenCheck,
 } from 'lucide-react';
 
 function formatBytes(bytes, decimals = 2) {
@@ -65,6 +70,15 @@ export default function Edit({
         is_downloadable: Boolean(material.is_downloadable),
         is_featured: Boolean(material.is_featured),
         audiences: material.audiences || [],
+        key_points: Array.isArray(material.key_points) && material.key_points.length > 0
+            ? material.key_points
+            : ['', '', ''],
+        learning_objectives: Array.isArray(material.learning_objectives) && material.learning_objectives.length > 0
+            ? material.learning_objectives
+            : [''],
+        table_of_contents: Array.isArray(material.table_of_contents) && material.table_of_contents.length > 0
+            ? material.table_of_contents
+            : [{ title: '', page: 1 }],
     });
 
     // State for Replace File Flow
@@ -97,6 +111,57 @@ export default function Edit({
             current.push(audienceId);
         }
         setData('audiences', current);
+    };
+
+    // Key points helpers (3 to 6 points)
+    const updateKeyPoint = (index, value) => {
+        const next = [...data.key_points];
+        next[index] = value;
+        setData('key_points', next);
+    };
+
+    const addKeyPoint = () => {
+        if (data.key_points.length < 6) {
+            setData('key_points', [...data.key_points, '']);
+        }
+    };
+
+    const removeKeyPoint = (index) => {
+        const next = data.key_points.filter((_, i) => i !== index);
+        setData('key_points', next.length > 0 ? next : ['']);
+    };
+
+    // Learning objectives helpers
+    const updateObjective = (index, value) => {
+        const next = [...data.learning_objectives];
+        next[index] = value;
+        setData('learning_objectives', next);
+    };
+
+    const addObjective = () => {
+        setData('learning_objectives', [...data.learning_objectives, '']);
+    };
+
+    const removeObjective = (index) => {
+        const next = data.learning_objectives.filter((_, i) => i !== index);
+        setData('learning_objectives', next.length > 0 ? next : ['']);
+    };
+
+    // Table of contents helpers
+    const updateTocItem = (index, field, value) => {
+        const next = [...data.table_of_contents];
+        next[index] = { ...next[index], [field]: value };
+        setData('table_of_contents', next);
+    };
+
+    const addTocItem = () => {
+        const lastPage = data.table_of_contents[data.table_of_contents.length - 1]?.page || 1;
+        setData('table_of_contents', [...data.table_of_contents, { title: '', page: Number(lastPage) + 1 }]);
+    };
+
+    const removeTocItem = (index) => {
+        const next = data.table_of_contents.filter((_, i) => i !== index);
+        setData('table_of_contents', next.length > 0 ? next : [{ title: '', page: 1 }]);
     };
 
     const handleNewFileSelected = (e) => {
@@ -404,6 +469,160 @@ export default function Edit({
                             rows={5}
                             error={errors.description}
                         />
+                    </section>
+
+                    {/* SECTION: Metadata Reader (Poin Penting, Tujuan Pembelajaran, Daftar Isi) */}
+                    <section className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs p-6 space-y-6">
+                        <div className="border-b border-[#DCE7F3] pb-3">
+                            <h2 className="text-sm font-bold text-[#0E2747] flex items-center gap-2">
+                                <BookOpenCheck className="w-4 h-4 text-[#0B63CE]" />
+                                <span>Pengaturan Interaktif Reader Digital</span>
+                            </h2>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Kelola poin penting kurikulum, sasaran capaian kompetensi, dan daftar isi navigasi halaman buku.
+                            </p>
+                        </div>
+
+                        {/* 1. Poin Penting Materi (3 - 6 poin) */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-[#0E2747] uppercase tracking-wider">
+                                    Poin Penting Materi (3 - 6 Poin)
+                                </label>
+                                {data.key_points.length < 6 && (
+                                    <button
+                                        type="button"
+                                        onClick={addKeyPoint}
+                                        className="text-xs text-[#0B63CE] hover:text-[#0A3F82] font-semibold inline-flex items-center gap-1"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Tambah Poin</span>
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                {data.key_points.map((pt, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        <span className="w-6 text-center text-xs font-mono font-bold text-slate-400">
+                                            {idx + 1}.
+                                        </span>
+                                        <input
+                                            type="text"
+                                            value={pt}
+                                            onChange={(e) => updateKeyPoint(idx, e.target.value)}
+                                            placeholder={`Poin pembahasan ${idx + 1}...`}
+                                            className="flex-1 text-xs py-2 px-3 border border-[#DCE7F3] rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
+                                        />
+                                        {data.key_points.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeKeyPoint(idx)}
+                                                aria-label="Hapus poin"
+                                                className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 2. Tujuan Pembelajaran */}
+                        <div className="pt-4 border-t border-[#DCE7F3] space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-[#0E2747] uppercase tracking-wider flex items-center gap-1.5">
+                                    <Target className="w-3.5 h-3.5 text-[#0B63CE]" />
+                                    <span>Tujuan Pembelajaran</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={addObjective}
+                                    className="text-xs text-[#0B63CE] hover:text-[#0A3F82] font-semibold inline-flex items-center gap-1"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Tambah Tujuan</span>
+                                </button>
+                            </div>
+
+                            <div className="space-y-2">
+                                {data.learning_objectives.map((obj, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-[#0B63CE] ml-2 shrink-0" />
+                                        <input
+                                            type="text"
+                                            value={obj}
+                                            onChange={(e) => updateObjective(idx, e.target.value)}
+                                            placeholder={`Target kompetensi ${idx + 1}...`}
+                                            className="flex-1 text-xs py-2 px-3 border border-[#DCE7F3] rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
+                                        />
+                                        {data.learning_objectives.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeObjective(idx)}
+                                                aria-label="Hapus tujuan"
+                                                className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 3. Daftar Isi Manual */}
+                        <div className="pt-4 border-t border-[#DCE7F3] space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-[#0E2747] uppercase tracking-wider flex items-center gap-1.5">
+                                    <ListOrdered className="w-3.5 h-3.5 text-[#0B63CE]" />
+                                    <span>Daftar Isi Manual (Bab & Halaman)</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={addTocItem}
+                                    className="text-xs text-[#0B63CE] hover:text-[#0A3F82] font-semibold inline-flex items-center gap-1"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Tambah Bab</span>
+                                </button>
+                            </div>
+
+                            <div className="space-y-2">
+                                {data.table_of_contents.map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={item.title}
+                                            onChange={(e) => updateTocItem(idx, 'title', e.target.value)}
+                                            placeholder="Judul Bab / Pokok Bahasan..."
+                                            className="flex-1 text-xs py-2 px-3 border border-[#DCE7F3] rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
+                                        />
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <span className="text-xs text-slate-400">Hal.</span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={item.page}
+                                                onChange={(e) => updateTocItem(idx, 'page', Number(e.target.value))}
+                                                className="w-16 text-center text-xs py-2 px-2 border border-[#DCE7F3] rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
+                                            />
+                                        </div>
+                                        {data.table_of_contents.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeTocItem(idx)}
+                                                aria-label="Hapus bab"
+                                                className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </section>
                 </div>
 

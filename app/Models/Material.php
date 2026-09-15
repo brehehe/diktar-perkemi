@@ -114,6 +114,22 @@ class Material extends Model
     }
 
     /**
+     * Reading progress records for this material.
+     */
+    public function readingProgress(): HasMany
+    {
+        return $this->hasMany(ReadingProgress::class);
+    }
+
+    /**
+     * Bookmarks created for this material.
+     */
+    public function bookmarks(): HasMany
+    {
+        return $this->hasMany(Bookmark::class);
+    }
+
+    /**
      * Scope for published materials.
      */
     public function scopePublished(Builder $query): Builder

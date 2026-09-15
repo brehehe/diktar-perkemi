@@ -229,7 +229,7 @@ test('draft material cannot be accessed by normal reader but admin can preview i
     $responseAdmin = $this->actingAs($admin)->get("/koleksi/{$material->slug}/baca");
     $responseAdmin->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('Reader/Show')
+            ->component('Portal/Reader/Show')
             ->where('material.status', 'draft')
         );
 });

@@ -43,6 +43,13 @@ class UpdateMaterialRequest extends FormRequest
             'is_featured' => ['nullable', 'boolean'],
             'audiences' => ['nullable', 'array'],
             'audiences.*' => ['exists:audiences,id'],
+            'key_points' => ['nullable', 'array'],
+            'key_points.*' => ['nullable', 'string', 'max:255'],
+            'learning_objectives' => ['nullable', 'array'],
+            'learning_objectives.*' => ['nullable', 'string', 'max:255'],
+            'table_of_contents' => ['nullable', 'array'],
+            'table_of_contents.*.title' => ['nullable', 'string', 'max:255'],
+            'table_of_contents.*.page' => ['nullable', 'integer', 'min:1'],
         ];
     }
 

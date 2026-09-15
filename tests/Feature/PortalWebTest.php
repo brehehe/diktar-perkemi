@@ -361,7 +361,7 @@ test('reader route enforces authentication and role authorization', function () 
     $authorizedResponse = $this->actingAs($wasit)->get("/koleksi/{$material->slug}/baca");
     $authorizedResponse->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('Reader/Show')
+            ->component('Portal/Reader/Show')
             ->where('material.title', 'Buku Wasit Rahasia')
             ->where('has_file', true)
         );

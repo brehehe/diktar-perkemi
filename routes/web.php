@@ -41,6 +41,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/koleksi/{slug}/baca', [ReaderController::class, 'show'])->name('reader.show');
     Route::get('/koleksi/{slug}/file', [ReaderController::class, 'streamFile'])->name('reader.file');
     Route::get('/koleksi/{slug}/unduh', [ReaderController::class, 'downloadFile'])->name('reader.download');
+    Route::post('/koleksi/{slug}/progres', [ReaderController::class, 'saveProgress'])->name('reader.progress');
+    Route::post('/koleksi/{slug}/bookmark', [ReaderController::class, 'storeBookmark'])->name('reader.bookmark.store');
+    Route::delete('/koleksi/{slug}/bookmark/{bookmark}', [ReaderController::class, 'destroyBookmark'])->name('reader.bookmark.destroy');
 });
 
 Route::middleware(['auth', EnsureUserIsAdmin::class])->prefix('admin')->name('admin.')->group(function () {

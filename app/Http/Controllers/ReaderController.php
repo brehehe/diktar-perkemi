@@ -3,7 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\Bookmark;
 use App\Models\Material;
+use App\Models\ReadingProgress;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
@@ -49,7 +53,44 @@ class ReaderController extends Controller
         $user = $request->user();
         $canDownload = $user ? $user->can('download', $material) : false;
 
-        return Inertia::render('Reader/Show', [
+        $lastReadPage = 1;
+        $bookmarks = [];
+
+        if ($user) {
+            $progress = ReadingProgress::where('user_id', $user->id)
+                ->where('material_id', $material->id)
+                ->first();
+
+            if ($progress) {
+                $lastReadPage = $progress->current_page ?? 1;
+            }
+
+            $bookmarks = Bookmark::where('user_id', $user->id)
+                ->where('material_id', $material->id)
+                ->orderBy('page_number')
+                ->get(['id', 'page_number', 'position_data', 'note', 'created_at'])
+                ->map(fn (Bookmark $b) => [
+                    'id' => $b->id,
+                    'page_number' => $b->page_number,
+                    'title' => $b->title,
+                    'note' => $b->note,
+                    'created_at' => $b->created_at?->toDateTimeString(),
+                ])
+                ->values()
+                ->all();
+        }
+
+        $metadata = is_array($material->metadata) ? $material->metadata : [];
+        $tableOfContents = $metadata['table_of_contents'] ?? [];
+        $keyPoints = $metadata['key_points'] ?? [];
+        $learningObjectives = $metadata['learning_objectives'] ?? [];
+        $targetAudiences = $material->audiences->map(fn ($aud) => [
+            'id' => $aud->id,
+            'name' => $aud->name,
+            'code' => $aud->code,
+        ]);
+
+        return Inertia::render('Portal/Reader/Show', [
             'material' => [
                 'id' => $material->id,
                 'title' => $material->title,
@@ -82,6 +123,12 @@ class ReaderController extends Controller
             'file_url' => "/koleksi/{$material->slug}/file",
             'download_url' => "/koleksi/{$material->slug}/unduh",
             'can_download' => $canDownload,
+            'last_read_page' => $lastReadPage,
+            'bookmarks' => $bookmarks,
+            'table_of_contents' => $tableOfContents,
+            'key_points' => $keyPoints,
+            'learning_objectives' => $learningObjectives,
+            'target_audiences' => $targetAudiences,
             'related_materials' => $relatedMaterials,
         ]);
     }
@@ -149,5 +196,117 @@ class ReaderController extends Controller
                 'X-Content-Type-Options' => 'nosniff',
             ]
         );
+    }
+
+    /**
+     * Save reading progress for authenticated user.
+     */
+    public function saveProgress(Request $request, string $slug): JsonResponse
+    {
+        $material = Material::where('slug', $slug)->firstOrFail();
+        Gate::authorize('read', $material);
+
+        $validated = $request->validate([
+            'page' => ['required', 'integer', 'min:1'],
+            'total_pages' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $page = (int) $validated['page'];
+        $totalPages = isset($validated['total_pages']) ? (int) $validated['total_pages'] : null;
+        $percent = ($totalPages && $totalPages > 0)
+            ? (int) min(100, round(($page / $totalPages) * 100))
+            : 0;
+
+        $progress = ReadingProgress::updateOrCreate(
+            [
+                'user_id' => $request->user()->id,
+                'material_id' => $material->id,
+            ],
+            [
+                'current_page' => $page,
+                'total_pages' => $totalPages,
+                'progress_percent' => $percent,
+                'last_read_at' => now(),
+                'started_at' => now(),
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'progress' => [
+                'user_id' => $progress->user_id,
+                'material_id' => $progress->material_id,
+                'last_page' => $progress->current_page,
+                'total_pages' => $progress->total_pages,
+                'percentage' => $progress->progress_percent,
+            ],
+        ]);
+    }
+
+    /**
+     * Store a bookmark for authenticated user.
+     */
+    public function storeBookmark(Request $request, string $slug): JsonResponse|RedirectResponse
+    {
+        $material = Material::where('slug', $slug)->firstOrFail();
+        Gate::authorize('read', $material);
+
+        $validated = $request->validate([
+            'page_number' => ['required', 'integer', 'min:1'],
+            'title' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $pageNumber = (int) $validated['page_number'];
+        $title = ! empty($validated['title']) ? trim($validated['title']) : "Halaman {$pageNumber}";
+
+        $bookmark = Bookmark::withTrashed()->updateOrCreate(
+            [
+                'user_id' => $request->user()->id,
+                'material_id' => $material->id,
+                'page_number' => $pageNumber,
+            ],
+            [
+                'position_data' => ['title' => $title],
+                'note' => $validated['note'] ?? null,
+                'deleted_at' => null,
+            ]
+        );
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'bookmark' => [
+                    'id' => $bookmark->id,
+                    'page_number' => $bookmark->page_number,
+                    'title' => $bookmark->title,
+                    'note' => $bookmark->note,
+                    'created_at' => $bookmark->created_at?->toDateTimeString(),
+                ],
+            ]);
+        }
+
+        return back()->with('success', 'Penanda halaman berhasil disimpan.');
+    }
+
+    /**
+     * Remove a bookmark for authenticated user.
+     */
+    public function destroyBookmark(Request $request, string $slug, Bookmark $bookmark): JsonResponse|RedirectResponse
+    {
+        $material = Material::where('slug', $slug)->firstOrFail();
+        Gate::authorize('read', $material);
+
+        if ($bookmark->user_id !== $request->user()->id || $bookmark->material_id !== $material->id) {
+            abort(403, 'Akses penanda halaman tidak diizinkan.');
+        }
+
+        $bookmark->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return back()->with('success', 'Penanda halaman berhasil dihapus.');
     }
 }

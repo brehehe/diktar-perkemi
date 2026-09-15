@@ -243,6 +243,28 @@ class MaterialSeeder extends Seeder
                 'published_at' => now()->subDays(3),
                 'primary_category' => 'modul-penataran',
                 'audiences' => ['coach', 'organizer', 'speaker'],
+                'metadata' => [
+                    'key_points' => [
+                        'Standar kurikulum sebagai dasar pelaksanaan penataran pelatih daerah.',
+                        'Kompetensi yang perlu dicapai oleh peserta penataran.',
+                        'Susunan materi, metode pembelajaran, dan evaluasi.',
+                        'Peran pelatih dalam menjaga mutu pembinaan.',
+                        'Pedoman penerapan kurikulum dalam kegiatan penataran daerah.',
+                    ],
+                    'learning_objectives' => [
+                        'Memahami filosofi, silabus baku, dan standarisasi kepelatihan PERKEMI.',
+                        'Mampu menyusun program periodisasi latihan fisik dan teknik kenshi daerah.',
+                        'Menjaga konsistensi pembinaan etika budo dan keselamatan latihan.',
+                    ],
+                    'table_of_contents' => [
+                        ['title' => 'Bab I: Pendahuluan & Filosofi Pendidikan Pelatih', 'page' => 1],
+                        ['title' => 'Bab II: Standar Kompetensi Pelatih PERKEMI', 'page' => 3],
+                        ['title' => 'Bab III: Metodologi Pengajaran Kihon & Waza', 'page' => 5],
+                        ['title' => 'Bab IV: Pembinaan Fisik, Mental, dan Budo', 'page' => 8],
+                        ['title' => 'Bab V: Manajemen Evaluasi & Ujian Tingkat', 'page' => 10],
+                        ['title' => 'Lampiran: Form Rencana Latihan & Penilaian', 'page' => 12],
+                    ],
+                ],
             ],
             [
                 'title' => 'Rubrik Penilaian Embu Beregu & Pasangan',
@@ -318,7 +340,7 @@ class MaterialSeeder extends Seeder
                 'author' => 'Tim Penyusun Komisi Perwasitan',
                 'keywords' => 'draf, silabus, wasit daerah',
                 'admin_notes' => 'Draf internal belum diverifikasi.',
-                'summary' => 'Rancangan silabus awal untuk penyelarasan ujian wasit tingkat kota/kabupaten.',
+                'summary' => 'Rancangan silabus awa l untuk penyelarasan ujian wasit tingkat kota/kabupaten.',
                 'description' => 'Konsep awal materi perwasitan daerah yang masih memerlukan masukan pengprov.',
                 'cover_path' => '/images/cover-2.jpg',
                 'type' => 'module',
@@ -397,14 +419,13 @@ class MaterialSeeder extends Seeder
                 Storage::disk('local')->makeDirectory($relativeDir);
             }
 
-            // If file does not exist, write the minimal valid PDF
-            if (! Storage::disk('local')->exists($relativePath)) {
-                Storage::disk('local')->put($relativePath, $minimalPdfContent);
-            }
+            // Generate multi-page PDF content for realistic reader testing
+            $pagesCount = min(12, max(6, (int) ($data['page_count'] ? ceil($data['page_count'] / 10) : 12)));
+            $generatedPdfContent = $this->generateSamplePdf($data['title'], $pagesCount);
 
-            $sizeBytes = Storage::disk('local')->exists($relativePath)
-                ? Storage::disk('local')->size($relativePath)
-                : strlen($minimalPdfContent);
+            // Always write the valid multi-page PDF content
+            Storage::disk('local')->put($relativePath, $generatedPdfContent);
+            $sizeBytes = strlen($generatedPdfContent);
 
             MaterialFile::updateOrCreate(
                 [
@@ -419,7 +440,7 @@ class MaterialSeeder extends Seeder
                     'mime_type' => 'application/pdf',
                     'extension' => 'pdf',
                     'size_bytes' => $sizeBytes,
-                    'page_count' => $material->page_count ?: 50,
+                    'page_count' => $pagesCount,
                     'sort_order' => 0,
                     'version' => 1,
                     'is_active' => true,
@@ -427,5 +448,57 @@ class MaterialSeeder extends Seeder
                 ]
             );
         }
+    }
+
+    /**
+     * Generate valid multi-page PDF binary for testing reader.
+     */
+    private function generateSamplePdf(string $title, int $numPages = 12): string
+    {
+        $out = "%PDF-1.4\n";
+        $offsets = [];
+        $objCount = 2 + ($numPages * 2);
+
+        $offsets[1] = strlen($out);
+        $out .= "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+
+        $kids = [];
+        for ($i = 1; $i <= $numPages; $i++) {
+            $pageObjNum = 2 + (($i * 2) - 1);
+            $kids[] = "{$pageObjNum} 0 R";
+        }
+        $kidsStr = implode(' ', $kids);
+
+        $offsets[2] = strlen($out);
+        $out .= "2 0 obj\n<< /Type /Pages /Kids [{$kidsStr}] /Count {$numPages} >>\nendobj\n";
+
+        for ($i = 1; $i <= $numPages; $i++) {
+            $pageObjNum = 2 + (($i * 2) - 1);
+            $contentObjNum = $pageObjNum + 1;
+
+            $offsets[$pageObjNum] = strlen($out);
+            $out .= "{$pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> /F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> >> >> /Contents {$contentObjNum} 0 R >>\nendobj\n";
+
+            $escapedTitle = addcslashes($title, '()\\');
+            $pageText = "BT /F2 18 Tf 72 720 Td ($escapedTitle) Tj ET "
+                .'BT /F1 12 Tf 72 680 Td (Pustaka Penataran PERKEMI - Dokumen Resmi Pembinaan Kenshi) Tj ET '
+                ."BT /F2 14 Tf 72 640 Td (Halaman {$i} dari {$numPages}) Tj ET "
+                .'BT /F1 11 Tf 72 600 Td (Materi berstatus resmi dan dilindungi hak cipta Persaudaraan Shorinji Kempo Indonesia.) Tj ET '
+                .'BT /F1 11 Tf 72 570 Td (Gunakan pedoman ini untuk standardisasi kurikulum dan kepelatihan berjenjang di dojo.) Tj ET';
+
+            $len = strlen($pageText);
+            $offsets[$contentObjNum] = strlen($out);
+            $out .= "{$contentObjNum} 0 obj\n<< /Length {$len} >>\nstream\n{$pageText}\nendstream\nendobj\n";
+        }
+
+        $xrefOffset = strlen($out);
+        $out .= "xref\n0 ".($objCount + 1)."\n";
+        $out .= "0000000000 65535 f \n";
+        for ($i = 1; $i <= $objCount; $i++) {
+            $out .= sprintf("%010d 00000 n \n", $offsets[$i]);
+        }
+        $out .= "trailer\n<< /Size ".($objCount + 1)." /Root 1 0 R >>\nstartxref\n{$xrefOffset}\n%%EOF\n";
+
+        return $out;
     }
 }

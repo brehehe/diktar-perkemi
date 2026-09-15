@@ -317,6 +317,9 @@ class MaterialController extends Controller
                 'is_featured' => (bool) $material->is_featured,
                 'category_id' => $selectedCategoryId,
                 'audiences' => $selectedAudiences,
+                'key_points' => $material->metadata['key_points'] ?? [],
+                'learning_objectives' => $material->metadata['learning_objectives'] ?? [],
+                'table_of_contents' => $material->metadata['table_of_contents'] ?? [],
             ],
             'active_file' => $activeFile,
             'file_history' => $fileHistory,
@@ -374,6 +377,18 @@ class MaterialController extends Controller
             'is_downloadable' => $request->boolean('is_downloadable'),
             'is_featured' => $request->boolean('is_featured'),
         ]);
+
+        $metadata = is_array($material->metadata) ? $material->metadata : [];
+        if ($request->has('key_points')) {
+            $metadata['key_points'] = array_values(array_filter(array_map('trim', (array) $request->input('key_points'))));
+        }
+        if ($request->has('learning_objectives')) {
+            $metadata['learning_objectives'] = array_values(array_filter(array_map('trim', (array) $request->input('learning_objectives'))));
+        }
+        if ($request->has('table_of_contents')) {
+            $metadata['table_of_contents'] = array_values(array_filter((array) $request->input('table_of_contents'), fn ($item) => ! empty($item['title'])));
+        }
+        $material->metadata = $metadata;
 
         if (! $wasPublished && $nowPublished) {
             $material->published_at = now();

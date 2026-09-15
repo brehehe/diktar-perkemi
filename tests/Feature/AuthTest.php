@@ -3,6 +3,7 @@
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -10,11 +11,7 @@ test('login screen can be rendered', function () {
     $response = $this->get('/login');
 
     $response->assertStatus(200);
-    $response->assertSee('Masuk ke Portal');
-    $response->assertSee('DIGITAL LEARNING CENTER');
-    $response->assertSee('Email atau Nama Pengguna');
-    $response->assertSee('Kata Sandi');
-    $response->assertSee('Masuk Portal');
+    $response->assertInertia(fn (Assert $page) => $page->component('Auth/Login'));
 });
 
 test('users can authenticate using the login screen', function () {
@@ -76,11 +73,7 @@ test('registration screen can be rendered', function () {
     $response = $this->get('/register');
 
     $response->assertStatus(200);
-    $response->assertSee('Daftar Akun');
-    $response->assertSee('BUAT AKUN');
-    $response->assertSee('Nama Lengkap');
-    $response->assertSee('Peran Utama dalam Kegiatan PERKEMI');
-    $response->assertSee('Buat Akun');
+    $response->assertInertia(fn (Assert $page) => $page->component('Auth/Register'));
 });
 
 test('new users can register with role and are authenticated', function () {

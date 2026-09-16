@@ -12,6 +12,7 @@ use App\Models\Audience;
 use App\Models\Category;
 use App\Models\Material;
 use App\Models\MaterialFile;
+use App\Services\MaterialSourceService;
 use Exception;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -58,6 +59,10 @@ class MaterialController extends Controller
             $query->where('type', $request->input('type'));
         }
 
+        if ($request->filled('source_type')) {
+            $query->where('source_type', $request->input('source_type'));
+        }
+
         if ($request->filled('year')) {
             $query->where('publication_year', (int) $request->input('year'));
         }
@@ -70,16 +75,26 @@ class MaterialController extends Controller
             'author' => $m->author ?: '-',
             'type' => $m->type,
             'type_label' => $m->type_label,
+            'source_type' => $m->source_type ?? 'uploaded_pdf',
+            'source_type_label' => $m->source_type_label,
+            'source_badge_class' => $m->source_badge_class,
+            'external_url' => $m->external_url,
+            'video_provider' => $m->video_provider,
             'status' => $m->status,
             'status_label' => $m->status_label,
             'cover_path' => $m->cover_path,
             'publication_year' => $m->publication_year,
             'is_downloadable' => $m->is_downloadable,
+            'allow_download' => (bool) ($m->allow_download || $m->is_downloadable),
             'is_featured' => $m->is_featured,
             'has_file' => $m->hasActiveFile(),
             'file_status' => $m->file_status,
             'file_status_label' => $m->file_status_label,
-            'file_format' => 'PDF',
+            'file_format' => match ($m->source_type) {
+                'video' => 'Video',
+                'external_link' => 'Link',
+                default => 'PDF',
+            },
             'active_version' => $m->activeFile ? 'v'.$m->activeFile->version.'.0' : '-',
             'file_size' => $m->activeFile ? $m->activeFile->formatted_size : '-',
             'category' => $m->categories->first() ? [
@@ -100,6 +115,12 @@ class MaterialController extends Controller
             ->orderByDesc('publication_year')
             ->pluck('publication_year');
 
+        $sourceOptions = [
+            ['value' => 'uploaded_pdf', 'label' => 'Upload File PDF', 'description' => 'Unggah berkas PDF buku digital ke penyimpanan privat PERKEMI.'],
+            ['value' => 'external_link', 'label' => 'Tautan Buku Digital', 'description' => 'Tautkan buku digital dari URL HTTPS eksternal resmi.'],
+            ['value' => 'video', 'label' => 'Video Pembelajaran', 'description' => 'Sematkan video pembelajaran resmi dari YouTube, Shorts, atau Vimeo.'],
+        ];
+
         return Inertia::render('Admin/Collections/Index', [
             'materials' => $materials,
             'categories' => $categories,
@@ -109,8 +130,10 @@ class MaterialController extends Controller
                 'status' => $request->input('status', ''),
                 'category' => $request->input('category', ''),
                 'type' => $request->input('type', ''),
+                'source_type' => $request->input('source_type', ''),
                 'year' => $request->input('year', ''),
             ],
+            'source_types' => $sourceOptions,
             'material_types' => [
                 ['value' => 'module', 'label' => 'Modul Penataran'],
                 ['value' => 'book', 'label' => 'Buku & Monograf'],
@@ -141,10 +164,17 @@ class MaterialController extends Controller
             ->orderBy('id')
             ->get(['id', 'name', 'code']);
 
+        $sourceOptions = [
+            ['value' => 'uploaded_pdf', 'label' => 'Upload File PDF', 'description' => 'Unggah dokumen buku digital PDF ke penyimpanan privat portal.'],
+            ['value' => 'external_link', 'label' => 'Tautan Buku Digital', 'description' => 'Tautkan buku digital dari URL HTTPS resmi eksternal.'],
+            ['value' => 'video', 'label' => 'Video Pembelajaran', 'description' => 'Video rekaman pembelajaran resmi dari YouTube, Shorts, atau Vimeo.'],
+        ];
+
         return Inertia::render('Admin/Collections/Create', [
             'categories' => $categories,
             'audiences' => $audiences,
             'max_file_size_mb' => round(config('pustaka.max_file_size_kb', 51200) / 1024),
+            'source_types' => $sourceOptions,
             'material_types' => [
                 ['value' => 'module', 'label' => 'Modul Penataran'],
                 ['value' => 'book', 'label' => 'Buku & Monograf'],
@@ -187,14 +217,74 @@ class MaterialController extends Controller
             $counter++;
         }
 
+        $sourceType = $validated['source_type'] ?? 'uploaded_pdf';
+        $externalUrl = null;
+        $externalSourceName = null;
+        $externalOpenMode = 'new_tab';
+        $videoProvider = null;
+        $videoId = null;
+        $videoUrl = null;
+        $videoAllowPortal = true;
+
+        if ($sourceType === 'external_link') {
+            $externalUrl = $validated['external_url'] ?? null;
+            $externalSourceName = $validated['external_source_name'] ?? null;
+            $externalOpenMode = $validated['external_open_mode'] ?? 'new_tab';
+        } elseif ($sourceType === 'video') {
+            $rawVideoUrl = $validated['video_url'] ?? null;
+            $parsedVideo = MaterialSourceService::parseVideoUrl($rawVideoUrl);
+            if ($parsedVideo) {
+                $videoProvider = $parsedVideo['provider'];
+                $videoId = $parsedVideo['video_id'];
+                $videoUrl = $rawVideoUrl;
+            }
+            $videoAllowPortal = $request->boolean('video_allow_portal', true);
+        }
+
+        $keyPoints = $request->filled('key_points')
+            ? array_values(array_filter(array_map('trim', (array) $request->input('key_points'))))
+            : [];
+        $learningObjectives = $request->filled('learning_objectives')
+            ? array_values(array_filter(array_map('trim', (array) $request->input('learning_objectives'))))
+            : [];
+
+        $allowDownload = $request->boolean('allow_download') || $request->boolean('is_downloadable');
+
         try {
-            $material = DB::transaction(function () use ($validated, $slug, $coverPath, $request, $disk, &$savedFilePath) {
+            $material = DB::transaction(function () use (
+                $validated,
+                $slug,
+                $coverPath,
+                $request,
+                $disk,
+                $sourceType,
+                $externalUrl,
+                $externalSourceName,
+                $externalOpenMode,
+                $videoProvider,
+                $videoId,
+                $videoUrl,
+                $videoAllowPortal,
+                $allowDownload,
+                $keyPoints,
+                $learningObjectives,
+                &$savedFilePath
+            ) {
                 $created = Material::create([
                     'title' => $validated['title'],
                     'slug' => $slug,
                     'code' => $validated['code'] ?? strtoupper(Str::random(6)),
                     'author' => $validated['author'] ?? null,
                     'type' => $validated['type'],
+                    'source_type' => $sourceType,
+                    'external_url' => $externalUrl,
+                    'external_source_name' => $externalSourceName,
+                    'external_open_mode' => $externalOpenMode,
+                    'video_provider' => $videoProvider,
+                    'video_id' => $videoId,
+                    'video_url' => $videoUrl,
+                    'video_allow_portal' => $videoAllowPortal,
+                    'access_scope' => $validated['access_scope'] ?? 'all',
                     'publication_year' => $validated['publication_year'] ?? date('Y'),
                     'page_count' => $validated['page_count'] ?? null,
                     'summary' => $validated['summary'] ?? null,
@@ -203,10 +293,17 @@ class MaterialController extends Controller
                     'admin_notes' => $validated['admin_notes'] ?? null,
                     'status' => $validated['status'],
                     'cover_path' => $coverPath,
-                    'is_downloadable' => $request->boolean('is_downloadable'),
+                    'is_downloadable' => $allowDownload,
+                    'allow_download' => $allowDownload,
                     'is_featured' => $request->boolean('is_featured'),
                     'created_by' => auth()->id() ?? 1,
                     'published_at' => $validated['status'] === 'published' ? now() : null,
+                    'key_points' => $keyPoints,
+                    'learning_objectives' => $learningObjectives,
+                    'metadata' => [
+                        'key_points' => $keyPoints,
+                        'learning_objectives' => $learningObjectives,
+                    ],
                 ]);
 
                 $created->categories()->sync([$validated['category_id'] => ['is_primary' => true]]);
@@ -215,8 +312,8 @@ class MaterialController extends Controller
                     $created->audiences()->sync((array) $request->input('audiences'));
                 }
 
-                // Handle private book PDF upload
-                if ($request->hasFile('book_file')) {
+                // Handle private book PDF upload for uploaded_pdf source
+                if ($sourceType === 'uploaded_pdf' && $request->hasFile('book_file')) {
                     $bookFile = $request->file('book_file');
                     $storageName = 'v1_'.Str::random(24).'.pdf';
                     $targetDirectory = "books/{$created->id}";
@@ -252,10 +349,11 @@ class MaterialController extends Controller
 
         ActivityLog::record('material.created', $material, [
             'title' => $material->title,
+            'source_type' => $material->source_type,
             'status' => $material->status,
         ]);
 
-        return redirect()->route('admin.materials.index')->with('success', 'Materi "'.$material->title.'" dan berkas digital berhasil disimpan.');
+        return redirect()->route('admin.materials.index')->with('success', 'Materi "'.$material->title.'" berhasil disimpan.');
     }
 
     /**
@@ -297,6 +395,15 @@ class MaterialController extends Controller
             'uploader_name' => $f->uploader?->name ?? 'Administrator',
         ]);
 
+        $keyPoints = $material->key_points ?: ($material->metadata['key_points'] ?? []);
+        $learningObjectives = $material->learning_objectives ?: ($material->metadata['learning_objectives'] ?? []);
+
+        $sourceOptions = [
+            ['value' => 'uploaded_pdf', 'label' => 'Upload File PDF', 'description' => 'Unggah dokumen buku digital PDF ke penyimpanan privat portal.'],
+            ['value' => 'external_link', 'label' => 'Tautan Buku Digital', 'description' => 'Tautkan buku digital dari URL HTTPS resmi eksternal.'],
+            ['value' => 'video', 'label' => 'Video Pembelajaran', 'description' => 'Video rekaman pembelajaran resmi dari YouTube, Shorts, atau Vimeo.'],
+        ];
+
         return Inertia::render('Admin/Collections/Edit', [
             'material' => [
                 'id' => $material->id,
@@ -305,6 +412,15 @@ class MaterialController extends Controller
                 'code' => $material->code,
                 'author' => $material->author ?? '',
                 'type' => $material->type,
+                'source_type' => $material->source_type ?? 'uploaded_pdf',
+                'external_url' => $material->external_url ?? '',
+                'external_source_name' => $material->external_source_name ?? '',
+                'external_open_mode' => $material->external_open_mode ?? 'new_tab',
+                'video_provider' => $material->video_provider ?? '',
+                'video_id' => $material->video_id ?? '',
+                'video_url' => $material->video_url ?? '',
+                'video_allow_portal' => (bool) ($material->video_allow_portal ?? true),
+                'access_scope' => $material->access_scope ?? 'all',
                 'publication_year' => $material->publication_year,
                 'page_count' => $material->page_count,
                 'summary' => $material->summary,
@@ -313,12 +429,13 @@ class MaterialController extends Controller
                 'admin_notes' => $material->admin_notes ?? '',
                 'status' => $material->status,
                 'cover_path' => $material->cover_path,
-                'is_downloadable' => (bool) $material->is_downloadable,
+                'is_downloadable' => (bool) ($material->allow_download || $material->is_downloadable),
+                'allow_download' => (bool) ($material->allow_download || $material->is_downloadable),
                 'is_featured' => (bool) $material->is_featured,
                 'category_id' => $selectedCategoryId,
                 'audiences' => $selectedAudiences,
-                'key_points' => $material->metadata['key_points'] ?? [],
-                'learning_objectives' => $material->metadata['learning_objectives'] ?? [],
+                'key_points' => $keyPoints,
+                'learning_objectives' => $learningObjectives,
                 'table_of_contents' => $material->metadata['table_of_contents'] ?? [],
             ],
             'active_file' => $activeFile,
@@ -326,6 +443,7 @@ class MaterialController extends Controller
             'categories' => $categories,
             'audiences' => $audiences,
             'max_file_size_mb' => round(config('pustaka.max_file_size_kb', 51200) / 1024),
+            'source_types' => $sourceOptions,
             'material_types' => [
                 ['value' => 'module', 'label' => 'Modul Penataran'],
                 ['value' => 'book', 'label' => 'Buku & Monograf'],
@@ -359,31 +477,70 @@ class MaterialController extends Controller
             $material->cover_path = '/images/'.$filename;
         }
 
+        $sourceType = $validated['source_type'] ?? $material->source_type ?? 'uploaded_pdf';
+        $externalUrl = null;
+        $externalSourceName = null;
+        $externalOpenMode = 'new_tab';
+        $videoProvider = null;
+        $videoId = null;
+        $videoUrl = null;
+        $videoAllowPortal = true;
+
+        if ($sourceType === 'external_link') {
+            $externalUrl = $validated['external_url'] ?? null;
+            $externalSourceName = $validated['external_source_name'] ?? null;
+            $externalOpenMode = $validated['external_open_mode'] ?? 'new_tab';
+        } elseif ($sourceType === 'video') {
+            $rawVideoUrl = $validated['video_url'] ?? null;
+            $parsedVideo = MaterialSourceService::parseVideoUrl($rawVideoUrl);
+            if ($parsedVideo) {
+                $videoProvider = $parsedVideo['provider'];
+                $videoId = $parsedVideo['video_id'];
+                $videoUrl = $rawVideoUrl;
+            }
+            $videoAllowPortal = $request->boolean('video_allow_portal', true);
+        }
+
         $wasPublished = $material->status === 'published';
         $nowPublished = $validated['status'] === 'published';
+        $allowDownload = $request->boolean('allow_download') || $request->boolean('is_downloadable');
 
         $material->fill([
             'title' => $validated['title'],
             'code' => $validated['code'] ?? $material->code,
             'author' => $validated['author'] ?? null,
             'type' => $validated['type'],
-            'publication_year' => $validated['publication_year'],
-            'page_count' => $validated['page_count'],
-            'summary' => $validated['summary'],
-            'description' => $validated['description'],
+            'source_type' => $sourceType,
+            'external_url' => $externalUrl,
+            'external_source_name' => $externalSourceName,
+            'external_open_mode' => $externalOpenMode,
+            'video_provider' => $videoProvider,
+            'video_id' => $videoId,
+            'video_url' => $videoUrl,
+            'video_allow_portal' => $videoAllowPortal,
+            'access_scope' => $validated['access_scope'] ?? $material->access_scope ?? 'all',
+            'publication_year' => $validated['publication_year'] ?? $material->publication_year,
+            'page_count' => $validated['page_count'] ?? $material->page_count,
+            'summary' => $validated['summary'] ?? $material->summary,
+            'description' => $validated['description'] ?? $material->description,
             'keywords' => $validated['keywords'] ?? null,
             'admin_notes' => $validated['admin_notes'] ?? null,
             'status' => $validated['status'],
-            'is_downloadable' => $request->boolean('is_downloadable'),
+            'is_downloadable' => $allowDownload,
+            'allow_download' => $allowDownload,
             'is_featured' => $request->boolean('is_featured'),
         ]);
 
         $metadata = is_array($material->metadata) ? $material->metadata : [];
         if ($request->has('key_points')) {
-            $metadata['key_points'] = array_values(array_filter(array_map('trim', (array) $request->input('key_points'))));
+            $cleanedPoints = array_values(array_filter(array_map('trim', (array) $request->input('key_points'))));
+            $metadata['key_points'] = $cleanedPoints;
+            $material->key_points = $cleanedPoints;
         }
         if ($request->has('learning_objectives')) {
-            $metadata['learning_objectives'] = array_values(array_filter(array_map('trim', (array) $request->input('learning_objectives'))));
+            $cleanedObjectives = array_values(array_filter(array_map('trim', (array) $request->input('learning_objectives'))));
+            $metadata['learning_objectives'] = $cleanedObjectives;
+            $material->learning_objectives = $cleanedObjectives;
         }
         if ($request->has('table_of_contents')) {
             $metadata['table_of_contents'] = array_values(array_filter((array) $request->input('table_of_contents'), fn ($item) => ! empty($item['title'])));
@@ -397,7 +554,7 @@ class MaterialController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($material, $validated, $request, $disk, &$savedFilePath) {
+            DB::transaction(function () use ($material, $validated, $request, $disk, $sourceType, &$savedFilePath) {
                 $material->save();
                 $material->categories()->sync([$validated['category_id'] => ['is_primary' => true]]);
 
@@ -405,8 +562,8 @@ class MaterialController extends Controller
                     $material->audiences()->sync((array) $request->input('audiences'));
                 }
 
-                // If new book file is provided during update, create next version
-                if ($request->hasFile('book_file')) {
+                // If new book file is provided during update for uploaded_pdf, create next version
+                if ($sourceType === 'uploaded_pdf' && $request->hasFile('book_file')) {
                     $bookFile = $request->file('book_file');
                     $nextVersion = ((int) $material->files()->max('version')) + 1;
 
@@ -444,6 +601,7 @@ class MaterialController extends Controller
 
         ActivityLog::record('material.updated', $material, [
             'title' => $material->title,
+            'source_type' => $material->source_type,
             'status' => $material->status,
         ]);
 

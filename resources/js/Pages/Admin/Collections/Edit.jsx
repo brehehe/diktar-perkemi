@@ -14,6 +14,10 @@ import FileInfo from '../../../Components/admin/FileInfo';
 import AlertDialog from '../../../Components/ui/AlertDialog';
 import Badge from '../../../Components/ui/Badge';
 import PublicationStatusSelect from '../../../Components/admin/PublicationStatusSelect';
+import MaterialSourceSelector from '../../../Components/admin/MaterialSourceSelector';
+import ExternalUrlField from '../../../Components/admin/ExternalUrlField';
+import VideoUrlField from '../../../Components/admin/VideoUrlField';
+import VideoPreview from '../../../Components/admin/VideoPreview';
 import {
     ArrowLeft,
     Save,
@@ -52,13 +56,14 @@ export default function Edit({
     status_options = [],
     max_file_size_mb = 50,
 }) {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, transform } = useForm({
         _method: 'PUT',
         title: material.title || '',
         code: material.code || '',
         author: material.author || '',
         category_id: material.category_id || '',
         type: material.type || 'module',
+        source_type: material.source_type || 'uploaded_pdf',
         publication_year: material.publication_year || '',
         page_count: material.page_count || '',
         summary: material.summary || '',
@@ -67,7 +72,14 @@ export default function Edit({
         admin_notes: material.admin_notes || '',
         status: material.status || 'draft',
         cover_file: null,
-        is_downloadable: Boolean(material.is_downloadable),
+        book_file: null,
+        external_url: material.external_url || '',
+        external_source_name: material.external_source_name || '',
+        external_open_mode: material.external_open_mode || 'new_tab',
+        video_url: material.video_url || '',
+        video_allow_portal: Boolean(material.video_allow_portal ?? true),
+        allow_download: Boolean(material.allow_download || material.is_downloadable),
+        is_downloadable: Boolean(material.allow_download || material.is_downloadable),
         is_featured: Boolean(material.is_featured),
         audiences: material.audiences || [],
         key_points: Array.isArray(material.key_points) && material.key_points.length > 0
@@ -75,13 +87,13 @@ export default function Edit({
             : ['', '', ''],
         learning_objectives: Array.isArray(material.learning_objectives) && material.learning_objectives.length > 0
             ? material.learning_objectives
-            : [''],
+            : ['', ''],
         table_of_contents: Array.isArray(material.table_of_contents) && material.table_of_contents.length > 0
             ? material.table_of_contents
             : [{ title: '', page: 1 }],
     });
 
-    // State for Replace File Flow
+    // State for Replace File Flow (PDF)
     const [selectedNewFile, setSelectedNewFile] = useState(null);
     const [replaceError, setReplaceError] = useState('');
     const [showConfirmReplaceModal, setShowConfirmReplaceModal] = useState(false);
@@ -97,6 +109,12 @@ export default function Edit({
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        transform((currentData) => ({
+            ...currentData,
+            _method: 'PUT',
+            is_downloadable: currentData.allow_download,
+        }));
+
         post(`/admin/koleksi/${material.id}`, {
             forceFormData: true,
         });
@@ -113,7 +131,7 @@ export default function Edit({
         setData('audiences', current);
     };
 
-    // Key points helpers (3 to 6 points)
+    // Key points helpers
     const updateKeyPoint = (index, value) => {
         const next = [...data.key_points];
         next[index] = value;
@@ -121,13 +139,11 @@ export default function Edit({
     };
 
     const addKeyPoint = () => {
-        if (data.key_points.length < 6) {
-            setData('key_points', [...data.key_points, '']);
-        }
+        setData('key_points', [...data.key_points, '']);
     };
 
     const removeKeyPoint = (index) => {
-        const next = data.key_points.filter((_, i) => i !== index);
+        const next = data.key_points.filter((_, idx) => idx !== index);
         setData('key_points', next.length > 0 ? next : ['']);
     };
 
@@ -143,7 +159,7 @@ export default function Edit({
     };
 
     const removeObjective = (index) => {
-        const next = data.learning_objectives.filter((_, i) => i !== index);
+        const next = data.learning_objectives.filter((_, idx) => idx !== index);
         setData('learning_objectives', next.length > 0 ? next : ['']);
     };
 
@@ -155,20 +171,21 @@ export default function Edit({
     };
 
     const addTocItem = () => {
-        const lastPage = data.table_of_contents[data.table_of_contents.length - 1]?.page || 1;
-        setData('table_of_contents', [...data.table_of_contents, { title: '', page: Number(lastPage) + 1 }]);
+        const lastPage = data.table_of_contents.length > 0
+            ? Number(data.table_of_contents[data.table_of_contents.length - 1].page) + 5
+            : 1;
+        setData('table_of_contents', [...data.table_of_contents, { title: '', page: lastPage }]);
     };
 
     const removeTocItem = (index) => {
-        const next = data.table_of_contents.filter((_, i) => i !== index);
+        const next = data.table_of_contents.filter((_, idx) => idx !== index);
         setData('table_of_contents', next.length > 0 ? next : [{ title: '', page: 1 }]);
     };
 
+    // Replace File Logic
     const handleNewFileSelected = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        setReplaceError('');
 
         if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
             setReplaceError('Format berkas harus berupa dokumen PDF (.pdf).');
@@ -177,30 +194,41 @@ export default function Edit({
 
         const maxBytes = max_file_size_mb * 1024 * 1024;
         if (file.size > maxBytes) {
-            setReplaceError(`Ukuran berkas melebihi batas maksimum ${max_file_size_mb} MB.`);
+            setReplaceError(`Ukuran berkas (${formatBytes(file.size)}) melebihi batas maksimal ${max_file_size_mb} MB.`);
             return;
         }
 
+        setReplaceError('');
         setSelectedNewFile(file);
+        setData('book_file', file);
         setShowConfirmReplaceModal(true);
     };
 
-    const executeFileReplacement = () => {
+    const confirmReplaceFile = () => {
         if (!selectedNewFile) return;
 
         setIsReplacingFile(true);
+        setReplaceError('');
         router.post(
             `/admin/koleksi/${material.id}/replace-file`,
             { book_file: selectedNewFile },
             {
                 forceFormData: true,
-                onFinish: () => {
-                    setIsReplacingFile(false);
+                preserveScroll: true,
+                onSuccess: () => {
                     setShowConfirmReplaceModal(false);
                     setSelectedNewFile(null);
+                    setData('book_file', null);
                     if (replaceFileInputRef.current) {
                         replaceFileInputRef.current.value = '';
                     }
+                },
+                onError: (errs) => {
+                    setReplaceError(errs.book_file || 'Gagal memperbarui versi berkas.');
+                    setShowConfirmReplaceModal(false);
+                },
+                onFinish: () => {
+                    setIsReplacingFile(false);
                 },
             }
         );
@@ -209,8 +237,8 @@ export default function Edit({
     return (
         <AdminLayout title={`Edit: ${material.title}`}>
             <PageHeader
-                title="Perbarui Materi Koleksi"
-                description={`Ubah metadata bibliografi, kelola riwayat versi berkas digital, atau atur publikasi "${material.title}".`}
+                title="Edit Materi Koleksi"
+                description={`Kode: ${material.code || '-'} • Terakhir diperbarui: ${material.updated_at || '-'}`}
                 breadcrumbs={[
                     { label: 'Koleksi', href: '/admin/koleksi' },
                     { label: 'Edit Materi' },
@@ -222,154 +250,37 @@ export default function Edit({
                                 Kembali
                             </Button>
                         </Link>
-                        <a
-                            href={`/koleksi/${material.slug}/baca`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            <Button variant="outline" size="sm" icon={ExternalLink}>
-                                Buka Reader
-                            </Button>
-                        </a>
+                        {data.source_type === 'uploaded_pdf' && (
+                            <a
+                                href={`/koleksi/${material.slug}/baca`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Button variant="outline" size="sm" icon={ExternalLink}>
+                                    Buka Flipbook
+                                </Button>
+                            </a>
+                        )}
                     </div>
                 }
             />
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-16">
-                {/* Left & Middle Column (2 cols) */}
+                {/* Left & Middle Column (2 cols): Main Sections */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* SECTION: Riwayat File dan Versi (Prompt Highlight) */}
+                    {/* SECTION A: Informasi Materi */}
                     <section className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs p-6 space-y-5">
                         <div className="border-b border-[#DCE7F3] pb-3 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <FileText className="w-5 h-5 text-[#0B63CE]" />
+                                <span className="w-6 h-6 rounded-full bg-[#EAF5FF] text-[#0B63CE] text-xs font-bold flex items-center justify-center">
+                                    A
+                                </span>
                                 <h2 className="text-sm font-bold text-[#0E2747]">
-                                    Riwayat Berkas & Manajemen Versi
+                                    Informasi Materi & Bibliografi
                                 </h2>
                             </div>
-                            <input
-                                ref={replaceFileInputRef}
-                                type="file"
-                                accept="application/pdf"
-                                className="sr-only"
-                                onChange={handleNewFileSelected}
-                            />
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                icon={RefreshCw}
-                                onClick={() => replaceFileInputRef.current?.click()}
-                            >
-                                Ganti File (Unggah Versi Baru)
-                            </Button>
+                            <span className="text-[11px] text-[#6B7C93]">* Wajib diisi</span>
                         </div>
-
-                        {replaceError && (
-                            <div className="p-3 bg-[#FDE8EF] border border-[#F8B4C4] rounded-lg text-xs text-[#FA5252] flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                <span>{replaceError}</span>
-                            </div>
-                        )}
-
-                        {/* Active File Display */}
-                        <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6B7C93] block mb-2">
-                                Berkas Aktif Saat Ini
-                            </span>
-                            {active_file ? (
-                                <FileInfo
-                                    fileName={active_file.original_name}
-                                    fileSize={active_file.formatted_size}
-                                    fileFormat="PDF"
-                                    version={active_file.version}
-                                    uploadedAt={active_file.uploaded_at}
-                                    uploaderName={active_file.uploader_name}
-                                    status="ready"
-                                    onChangeFile={() => replaceFileInputRef.current?.click()}
-                                    onViewFile={() => window.open(`/koleksi/${material.slug}/baca`, '_blank')}
-                                />
-                            ) : (
-                                <div className="p-4 bg-[#FFF3E6] border border-[#FFE8CC] rounded-xl text-xs text-[#E8590C] flex items-center justify-between">
-                                    <span>Belum ada berkas PDF aktif yang diunggah untuk materi ini.</span>
-                                    <Button
-                                        type="button"
-                                        variant="primary"
-                                        size="xs"
-                                        onClick={() => replaceFileInputRef.current?.click()}
-                                    >
-                                        Unggah Sekarang
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Version History Table */}
-                        {file_history.length > 0 && (
-                            <div className="pt-3 border-t border-[#DCE7F3]">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <History className="w-4 h-4 text-[#6B7C93]" />
-                                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#112743]">
-                                        Daftar Riwayat Versi ({file_history.length})
-                                    </h3>
-                                </div>
-
-                                <div className="border border-[#DCE7F3] rounded-lg overflow-hidden text-xs">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-[#F8FBFF] border-b border-[#DCE7F3] text-[11px] font-semibold text-[#6B7C93] uppercase">
-                                                <th className="py-2.5 px-3">Versi</th>
-                                                <th className="py-2.5 px-3">Nama Berkas</th>
-                                                <th className="py-2.5 px-3">Ukuran</th>
-                                                <th className="py-2.5 px-3">Pengunggah</th>
-                                                <th className="py-2.5 px-3">Waktu Unggah</th>
-                                                <th className="py-2.5 px-3 text-right">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-[#DCE7F3]">
-                                            {file_history.map((hist) => (
-                                                <tr
-                                                    key={hist.id}
-                                                    className={hist.is_active ? 'bg-[#EAF5FF]/40 font-medium' : 'hover:bg-[#F8FBFF]'}
-                                                >
-                                                    <td className="py-2.5 px-3 font-mono text-[#0B63CE] font-bold">
-                                                        v{hist.version}.0
-                                                    </td>
-                                                    <td className="py-2.5 px-3 text-[#112743] max-w-xs truncate" title={hist.original_name}>
-                                                        {hist.original_name}
-                                                    </td>
-                                                    <td className="py-2.5 px-3 text-[#6B7C93]">
-                                                        {hist.formatted_size}
-                                                    </td>
-                                                    <td className="py-2.5 px-3 text-[#6B7C93]">
-                                                        {hist.uploader_name}
-                                                    </td>
-                                                    <td className="py-2.5 px-3 text-[#6B7C93]">
-                                                        {hist.uploaded_at}
-                                                    </td>
-                                                    <td className="py-2.5 px-3 text-right">
-                                                        {hist.is_active ? (
-                                                            <Badge variant="success" size="sm" dot>
-                                                                Aktif
-                                                            </Badge>
-                                                        ) : (
-                                                            <span className="text-[11px] text-[#6B7C93]">Arsip</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-                    </section>
-
-                    {/* SECTION: Informasi Utama Materi */}
-                    <section className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs p-6 space-y-5">
-                        <h2 className="text-sm font-bold text-[#0E2747] border-b border-[#DCE7F3] pb-3">
-                            Informasi Materi & Bibliografi
-                        </h2>
 
                         <Input
                             label="Judul Materi"
@@ -395,13 +306,12 @@ export default function Edit({
                                 value={data.category_id}
                                 onChange={(val) => setData('category_id', val)}
                                 options={categoryOptions}
-                                placeholder="Pilih topik kategori..."
                                 required
                                 error={errors.category_id}
                             />
 
                             <Select
-                                label="Jenis Materi"
+                                label="Jenis Format Materi"
                                 name="type"
                                 value={data.type}
                                 onChange={(e) => setData('type', e.target.value)}
@@ -446,12 +356,12 @@ export default function Edit({
                                 name="keywords"
                                 value={data.keywords}
                                 onChange={(e) => setData('keywords', e.target.value)}
-                                helperText="Pisahkan dengan tanda koma"
+                                helperText="Pisahkan kata kunci dengan tanda koma"
                                 error={errors.keywords}
                             />
 
                             <Input
-                                label="Jumlah Halaman"
+                                label="Jumlah Halaman (Opsional)"
                                 name="page_count"
                                 type="number"
                                 min="1"
@@ -461,65 +371,37 @@ export default function Edit({
                             />
                         </div>
 
-                        <Textarea
-                            label="Deskripsi Lengkap & Silabus"
-                            name="description"
-                            value={data.description}
-                            onChange={(e) => setData('description', e.target.value)}
-                            rows={5}
-                            error={errors.description}
-                        />
-                    </section>
-
-                    {/* SECTION: Metadata Reader (Poin Penting, Tujuan Pembelajaran, Daftar Isi) */}
-                    <section className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs p-6 space-y-6">
-                        <div className="border-b border-[#DCE7F3] pb-3">
-                            <h2 className="text-sm font-bold text-[#0E2747] flex items-center gap-2">
-                                <BookOpenCheck className="w-4 h-4 text-[#0B63CE]" />
-                                <span>Pengaturan Interaktif Reader Digital</span>
-                            </h2>
-                            <p className="text-xs text-slate-500 mt-1">
-                                Kelola poin penting kurikulum, sasaran capaian kompetensi, dan daftar isi navigasi halaman buku.
-                            </p>
-                        </div>
-
-                        {/* 1. Poin Penting Materi (3 - 6 poin) */}
-                        <div className="space-y-3">
+                        {/* Poin Penting Materi */}
+                        <div className="pt-2 border-t border-[#DCE7F3] space-y-3">
                             <div className="flex items-center justify-between">
-                                <label className="text-xs font-bold text-[#0E2747] uppercase tracking-wider">
-                                    Poin Penting Materi (3 - 6 Poin)
+                                <label className="text-xs font-bold text-[#0E2747] flex items-center gap-1.5">
+                                    <BookOpenCheck className="w-4 h-4 text-[#20A47A]" />
+                                    Poin Penting Materi
                                 </label>
-                                {data.key_points.length < 6 && (
-                                    <button
-                                        type="button"
-                                        onClick={addKeyPoint}
-                                        className="text-xs text-[#0B63CE] hover:text-[#0A3F82] font-semibold inline-flex items-center gap-1"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                        <span>Tambah Poin</span>
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={addKeyPoint}
+                                    className="text-xs font-semibold text-[#0B63CE] hover:text-[#0A3F82] flex items-center gap-1"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Tambah Poin</span>
+                                </button>
                             </div>
 
                             <div className="space-y-2">
-                                {data.key_points.map((pt, idx) => (
+                                {data.key_points.map((point, idx) => (
                                     <div key={idx} className="flex items-center gap-2">
-                                        <span className="w-6 text-center text-xs font-mono font-bold text-slate-400">
-                                            {idx + 1}.
-                                        </span>
-                                        <input
-                                            type="text"
-                                            value={pt}
+                                        <Input
+                                            value={point}
                                             onChange={(e) => updateKeyPoint(idx, e.target.value)}
-                                            placeholder={`Poin pembahasan ${idx + 1}...`}
-                                            className="flex-1 text-xs py-2 px-3 border border-[#DCE7F3] rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
+                                            placeholder={`Poin penting #${idx + 1}`}
+                                            className="flex-1"
                                         />
                                         {data.key_points.length > 1 && (
                                             <button
                                                 type="button"
                                                 onClick={() => removeKeyPoint(idx)}
-                                                aria-label="Hapus poin"
-                                                className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                                                className="p-2 text-[#6B7C93] hover:text-[#FA5252] rounded-lg hover:bg-[#FDE8EF]/40 transition-colors"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
@@ -529,17 +411,17 @@ export default function Edit({
                             </div>
                         </div>
 
-                        {/* 2. Tujuan Pembelajaran */}
-                        <div className="pt-4 border-t border-[#DCE7F3] space-y-3">
+                        {/* Tujuan Pembelajaran */}
+                        <div className="pt-2 border-t border-[#DCE7F3] space-y-3">
                             <div className="flex items-center justify-between">
-                                <label className="text-xs font-bold text-[#0E2747] uppercase tracking-wider flex items-center gap-1.5">
-                                    <Target className="w-3.5 h-3.5 text-[#0B63CE]" />
-                                    <span>Tujuan Pembelajaran</span>
+                                <label className="text-xs font-bold text-[#0E2747] flex items-center gap-1.5">
+                                    <Target className="w-4 h-4 text-[#0B63CE]" />
+                                    Tujuan Pembelajaran
                                 </label>
                                 <button
                                     type="button"
                                     onClick={addObjective}
-                                    className="text-xs text-[#0B63CE] hover:text-[#0A3F82] font-semibold inline-flex items-center gap-1"
+                                    className="text-xs font-semibold text-[#0B63CE] hover:text-[#0A3F82] flex items-center gap-1"
                                 >
                                     <Plus className="w-3.5 h-3.5" />
                                     <span>Tambah Tujuan</span>
@@ -549,20 +431,17 @@ export default function Edit({
                             <div className="space-y-2">
                                 {data.learning_objectives.map((obj, idx) => (
                                     <div key={idx} className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-[#0B63CE] ml-2 shrink-0" />
-                                        <input
-                                            type="text"
+                                        <Input
                                             value={obj}
                                             onChange={(e) => updateObjective(idx, e.target.value)}
-                                            placeholder={`Target kompetensi ${idx + 1}...`}
-                                            className="flex-1 text-xs py-2 px-3 border border-[#DCE7F3] rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
+                                            placeholder={`Target capaian #${idx + 1}`}
+                                            className="flex-1"
                                         />
                                         {data.learning_objectives.length > 1 && (
                                             <button
                                                 type="button"
                                                 onClick={() => removeObjective(idx)}
-                                                aria-label="Hapus tujuan"
-                                                className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                                                className="p-2 text-[#6B7C93] hover:text-[#FA5252] rounded-lg hover:bg-[#FDE8EF]/40 transition-colors"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
@@ -572,17 +451,17 @@ export default function Edit({
                             </div>
                         </div>
 
-                        {/* 3. Daftar Isi Manual */}
-                        <div className="pt-4 border-t border-[#DCE7F3] space-y-3">
+                        {/* Daftar Isi Bab */}
+                        <div className="pt-2 border-t border-[#DCE7F3] space-y-3">
                             <div className="flex items-center justify-between">
-                                <label className="text-xs font-bold text-[#0E2747] uppercase tracking-wider flex items-center gap-1.5">
-                                    <ListOrdered className="w-3.5 h-3.5 text-[#0B63CE]" />
-                                    <span>Daftar Isi Manual (Bab & Halaman)</span>
+                                <label className="text-xs font-bold text-[#0E2747] flex items-center gap-1.5">
+                                    <ListOrdered className="w-4 h-4 text-[#7957D5]" />
+                                    Daftar Isi & Struktur Bab
                                 </label>
                                 <button
                                     type="button"
                                     onClick={addTocItem}
-                                    className="text-xs text-[#0B63CE] hover:text-[#0A3F82] font-semibold inline-flex items-center gap-1"
+                                    className="text-xs font-semibold text-[#0B63CE] hover:text-[#0A3F82] flex items-center gap-1"
                                 >
                                     <Plus className="w-3.5 h-3.5" />
                                     <span>Tambah Bab</span>
@@ -596,11 +475,11 @@ export default function Edit({
                                             type="text"
                                             value={item.title}
                                             onChange={(e) => updateTocItem(idx, 'title', e.target.value)}
-                                            placeholder="Judul Bab / Pokok Bahasan..."
+                                            placeholder={`Judul Bab #${idx + 1}`}
                                             className="flex-1 text-xs py-2 px-3 border border-[#DCE7F3] rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
                                         />
                                         <div className="flex items-center gap-1 shrink-0">
-                                            <span className="text-xs text-slate-400">Hal.</span>
+                                            <span className="text-xs text-[#6B7C93]">Hal.</span>
                                             <input
                                                 type="number"
                                                 min="1"
@@ -613,8 +492,7 @@ export default function Edit({
                                             <button
                                                 type="button"
                                                 onClick={() => removeTocItem(idx)}
-                                                aria-label="Hapus bab"
-                                                className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                                                className="p-2 text-[#6B7C93] hover:text-[#FA5252] rounded-lg hover:bg-[#FDE8EF]/40 transition-colors"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
@@ -623,15 +501,266 @@ export default function Edit({
                                 ))}
                             </div>
                         </div>
+
+                        <Textarea
+                            label="Deskripsi Lengkap & Silabus"
+                            name="description"
+                            value={data.description}
+                            onChange={(e) => setData('description', e.target.value)}
+                            rows={4}
+                            error={errors.description}
+                        />
+                    </section>
+
+                    {/* SECTION B: Sumber Materi */}
+                    <section className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs p-6 space-y-5">
+                        <div className="border-b border-[#DCE7F3] pb-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-[#EAF5FF] text-[#0B63CE] text-xs font-bold flex items-center justify-center">
+                                    B
+                                </span>
+                                <h2 className="text-sm font-bold text-[#0E2747]">
+                                    Sumber Materi Pembelajaran
+                                </h2>
+                            </div>
+                            <span className="text-[11px] text-[#FA5252] font-semibold">* Wajib Dipilih</span>
+                        </div>
+
+                        {/* Source Selector */}
+                        <MaterialSourceSelector
+                            value={data.source_type}
+                            onChange={(source) => setData('source_type', source)}
+                            error={errors.source_type}
+                        />
+
+                        {/* Source Content Panel */}
+                        <div className="pt-2">
+                            {data.source_type === 'uploaded_pdf' && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between pb-2 border-b border-[#DCE7F3]">
+                                        <div className="flex items-center gap-2">
+                                            <FileText className="w-4 h-4 text-[#0B63CE]" />
+                                            <h3 className="text-xs font-bold text-[#0E2747] uppercase tracking-wider">
+                                                Berkas PDF Aktif & Versi
+                                            </h3>
+                                        </div>
+                                        <input
+                                            ref={replaceFileInputRef}
+                                            type="file"
+                                            accept="application/pdf"
+                                            className="sr-only"
+                                            onClick={(e) => {
+                                                e.target.value = '';
+                                            }}
+                                            onChange={handleNewFileSelected}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            icon={RefreshCw}
+                                            onClick={() => replaceFileInputRef.current?.click()}
+                                        >
+                                            Ganti File (Versi Baru)
+                                        </Button>
+                                    </div>
+
+                                    {replaceError && (
+                                        <div className="p-3 bg-[#FDE8EF] border border-[#F8B4C4] rounded-lg text-xs text-[#FA5252] flex items-center gap-2">
+                                            <AlertCircle className="w-4 h-4 shrink-0" />
+                                            <span>{replaceError}</span>
+                                        </div>
+                                    )}
+
+                                    {selectedNewFile && (
+                                        <div className="p-4 bg-[#EAF5FF] border-2 border-[#0B63CE]/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in">
+                                            <div className="flex items-start sm:items-center gap-3 min-w-0">
+                                                <div className="w-10 h-10 rounded-lg bg-[#0B63CE] text-white flex items-center justify-center shrink-0 shadow-xs">
+                                                    <FileText className="w-5 h-5" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <p className="text-xs sm:text-sm font-bold text-[#0E2747] truncate" title={selectedNewFile.name}>
+                                                            {selectedNewFile.name}
+                                                        </p>
+                                                        <Badge variant="primary" size="sm">
+                                                            Siap Versi v{((active_file?.version || 0) + 1)}.0
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-[11px] text-[#6B7C93] mt-0.5">
+                                                        {formatBytes(selectedNewFile.size)} • Klik "Perbarui Versi Sekarang" untuk langsung menerapkan versi baru, atau simpan bersama formulir.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                                <Button
+                                                    type="button"
+                                                    variant="primary"
+                                                    size="sm"
+                                                    loading={isReplacingFile}
+                                                    icon={RefreshCw}
+                                                    onClick={confirmReplaceFile}
+                                                >
+                                                    Perbarui Versi Sekarang
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    disabled={isReplacingFile}
+                                                    onClick={() => {
+                                                        setSelectedNewFile(null);
+                                                        setData('book_file', null);
+                                                        if (replaceFileInputRef.current) {
+                                                            replaceFileInputRef.current.value = '';
+                                                        }
+                                                    }}
+                                                >
+                                                    Batal
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {active_file ? (
+                                        <FileInfo
+                                            fileName={active_file.original_name}
+                                            fileSize={active_file.formatted_size}
+                                            fileFormat="PDF"
+                                            version={active_file.version}
+                                            uploadedAt={active_file.uploaded_at}
+                                            uploaderName={active_file.uploader_name}
+                                            status="ready"
+                                            onChangeFile={() => replaceFileInputRef.current?.click()}
+                                            onViewFile={() => window.open(`/koleksi/${material.slug}/baca`, '_blank')}
+                                        />
+                                    ) : (
+                                        <div className="p-4 bg-[#FFF3E6] border border-[#FFE8CC] rounded-xl text-xs text-[#E8590C] flex items-center justify-between">
+                                            <span>Belum ada berkas PDF yang diunggah.</span>
+                                            <Button
+                                                type="button"
+                                                variant="primary"
+                                                size="xs"
+                                                onClick={() => replaceFileInputRef.current?.click()}
+                                            >
+                                                Unggah Sekarang
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {/* Version History Table */}
+                                    {file_history.length > 0 && (
+                                        <div className="pt-3 border-t border-[#DCE7F3] space-y-2.5">
+                                            <div className="flex items-center gap-2">
+                                                <History className="w-3.5 h-3.5 text-[#6B7C93]" />
+                                                <h4 className="text-xs font-bold uppercase tracking-wider text-[#112743]">
+                                                    Riwayat Versi Berkas ({file_history.length})
+                                                </h4>
+                                            </div>
+
+                                            <div className="border border-[#DCE7F3] rounded-lg overflow-hidden text-xs">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-[#F8FBFF] border-b border-[#DCE7F3] text-[11px] font-semibold text-[#6B7C93] uppercase">
+                                                            <th className="py-2.5 px-3">Versi</th>
+                                                            <th className="py-2.5 px-3">Nama Berkas</th>
+                                                            <th className="py-2.5 px-3">Ukuran</th>
+                                                            <th className="py-2.5 px-3">Waktu Unggah</th>
+                                                            <th className="py-2.5 px-3 text-right">Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-[#DCE7F3]">
+                                                        {file_history.map((hist) => (
+                                                            <tr
+                                                                key={hist.id}
+                                                                className={hist.is_active ? 'bg-[#EAF5FF]/40 font-medium' : 'hover:bg-[#F8FBFF]'}
+                                                            >
+                                                                <td className="py-2.5 px-3 font-mono text-[#0B63CE] font-bold">
+                                                                    v{hist.version}.0
+                                                                </td>
+                                                                <td className="py-2.5 px-3 text-[#112743] max-w-xs truncate" title={hist.original_name}>
+                                                                    {hist.original_name}
+                                                                </td>
+                                                                <td className="py-2.5 px-3 text-[#6B7C93]">
+                                                                    {hist.formatted_size}
+                                                                </td>
+                                                                <td className="py-2.5 px-3 text-[#6B7C93]">
+                                                                    {hist.uploaded_at}
+                                                                </td>
+                                                                <td className="py-2.5 px-3 text-right">
+                                                                    {hist.is_active ? (
+                                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#2B8A3E] bg-[#EBFBEE] border border-[#D3F9D8] px-2 py-0.5 rounded-full">
+                                                                            <CheckCircle2 className="w-3 h-3" />
+                                                                            Aktif
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] font-medium text-[#868E96] bg-[#F1F3F5] px-2 py-0.5 rounded-full">
+                                                                            Arsip
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {data.source_type === 'external_link' && (
+                                <ExternalUrlField
+                                    url={data.external_url}
+                                    onUrlChange={(val) => setData('external_url', val)}
+                                    sourceName={data.external_source_name}
+                                    onSourceNameChange={(val) => setData('external_source_name', val)}
+                                    openMode={data.external_open_mode}
+                                    onOpenModeChange={(val) => setData('external_open_mode', val)}
+                                    error={errors.external_url}
+                                />
+                            )}
+
+                            {data.source_type === 'video' && (
+                                <div className="space-y-5">
+                                    <VideoUrlField
+                                        url={data.video_url}
+                                        onUrlChange={(val) => setData('video_url', val)}
+                                        allowPortal={data.video_allow_portal}
+                                        onAllowPortalChange={(val) => setData('video_allow_portal', val)}
+                                        error={errors.video_url}
+                                    />
+
+                                    <VideoPreview
+                                        url={data.video_url}
+                                        title={data.title || 'Pratinjau Video'}
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </section>
                 </div>
 
-                {/* Right Column: Publication, Cover, & Action (1 col) */}
+                {/* Right Column (1 col): Publication, Cover, & Actions */}
                 <div className="space-y-6">
-                    {/* Publication & Status Card */}
+                    {/* Cover Section */}
+                    <section className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs p-5 space-y-4">
+                        <h2 className="text-sm font-bold text-[#0E2747] border-b border-[#DCE7F3] pb-3">
+                            Berkas Sampul (Cover)
+                        </h2>
+
+                        <FileUpload
+                            name="cover_file"
+                            currentCover={material.cover_path}
+                            onFileSelect={(file) => setData('cover_file', file)}
+                            error={errors.cover_file}
+                        />
+                    </section>
+
+                    {/* Status & Publication Section */}
                     <section className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs p-5 space-y-5">
                         <h2 className="text-sm font-bold text-[#0E2747] border-b border-[#DCE7F3] pb-3">
-                            Status & Publikasi
+                            Status & Akses
                         </h2>
 
                         <PublicationStatusSelect
@@ -652,7 +781,7 @@ export default function Edit({
                                 </span>
                             </div>
 
-                            <div className="space-y-2 pt-1">
+                            <div className="space-y-2 pt-1 max-h-48 overflow-y-auto pr-1">
                                 {audiences.map((aud) => (
                                     <Checkbox
                                         key={aud.id}
@@ -669,9 +798,12 @@ export default function Edit({
                         <div className="pt-3 border-t border-[#DCE7F3] space-y-3">
                             <Switch
                                 label="Izinkan Unduh Berkas"
-                                helperText="Pengguna terotorisasi dapat mengunduh dokumen PDF"
-                                checked={data.is_downloadable}
-                                onChange={(val) => setData('is_downloadable', val)}
+                                helperText="Pengguna terotorisasi dapat mengunduh dokumen e-book"
+                                checked={data.allow_download}
+                                onChange={(val) => {
+                                    setData('allow_download', val);
+                                    setData('is_downloadable', val);
+                                }}
                             />
 
                             <Switch
@@ -685,7 +817,7 @@ export default function Edit({
                         {/* Admin Notes */}
                         <div className="pt-3 border-t border-[#DCE7F3]">
                             <Textarea
-                                label="Catatan Admin (Internal)"
+                                label="Catatan Redaksi (Internal)"
                                 name="admin_notes"
                                 value={data.admin_notes}
                                 onChange={(e) => setData('admin_notes', e.target.value)}
@@ -695,21 +827,7 @@ export default function Edit({
                         </div>
                     </section>
 
-                    {/* Cover Upload Card */}
-                    <section className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs p-5 space-y-4">
-                        <h2 className="text-sm font-bold text-[#0E2747] border-b border-[#DCE7F3] pb-3">
-                            Berkas Sampul (Cover)
-                        </h2>
-
-                        <FileUpload
-                            name="cover_file"
-                            currentCover={material.cover_path}
-                            onFileSelect={(file) => setData('cover_file', file)}
-                            error={errors.cover_file}
-                        />
-                    </section>
-
-                    {/* Action Card */}
+                    {/* Action Button Card */}
                     <div className="bg-[#EAF5FF] rounded-xl border border-[#BCE0FD] p-5 space-y-2.5">
                         <Button
                             type="submit"
@@ -717,7 +835,7 @@ export default function Edit({
                             size="md"
                             loading={processing}
                             icon={Save}
-                            className="w-full"
+                            className="w-full justify-center"
                         >
                             Simpan Perubahan
                         </Button>
@@ -728,7 +846,7 @@ export default function Edit({
                                 variant="secondary"
                                 size="sm"
                                 disabled={processing}
-                                className="w-full"
+                                className="w-full justify-center"
                             >
                                 Batalkan
                             </Button>
@@ -737,21 +855,29 @@ export default function Edit({
                 </div>
             </form>
 
-            {/* Alert Dialog for File Replacement */}
+            {/* Modal Konfirmasi Ganti Berkas PDF */}
             <AlertDialog
                 isOpen={showConfirmReplaceModal}
-                onClose={() => {
-                    setShowConfirmReplaceModal(false);
-                    setSelectedNewFile(null);
-                    if (replaceFileInputRef.current) replaceFileInputRef.current.value = '';
-                }}
-                onConfirm={executeFileReplacement}
-                title="Ganti Berkas Buku Digital?"
-                description={`Anda akan mengunggah berkas "${selectedNewFile?.name}" (${selectedNewFile ? formatBytes(selectedNewFile.size) : ''}) sebagai versi berikutnya. Berkas baru akan menjadi versi aktif yang dapat diakses oleh pembaca.`}
-                confirmText="Konfirmasi & Unggah Versi Baru"
-                cancelText="Batalkan"
+                open={showConfirmReplaceModal}
+                title="Konfirmasi Pembaruan Versi Berkas"
+                description={
+                    selectedNewFile
+                        ? `Anda akan memperbarui berkas menjadi versi ${((active_file?.version || 0) + 1)}.0 dengan berkas baru "${selectedNewFile.name}" (${formatBytes(selectedNewFile.size)}). Versi lama akan tetap tersimpan dalam riwayat.`
+                        : ''
+                }
                 variant="info"
                 loading={isReplacingFile}
+                confirmText={isReplacingFile ? 'Menyimpan...' : 'Ya, Perbarui Versi'}
+                confirmLabel={isReplacingFile ? 'Menyimpan...' : 'Ya, Perbarui Versi'}
+                cancelText="Batal"
+                cancelLabel="Batal"
+                onConfirm={confirmReplaceFile}
+                onClose={() => {
+                    setShowConfirmReplaceModal(false);
+                }}
+                onCancel={() => {
+                    setShowConfirmReplaceModal(false);
+                }}
             />
         </AdminLayout>
     );

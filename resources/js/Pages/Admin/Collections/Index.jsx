@@ -22,11 +22,14 @@ import {
     FileText,
 } from 'lucide-react';
 
+import MaterialSourceBadge from '../../../Components/portal/MaterialSourceBadge';
+
 export default function Index({
     materials,
     categories = [],
     available_years = [],
     filters = {},
+    source_types = [],
     material_types = [],
     status_options = [],
 }) {
@@ -34,6 +37,7 @@ export default function Index({
     const [selectedCategory, setSelectedCategory] = useState(filters.category || '');
     const [selectedStatus, setSelectedStatus] = useState(filters.status || '');
     const [selectedType, setSelectedType] = useState(filters.type || '');
+    const [selectedSourceType, setSelectedSourceType] = useState(filters.source_type || '');
     const [selectedYear, setSelectedYear] = useState(filters.year || '');
 
     // State for Delete Alert Dialog
@@ -50,6 +54,7 @@ export default function Index({
             category: selectedCategory,
             status: selectedStatus,
             type: selectedType,
+            source_type: selectedSourceType,
             year: selectedYear,
             ...customParams,
         };
@@ -74,6 +79,7 @@ export default function Index({
         setSelectedCategory('');
         setSelectedStatus('');
         setSelectedType('');
+        setSelectedSourceType('');
         setSelectedYear('');
         router.get('/admin/koleksi', {}, {
             preserveState: true,
@@ -82,7 +88,7 @@ export default function Index({
     };
 
     const hasActiveFilters = Boolean(
-        search || selectedCategory || selectedStatus || selectedType || selectedYear
+        search || selectedCategory || selectedStatus || selectedType || selectedSourceType || selectedYear
     );
 
     const handleDelete = () => {
@@ -128,6 +134,12 @@ export default function Index({
                         )}
                     </div>
                     <div className="min-w-0 max-w-xs sm:max-w-sm">
+                        <div className="flex items-center gap-1.5 mb-1">
+                            <MaterialSourceBadge sourceType={row.source_type} />
+                            <span className="font-mono text-[#0B63CE] bg-[#EAF5FF] px-1.5 py-0.2 rounded text-[10px]">
+                                {row.code}
+                            </span>
+                        </div>
                         <Link
                             href={`/admin/koleksi/${row.id}/edit`}
                             className="font-semibold text-sm text-[#112743] hover:text-[#0B63CE] transition-colors truncate block"
@@ -135,10 +147,6 @@ export default function Index({
                             {row.title}
                         </Link>
                         <div className="flex items-center gap-2 text-[11px] text-[#6B7C93] mt-0.5">
-                            <span className="font-mono text-[#0B63CE] bg-[#EAF5FF] px-1.5 py-0.2 rounded text-[10px]">
-                                {row.code}
-                            </span>
-                            <span>&bull;</span>
                             <span className="truncate">{row.author || 'PERKEMI'}</span>
                         </div>
                     </div>
@@ -167,8 +175,44 @@ export default function Index({
             ),
         },
         {
-            header: 'Berkas & Versi',
+            header: 'Sumber & Berkas',
             cell: (row) => {
+                if (row.source_type === 'video') {
+                    return (
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                                <span className="px-1.5 py-0.5 rounded bg-[#F3EDFF] text-[#7957D5] font-mono font-bold text-[10px] border border-[#D0BFFF]">
+                                    {(row.video_provider || 'VIDEO').toUpperCase()}
+                                </span>
+                                <span className="text-xs text-[#112743] font-medium">Video Player</span>
+                            </div>
+                            <span className="inline-flex items-center gap-1 text-[11px] text-[#20A47A] font-medium">
+                                <CheckCircle className="w-3 h-3 shrink-0" />
+                                <span>Tautan Video Siap</span>
+                            </span>
+                        </div>
+                    );
+                }
+
+                if (row.source_type === 'external_link') {
+                    return (
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                                <span className="px-1.5 py-0.5 rounded bg-[#FFF3E6] text-[#EE9B25] font-mono font-bold text-[10px] border border-[#FFD8A8]">
+                                    HTTPS
+                                </span>
+                                <span className="text-xs text-[#112743] font-medium truncate max-w-[120px]" title={row.external_url}>
+                                    Tautan Eksternal
+                                </span>
+                            </div>
+                            <span className="inline-flex items-center gap-1 text-[11px] text-[#20A47A] font-medium">
+                                <CheckCircle className="w-3 h-3 shrink-0" />
+                                <span>Tautan Valid</span>
+                            </span>
+                        </div>
+                    );
+                }
+
                 let badgeVariant = 'neutral';
                 if (row.file_status === 'ready') badgeVariant = 'success';
                 else if (row.file_status === 'needs_update') badgeVariant = 'warning';
@@ -220,9 +264,21 @@ export default function Index({
             cell: (row) => {
                 const actionItems = [
                     {
-                        label: 'Baca sebagai pembaca',
+                        label: row.source_type === 'video'
+                            ? 'Lihat halaman video'
+                            : row.source_type === 'external_link'
+                            ? 'Buka tautan buku'
+                            : 'Baca sebagai pembaca',
                         icon: Eye,
-                        onClick: () => window.open(`/koleksi/${row.slug}/baca`, '_blank'),
+                        onClick: () => {
+                            if (row.source_type === 'video') {
+                                window.open(`/koleksi/${row.slug}`, '_blank');
+                            } else if (row.source_type === 'external_link') {
+                                window.open(row.external_url || `/koleksi/${row.slug}`, '_blank');
+                            } else {
+                                window.open(`/koleksi/${row.slug}/baca`, '_blank');
+                            }
+                        },
                     },
                     {
                         label: 'Edit Materi & Versi',
@@ -349,6 +405,23 @@ export default function Index({
                         >
                             <option value="">Semua Status</option>
                             {status_options.map((s) => (
+                                <option key={s.value} value={s.value}>
+                                    {s.label}
+                                </option>
+                            ))}
+                        </select>
+
+                        {/* Sumber Materi Filter */}
+                        <select
+                            value={selectedSourceType}
+                            onChange={(e) => {
+                                setSelectedSourceType(e.target.value);
+                                applyFilters({ source_type: e.target.value });
+                            }}
+                            className="bg-[#F8FBFF] border border-[#DCE7F3] rounded-lg px-2.5 py-2 text-xs text-[#112743] focus:outline-none focus:border-[#0B63CE]"
+                        >
+                            <option value="">Semua Sumber</option>
+                            {source_types.map((s) => (
                                 <option key={s.value} value={s.value}>
                                     {s.label}
                                 </option>

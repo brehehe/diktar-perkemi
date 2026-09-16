@@ -1,7 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
 import BookSpread from './BookSpread';
 import ReaderLoadingState from './ReaderLoadingState';
 import ReaderErrorState from './ReaderErrorState';
+
+const SWIPE_THRESHOLD = 48; // px — minimum horizontal distance to count as a swipe
 
 export default function BookViewport({
     pdfDoc,
@@ -14,8 +16,62 @@ export default function BookViewport({
     isMobile = false,
     onRetry,
     backUrl = '/koleksi',
+    direction = 1,       // 1 = forward (next), −1 = backward (prev)
+    onSwipeLeft,         // called when user swipes left (→ next page)
+    onSwipeRight,        // called when user swipes right (→ prev page)
 }) {
     const viewportRef = useRef(null);
+    const touchStartX = useRef(null);
+    const touchStartY = useRef(null);
+
+    // Track whether pdfDoc just appeared (initial reveal vs. navigation flip)
+    const [isFirstRender, setIsFirstRender] = useState(true);
+
+    useEffect(() => {
+        if (pdfDoc && isFirstRender) {
+            // Small timeout so the "initial" class is applied on first render only
+            const t = setTimeout(() => setIsFirstRender(false), 600);
+            return () => clearTimeout(t);
+        }
+    }, [pdfDoc, isFirstRender]);
+
+    // ── Touch swipe handlers ─────────────────────────────────────────────────
+
+    const handleTouchStart = useCallback((e) => {
+        touchStartX.current = e.touches[0].clientX;
+        touchStartY.current = e.touches[0].clientY;
+    }, []);
+
+    const handleTouchEnd = useCallback((e) => {
+        if (touchStartX.current === null) return;
+
+        const dx = e.changedTouches[0].clientX - touchStartX.current;
+        const dy = e.changedTouches[0].clientY - touchStartY.current;
+
+        touchStartX.current = null;
+        touchStartY.current = null;
+
+        // Ignore vertical-dominant swipes (scrolling)
+        if (Math.abs(dy) > Math.abs(dx)) return;
+        if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+
+        if (dx < 0) {
+            onSwipeLeft?.();   // swipe left → next page
+        } else {
+            onSwipeRight?.();  // swipe right → previous page
+        }
+    }, [onSwipeLeft, onSwipeRight]);
+
+    // ── Determine animation class ────────────────────────────────────────────
+
+    // On initial load we use a gentle reveal; on navigation we use the directional flip.
+    // The key={currentPage} on the inner div forces a React re-mount on every page
+    // change, which restarts the CSS animation from its `from` keyframe.
+    const animationClass = isFirstRender
+        ? 'reader-flip-initial'
+        : direction > 0
+            ? 'reader-flip-forward'
+            : 'reader-flip-backward';
 
     return (
         /**
@@ -29,8 +85,8 @@ export default function BookViewport({
          *
          * Fix: the outer div is a plain scroll container. The inner wrapper uses
          * `min-h-full flex items-center justify-center` so that:
-         *  - Short pages: inner div fills the viewport and centers content ✓
-         *  - Tall pages: inner div grows beyond the viewport and scroll starts
+         *  - Short pages: inner div fills the viewport and centres content ✓
+         *  - Tall pages: inner div grows beyond the viewport; scroll starts
          *    from the top, making the whole page reachable ✓
          */
         <div
@@ -41,6 +97,8 @@ export default function BookViewport({
             style={{
                 background: 'radial-gradient(ellipse at 60% 40%, #EEF5FF 0%, #E5EDF8 55%, #DAE5F3 100%)',
             }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
         >
             {/* Loading overlay */}
             {isLoading && (
@@ -61,17 +119,22 @@ export default function BookViewport({
                 </div>
             )}
 
-            {/* Book pages — inner wrapper with min-h-full for correct scroll behavior */}
+            {/* Book pages — inner wrapper with min-h-full for correct scroll behaviour.
+                The key on the animated wrapper changes on every page navigation, which
+                causes React to unmount the old div and mount a new one. The new div
+                starts fresh with the CSS animation applied from its `from` keyframe. */}
             {pdfDoc && !error && (
                 <div className="min-h-full min-w-full flex items-center justify-center py-8 px-4 sm:px-14">
-                    <BookSpread
-                        pdfDoc={pdfDoc}
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        scale={scale}
-                        viewMode={viewMode}
-                        isMobile={isMobile}
-                    />
+                    <div key={currentPage} className={animationClass}>
+                        <BookSpread
+                            pdfDoc={pdfDoc}
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            scale={scale}
+                            viewMode={viewMode}
+                            isMobile={isMobile}
+                        />
+                    </div>
                 </div>
             )}
         </div>

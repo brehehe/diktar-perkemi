@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useForm } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 import AdminLayout from '../../../Layouts/AdminLayout';
 import PageHeader from '../../../Components/admin/PageHeader';
 import Button from '../../../Components/ui/Button';
@@ -13,6 +13,8 @@ import {
     UserCheck,
     Bell,
     Save,
+    Sparkles,
+    ArrowUpRight,
 } from 'lucide-react';
 
 export default function Index({ settings = {} }) {
@@ -177,11 +179,32 @@ export default function Index({ settings = {} }) {
 
             {/* Tab 2: Landing Page */}
             {activeTab === 'landing' && (
-                <form onSubmit={handleLandingSubmit} className="max-w-3xl space-y-6">
-                    <div className="bg-white rounded-xl border border-[#DCE7F3] p-6 shadow-xs space-y-5">
-                        <h2 className="text-sm font-bold text-[#0E2747] border-b border-[#DCE7F3] pb-3">
-                            Konten Sorotan Beranda (Hero Section)
-                        </h2>
+                <div className="max-w-3xl space-y-6">
+                    {/* Banner Shortcut ke Showcase 3 Buku */}
+                    <div className="bg-gradient-to-r from-[#EAF5FF] to-white rounded-xl border border-[#BCE0FD] p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-start sm:items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-lg bg-[#0B63CE] text-white flex items-center justify-center shrink-0 shadow-xs">
+                                <Sparkles className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-[#0E2747]">Visual Showcase 3 Buku Beranda</h3>
+                                <p className="text-xs text-[#6B7C93] mt-0.5">
+                                    Unggah cover custom, ganti judul, dan atur tautan navigasi untuk 3 buku 3D di hero section.
+                                </p>
+                            </div>
+                        </div>
+                        <Link href="/admin/showcase" className="shrink-0">
+                            <Button type="button" variant="primary" size="sm" icon={ArrowUpRight}>
+                                Kelola Showcase
+                            </Button>
+                        </Link>
+                    </div>
+
+                    <form onSubmit={handleLandingSubmit} className="space-y-6">
+                        <div className="bg-white rounded-xl border border-[#DCE7F3] p-6 shadow-xs space-y-5">
+                            <h2 className="text-sm font-bold text-[#0E2747] border-b border-[#DCE7F3] pb-3">
+                                Konten Teks Sorotan Beranda (Hero Section)
+                            </h2>
 
                         <Input
                             label="Lencana Hero (Top Badge)"
@@ -217,7 +240,8 @@ export default function Index({ settings = {} }) {
                         </div>
                     </div>
                 </form>
-            )}
+            </div>
+        )}
 
             {/* Tab 3: Akses & Registrasi */}
             {activeTab === 'access' && (

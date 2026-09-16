@@ -12,10 +12,11 @@ export default function Index({
     categories = [],
     available_years = [],
     material_types = [],
+    source_types = [],
     filters = {},
 }) {
     const hasActiveFilters = Boolean(
-        filters.q || filters.search || filters.category || filters.type || filters.year || (filters.sort && filters.sort !== 'latest')
+        filters.q || filters.search || filters.category || filters.type || filters.source_type || filters.year || (filters.sort && filters.sort !== 'latest')
     );
 
     const handleReset = () => {
@@ -88,6 +89,7 @@ export default function Index({
                     categories={categories}
                     availableYears={available_years}
                     materialTypes={material_types}
+                    sourceTypes={source_types}
                 />
 
                 {/* Materials Grid or Empty State */}

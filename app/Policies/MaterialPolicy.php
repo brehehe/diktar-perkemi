@@ -48,6 +48,22 @@ class MaterialPolicy
     }
 
     /**
+     * Determine whether the user can publish the model.
+     */
+    public function publish(User $user, Material $material): bool
+    {
+        return $user->isAdmin();
+    }
+
+    /**
+     * Determine whether the user can archive the model.
+     */
+    public function archive(User $user, Material $material): bool
+    {
+        return $user->isAdmin();
+    }
+
+    /**
      * Determine whether the user can read the digital book via the secure reader.
      */
     public function read(User $user, Material $material): bool
@@ -82,6 +98,11 @@ class MaterialPolicy
      */
     public function download(User $user, Material $material): bool
     {
+        // Non-PDF materials cannot be downloaded
+        if ($material->source_type && $material->source_type !== 'uploaded_pdf') {
+            return false;
+        }
+
         if (! $this->read($user, $material)) {
             return false;
         }
@@ -90,6 +111,6 @@ class MaterialPolicy
             return true;
         }
 
-        return (bool) $material->is_downloadable;
+        return (bool) ($material->allow_download || $material->is_downloadable);
     }
 }

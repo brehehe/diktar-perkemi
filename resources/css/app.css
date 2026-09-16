@@ -2094,3 +2094,140 @@ button, a, .pp-chip, .pp-faq-trigger {
     font-weight: 600;
     border-bottom-color: var(--pp-primary);
 }
+
+/* ─── Reader Page Flip Animations ─────────────────────────────────────────── */
+/* CSS-only 3D flip — no Framer Motion used for the main page turn.           */
+
+@keyframes readerFlipForward {
+    from {
+        transform: perspective(1400px) rotateY(52deg) scale(0.96);
+        opacity: 0;
+        filter: brightness(0.88);
+    }
+    60% {
+        filter: brightness(1);
+    }
+    to {
+        transform: perspective(1400px) rotateY(0deg) scale(1);
+        opacity: 1;
+        filter: brightness(1);
+    }
+}
+
+@keyframes readerFlipBackward {
+    from {
+        transform: perspective(1400px) rotateY(-52deg) scale(0.96);
+        opacity: 0;
+        filter: brightness(0.88);
+    }
+    60% {
+        filter: brightness(1);
+    }
+    to {
+        transform: perspective(1400px) rotateY(0deg) scale(1);
+        opacity: 1;
+        filter: brightness(1);
+    }
+}
+
+/* Forward (next page): page "opens" from the right edge */
+.reader-flip-forward {
+    animation: readerFlipForward 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: left center;
+    will-change: transform, opacity;
+}
+
+/* Backward (previous page): page "opens" from the left edge */
+.reader-flip-backward {
+    animation: readerFlipBackward 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: right center;
+    will-change: transform, opacity;
+}
+
+/* Initial load — book fades and scales up (no directional flip) */
+@keyframes readerInitialReveal {
+    from {
+        opacity: 0;
+        transform: scale(0.97) translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.reader-flip-initial {
+    animation: readerInitialReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Accessibility: disable all flip animations when user prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .reader-flip-forward,
+    .reader-flip-backward,
+    .reader-flip-initial {
+        animation: none !important;
+        transform: none !important;
+        opacity: 1 !important;
+        filter: none !important;
+    }
+}
+
+/* Scrollbar hide utility for reader overflow containers */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* ── StPageFlip / react-pageflip Core 3D Styles ─────────────────────────── */
+.stf__parent {
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    transform: translateZ(0);
+    -ms-touch-action: pan-y;
+    touch-action: pan-y;
+}
+
+.sft__wrapper {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.stf__parent canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+}
+
+.stf__block {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    perspective: 2000px;
+}
+
+.stf__item {
+    display: none;
+    position: absolute;
+    transform-style: preserve-3d;
+}
+
+.stf__outerShadow,
+.stf__innerShadow,
+.stf__hardShadow,
+.stf__hardInnerShadow {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.hard-page {
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.06);
+}
+.soft-page {
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.04);
+}
+
+

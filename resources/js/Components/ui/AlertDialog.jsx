@@ -4,12 +4,17 @@ import Button from './Button';
 
 export default function AlertDialog({
     isOpen,
+    open,
     onClose,
+    onCancel,
+    onOpenChange,
     onConfirm,
     title = 'Konfirmasi Tindakan',
     description,
-    confirmText = 'Lanjutkan',
-    cancelText = 'Batal',
+    confirmText,
+    confirmLabel,
+    cancelText,
+    cancelLabel,
     variant = 'danger',
     loading = false,
 }) {
@@ -17,8 +22,19 @@ export default function AlertDialog({
     const cancelButtonRef = useRef(null);
     const previousActiveElement = useRef(null);
 
+    const isShown = Boolean(isOpen ?? open);
+    const resolvedConfirmText = confirmText || confirmLabel || 'Lanjutkan';
+    const resolvedCancelText = cancelText || cancelLabel || 'Batal';
+
+    const handleClose = () => {
+        if (loading) return;
+        if (onClose) onClose();
+        if (onCancel) onCancel();
+        if (onOpenChange) onOpenChange(false);
+    };
+
     useEffect(() => {
-        if (isOpen) {
+        if (isShown) {
             previousActiveElement.current = document.activeElement;
             document.body.style.overflow = 'hidden';
             setTimeout(() => cancelButtonRef.current?.focus(), 50);
@@ -28,20 +44,20 @@ export default function AlertDialog({
                 previousActiveElement.current.focus();
             }
         }
-    }, [isOpen]);
+    }, [isShown]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.key === 'Escape' && isOpen && !loading) {
+            if (e.key === 'Escape' && isShown && !loading) {
                 e.preventDefault();
-                onClose();
+                handleClose();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, loading, onClose]);
+    }, [isShown, loading]);
 
-    if (!isOpen) return null;
+    if (!isShown) return null;
 
     const iconMap = {
         danger: <AlertTriangle className="w-5 h-5 text-[#FA5252]" />,
@@ -65,7 +81,7 @@ export default function AlertDialog({
         >
             <div
                 className="fixed inset-0 bg-[#0E2747]/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-                onClick={() => !loading && onClose()}
+                onClick={handleClose}
             />
 
             <div
@@ -95,9 +111,9 @@ export default function AlertDialog({
                         variant="secondary"
                         size="sm"
                         disabled={loading}
-                        onClick={onClose}
+                        onClick={handleClose}
                     >
-                        {cancelText}
+                        {resolvedCancelText}
                     </Button>
                     <Button
                         type="button"
@@ -106,7 +122,7 @@ export default function AlertDialog({
                         loading={loading}
                         onClick={onConfirm}
                     >
-                        {confirmText}
+                        {resolvedConfirmText}
                     </Button>
                 </div>
             </div>

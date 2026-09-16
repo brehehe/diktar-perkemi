@@ -3,6 +3,10 @@ import { Link, usePage } from '@inertiajs/react';
 import PortalLayout from '../../../Layouts/PortalLayout';
 import CollectionGrid from '../../../Components/portal/CollectionGrid';
 import CollectionMeta from '../../../Components/portal/CollectionMeta';
+import MaterialSourceBadge from '../../../Components/portal/MaterialSourceBadge';
+import VideoPlayer from '../../../Components/portal/VideoPlayer';
+import VideoMeta from '../../../Components/portal/VideoMeta';
+import ExternalMaterialViewer from '../../../Components/portal/ExternalMaterialViewer';
 import Button from '../../../Components/ui/Button';
 import {
     BookOpen,
@@ -16,6 +20,10 @@ import {
     ShieldAlert,
     ArrowLeft,
     Sparkles,
+    Play,
+    ExternalLink,
+    Video,
+    Globe,
 } from 'lucide-react';
 
 export default function Show({
@@ -71,7 +79,7 @@ export default function Show({
                     <div className="lg:col-span-4 space-y-5">
                         {/* Cover Card with tactile book styling */}
                         <div className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs overflow-hidden">
-                            <div className="h-1 bg-gradient-to-r from-[#0B63CE] to-[#0A3F82]" />
+                            <div className="h-1 bg-gradient-to-r from-[#0B63CE] via-[#20A47A] to-[#7957D5]" />
 
                             <div className="p-7 flex flex-col items-center text-center space-y-6">
                                 {/* Book Cover with physical book spine */}
@@ -90,7 +98,21 @@ export default function Show({
                                         />
                                     ) : (
                                         <div className="w-full h-full p-5 flex flex-col justify-between bg-gradient-to-b from-[#EAF5FF] to-white text-center">
-                                            <BookOpen className="w-14 h-14 text-[#0B63CE] mx-auto mt-4" />
+                                            <div className="mt-4">
+                                                {material.source_type === 'video' ? (
+                                                    <div className="w-14 h-14 rounded-2xl bg-[#F3EDFF] text-[#7957D5] border border-[#D0BFFF] flex items-center justify-center mx-auto shadow-xs">
+                                                        <Play className="w-7 h-7 fill-current ml-0.5" />
+                                                    </div>
+                                                ) : material.source_type === 'external_link' ? (
+                                                    <div className="w-14 h-14 rounded-2xl bg-[#FFF3E6] text-[#EE9B25] border border-[#FFD8A8] flex items-center justify-center mx-auto shadow-xs">
+                                                        <ExternalLink className="w-7 h-7" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-14 h-14 rounded-2xl bg-[#EAF5FF] text-[#0B63CE] border border-[#BCE0FD] flex items-center justify-center mx-auto shadow-xs">
+                                                        <BookOpen className="w-7 h-7" />
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="space-y-2">
                                                 <span className="font-serif text-sm font-bold text-[#0E2747] line-clamp-3 leading-snug block">
                                                     {material.title}
@@ -108,7 +130,44 @@ export default function Show({
 
                                 {/* Access & Action */}
                                 <div className="w-full space-y-3">
-                                    {can_read ? (
+                                    {material.source_type === 'video' ? (
+                                        <a
+                                            href="#video-player-section"
+                                            className="block w-full"
+                                            onClick={(e) => {
+                                                const el = document.getElementById('video-player-section');
+                                                if (el) {
+                                                    e.preventDefault();
+                                                    el.scrollIntoView({ behavior: 'smooth' });
+                                                }
+                                            }}
+                                        >
+                                            <Button
+                                                variant="primary"
+                                                size="lg"
+                                                icon={Play}
+                                                className="w-full justify-center"
+                                            >
+                                                Tonton Video
+                                            </Button>
+                                        </a>
+                                    ) : material.source_type === 'external_link' ? (
+                                        <a
+                                            href={material.external_url || '#'}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="block w-full"
+                                        >
+                                            <Button
+                                                variant="primary"
+                                                size="lg"
+                                                icon={ExternalLink}
+                                                className="w-full justify-center"
+                                            >
+                                                Buka Buku Digital
+                                            </Button>
+                                        </a>
+                                    ) : can_read ? (
                                         <Link
                                             href={readUrl}
                                             className="block w-full"
@@ -119,7 +178,7 @@ export default function Show({
                                                 icon={BookOpen}
                                                 className="w-full justify-center"
                                             >
-                                                Baca Sekarang
+                                                Baca E-Book (Flipbook)
                                             </Button>
                                         </Link>
                                     ) : !user ? (
@@ -149,7 +208,7 @@ export default function Show({
                                         </div>
                                     )}
 
-                                    {can_download && download_url && (
+                                    {can_download && download_url && material.source_type === 'uploaded_pdf' && (
                                         <a href={download_url} download className="block w-full">
                                             <Button variant="secondary" size="md" icon={Download} className="w-full justify-center">
                                                 Unduh Dokumen PDF
@@ -175,6 +234,7 @@ export default function Show({
                         {/* Title & Header Badges */}
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 flex-wrap">
+                                <MaterialSourceBadge sourceType={material.source_type} />
                                 {material.category && (
                                     <Link
                                         href={`/kategori/${material.category.slug}`}
@@ -209,7 +269,7 @@ export default function Show({
                                     <Calendar className="w-4 h-4 text-[#6B7C93]" />
                                     <span>Tahun {material.publication_year || '—'}</span>
                                 </span>
-                                {material.page_count && (
+                                {material.page_count && material.source_type === 'uploaded_pdf' && (
                                     <>
                                         <span className="text-[#DCE7F3]">•</span>
                                         <span>{material.page_count} Halaman</span>
@@ -218,16 +278,42 @@ export default function Show({
                             </div>
                         </div>
 
+                        {/* Video Player (if video) */}
+                        {material.source_type === 'video' && (
+                            <div id="video-player-section" className="scroll-mt-6">
+                                <VideoPlayer
+                                    embedUrl={material.embed_url}
+                                    title={material.title}
+                                    provider={material.video_provider}
+                                />
+                            </div>
+                        )}
+
+                        {/* External Viewer (if external link) */}
+                        {material.source_type === 'external_link' && (
+                            <ExternalMaterialViewer
+                                url={material.external_url}
+                                sourceName={material.external_source_name}
+                                openMode={material.external_open_mode}
+                                title={material.title}
+                            />
+                        )}
+
                         {/* Summary Block */}
                         {material.summary && (
                             <div className="bg-white rounded-xl border border-[#DCE7F3] p-6 shadow-xs space-y-2">
                                 <h3 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">
-                                    Ringkasan Modul
+                                    {material.source_type === 'video' ? 'Ringkasan Video' : 'Ringkasan Materi'}
                                 </h3>
                                 <p className="text-sm text-[#112743] leading-relaxed">
                                     {material.summary}
                                 </p>
                             </div>
+                        )}
+
+                        {/* Video Meta (Key points & learning objectives for video) */}
+                        {material.source_type === 'video' && (
+                            <VideoMeta material={material} />
                         )}
 
                         {/* Description / Full Syllabus */}

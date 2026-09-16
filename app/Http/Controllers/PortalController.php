@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Audience;
 use App\Models\Category;
 use App\Models\Material;
+use App\Models\Setting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -19,13 +20,13 @@ class PortalController extends Controller
     public function home(): Response
     {
         // 1. Portal Statistics from real database records
-        $totalPublished = Material::published()->whereHas('activeFile')->count();
+        $totalPublished = Material::published()->withValidSource()->count();
         $totalCategories = Category::where('is_active', true)->has('publishedMaterials')->count();
         if ($totalCategories === 0) {
             $totalCategories = Category::where('is_active', true)->count();
         }
         $totalAudiences = Audience::where('is_active', true)->count();
-        $latestUpdate = Material::published()->whereHas('activeFile')->max('updated_at');
+        $latestUpdate = Material::published()->withValidSource()->max('updated_at');
 
         $stats = [
             'total_materials' => $totalPublished,
@@ -37,7 +38,7 @@ class PortalController extends Controller
         // 2. Featured Collections (materials marked is_featured, fallback to latest)
         $featuredQuery = Material::query()
             ->published()
-            ->whereHas('activeFile')
+            ->withValidSource()
             ->with(['categories', 'activeFile']);
 
         $featuredMaterials = (clone $featuredQuery)
@@ -67,7 +68,7 @@ class PortalController extends Controller
 
         $categories = Category::where('is_active', true)
             ->withCount(['materials as published_count' => function ($q) {
-                $q->where('materials.status', 'published')->whereHas('activeFile');
+                $q->where('materials.status', 'published')->withValidSource();
             }])
             ->orderByDesc('published_count')
             ->take(6)
@@ -90,7 +91,7 @@ class PortalController extends Controller
         // 4. Latest Published Collections
         $latestMaterials = Material::query()
             ->published()
-            ->whereHas('activeFile')
+            ->withValidSource()
             ->with(['categories', 'activeFile'])
             ->latest('published_at')
             ->take(6)
@@ -100,7 +101,7 @@ class PortalController extends Controller
         // 5. Target Roles (Audiences)
         $audiences = Audience::where('is_active', true)
             ->withCount(['materials as materials_count' => function ($q) {
-                $q->where('materials.status', 'published')->whereHas('activeFile');
+                $q->where('materials.status', 'published')->withValidSource();
             }])
             ->orderBy('id')
             ->get()
@@ -113,12 +114,32 @@ class PortalController extends Controller
                 'materials_count' => $a->materials_count,
             ]);
 
+        // 6. Hero Showcase Books
+        $heroBooks = [
+            'book_1' => [
+                'image' => Setting::get('hero_book_1_image', '/images/cover-1.jpg'),
+                'title' => Setting::get('hero_book_1_title', 'Buku Modul PERKEMI 1'),
+                'link' => Setting::get('hero_book_1_link', '/koleksi'),
+            ],
+            'book_2' => [
+                'image' => Setting::get('hero_book_2_image', '/images/cover-2.jpg'),
+                'title' => Setting::get('hero_book_2_title', 'Buku Modul PERKEMI 2'),
+                'link' => Setting::get('hero_book_2_link', '/koleksi'),
+            ],
+            'book_3' => [
+                'image' => Setting::get('hero_book_3_image', '/images/cover-3.jpg'),
+                'title' => Setting::get('hero_book_3_title', 'Buku Utama Kurikulum PERKEMI'),
+                'link' => Setting::get('hero_book_3_link', '/koleksi'),
+            ],
+        ];
+
         return Inertia::render('Portal/Home', [
             'stats' => $stats,
             'featured_materials' => $formattedFeatured,
             'categories' => $categories,
             'latest_materials' => $latestMaterials,
             'roles' => $audiences,
+            'hero_books' => $heroBooks,
         ]);
     }
 
@@ -129,7 +150,7 @@ class PortalController extends Controller
     {
         $query = Material::query()
             ->published()
-            ->whereHas('activeFile')
+            ->withValidSource()
             ->with(['categories', 'activeFile', 'audiences']);
 
         // Search by keyword, title, code, author, or summary
@@ -157,6 +178,11 @@ class PortalController extends Controller
         // Filter by Type
         if ($request->filled('type')) {
             $query->where('type', $request->input('type'));
+        }
+
+        // Filter by Source Type
+        if ($request->filled('source_type')) {
+            $query->where('source_type', $request->input('source_type'));
         }
 
         // Filter by Publication Year
@@ -187,7 +213,7 @@ class PortalController extends Controller
             ->get(['id', 'name', 'slug', 'color']);
 
         $availableYears = Material::published()
-            ->whereHas('activeFile')
+            ->withValidSource()
             ->select('publication_year')
             ->whereNotNull('publication_year')
             ->distinct()
@@ -203,15 +229,23 @@ class PortalController extends Controller
             ['value' => 'document', 'label' => 'Dokumen / SK'],
         ];
 
+        $sourceTypes = [
+            ['value' => 'uploaded_pdf', 'label' => 'E-Book PDF'],
+            ['value' => 'external_link', 'label' => 'Buku Digital (Tautan)'],
+            ['value' => 'video', 'label' => 'Video Pembelajaran'],
+        ];
+
         return Inertia::render('Portal/Collections/Index', [
             'materials' => $materials,
             'categories' => $categories,
             'available_years' => $availableYears,
             'material_types' => $materialTypes,
+            'source_types' => $sourceTypes,
             'filters' => [
                 'q' => $request->input('q') ?? $request->input('search', ''),
                 'category' => $request->input('category', ''),
                 'type' => $request->input('type', ''),
+                'source_type' => $request->input('source_type', ''),
                 'year' => $request->input('year', ''),
                 'sort' => $sort,
             ],
@@ -225,7 +259,7 @@ class PortalController extends Controller
     {
         $material = Material::where('slug', $slug)
             ->published()
-            ->whereHas('activeFile')
+            ->withValidSource()
             ->with(['categories', 'audiences', 'activeFile'])
             ->firstOrFail();
 
@@ -247,12 +281,12 @@ class PortalController extends Controller
             }
         }
 
-        $canDownload = $user && $material->is_downloadable && ($user->isAdmin() || $canRead);
+        $canDownload = $user && ($material->allow_download || $material->is_downloadable) && $material->source_type === 'uploaded_pdf' && ($user->isAdmin() || $canRead);
 
         // Related materials in the same category
         $relatedMaterials = Material::where('id', '!=', $material->id)
             ->published()
-            ->whereHas('activeFile')
+            ->withValidSource()
             ->when($primaryCategory, function ($q) use ($primaryCategory) {
                 $q->whereHas('categories', function ($catQuery) use ($primaryCategory) {
                     $catQuery->where('categories.id', $primaryCategory->id);
@@ -261,6 +295,9 @@ class PortalController extends Controller
             ->take(3)
             ->get()
             ->map(fn (Material $m) => $this->formatMaterialSummary($m));
+
+        $keyPoints = $material->key_points ?: ($material->metadata['key_points'] ?? []);
+        $learningObjectives = $material->learning_objectives ?: ($material->metadata['learning_objectives'] ?? []);
 
         return Inertia::render('Portal/Collections/Show', [
             'material' => [
@@ -277,7 +314,28 @@ class PortalController extends Controller
                 'cover_path' => $material->cover_path,
                 'type' => $material->type,
                 'type_label' => $material->type_label,
-                'is_downloadable' => (bool) $material->is_downloadable,
+                'source_type' => $material->source_type ?? 'uploaded_pdf',
+                'source_type_label' => $material->source_type_label,
+                'source_badge_class' => $material->source_badge_class,
+                'external_url' => $material->external_url,
+                'external_source_name' => $material->external_source_name,
+                'external_open_mode' => $material->external_open_mode ?? 'new_tab',
+                'video_provider' => $material->video_provider,
+                'video_id' => $material->video_id,
+                'video_url' => $material->video_url,
+                'embed_url' => $material->embed_url,
+                'cta_label' => match ($material->source_type) {
+                    'video' => 'Tonton Video',
+                    'external_link' => 'Buka Buku Digital',
+                    default => 'Baca E-Book',
+                },
+                'cta_type' => match ($material->source_type) {
+                    'video' => 'video',
+                    'external_link' => 'external',
+                    default => 'reader',
+                },
+                'is_downloadable' => (bool) ($material->allow_download || $material->is_downloadable),
+                'allow_download' => (bool) ($material->allow_download || $material->is_downloadable),
                 'is_featured' => (bool) $material->is_featured,
                 'category' => $primaryCategory ? [
                     'id' => $primaryCategory->id,
@@ -290,6 +348,8 @@ class PortalController extends Controller
                     'name' => $a->name,
                     'code' => $a->code,
                 ]),
+                'key_points' => $keyPoints,
+                'learning_objectives' => $learningObjectives,
                 'active_file' => $material->activeFile ? [
                     'id' => $material->activeFile->id,
                     'original_name' => $material->activeFile->original_name,
@@ -316,7 +376,7 @@ class PortalController extends Controller
 
         $categories = Category::where('is_active', true)
             ->withCount(['materials as published_count' => function ($q) {
-                $q->where('materials.status', 'published')->whereHas('activeFile');
+                $q->where('materials.status', 'published')->withValidSource();
             }])
             ->orderBy('name')
             ->get()
@@ -334,7 +394,7 @@ class PortalController extends Controller
                 ];
             });
 
-        $totalMaterials = Material::published()->whereHas('activeFile')->count();
+        $totalMaterials = Material::published()->withValidSource()->count();
 
         return Inertia::render('Portal/Categories/Index', [
             'categories' => $categories,
@@ -351,7 +411,7 @@ class PortalController extends Controller
         $category = Category::where('slug', $slug)->firstOrFail();
 
         $query = Material::published()
-            ->whereHas('activeFile')
+            ->withValidSource()
             ->whereHas('categories', function ($q) use ($category) {
                 $q->where('categories.id', $category->id);
             })
@@ -385,7 +445,7 @@ class PortalController extends Controller
         $otherCategories = Category::where('id', '!=', $category->id)
             ->where('is_active', true)
             ->withCount(['materials as published_count' => function ($q) {
-                $q->where('materials.status', 'published')->whereHas('activeFile');
+                $q->where('materials.status', 'published')->withValidSource();
             }])
             ->get()
             ->map(fn (Category $c) => [
@@ -438,7 +498,7 @@ class PortalController extends Controller
 
         $audiences = Audience::where('is_active', true)
             ->withCount(['materials as materials_count' => function ($q) {
-                $q->where('materials.status', 'published')->whereHas('activeFile');
+                $q->where('materials.status', 'published')->withValidSource();
             }])
             ->orderBy('id')
             ->get()
@@ -497,7 +557,7 @@ class PortalController extends Controller
         $roleSlug = Str::slug($roleName);
 
         $query = Material::published()
-            ->whereHas('activeFile')
+            ->withValidSource()
             ->when($audience, function ($q) use ($audience) {
                 $q->whereHas('audiences', function ($audQ) use ($audience) {
                     $audQ->where('audiences.id', $audience->id);
@@ -532,7 +592,7 @@ class PortalController extends Controller
 
         $allRoles = Audience::where('is_active', true)
             ->withCount(['materials as materials_count' => function ($q) {
-                $q->where('materials.status', 'published')->whereHas('activeFile');
+                $q->where('materials.status', 'published')->withValidSource();
             }])
             ->get()
             ->map(fn (Audience $a) => [
@@ -562,7 +622,7 @@ class PortalController extends Controller
     public function about(): Response
     {
         $stats = [
-            'total_materials' => Material::published()->whereHas('activeFile')->count(),
+            'total_materials' => Material::published()->withValidSource()->count(),
             'total_categories' => Category::where('is_active', true)->count(),
             'total_roles' => Audience::where('is_active', true)->count(),
         ];
@@ -586,6 +646,7 @@ class PortalController extends Controller
     private function formatMaterialSummary(Material $m): array
     {
         $primaryCategory = $m->categories->first();
+        $sourceType = $m->source_type ?? 'uploaded_pdf';
 
         return [
             'id' => $m->id,
@@ -597,12 +658,37 @@ class PortalController extends Controller
             'cover_path' => $m->cover_path,
             'type' => $m->type,
             'type_label' => $m->type_label,
+            'source_type' => $sourceType,
+            'source_type_label' => $m->source_type_label,
+            'source_badge_class' => $m->source_badge_class,
+            'external_url' => $m->external_url,
+            'external_source_name' => $m->external_source_name,
+            'external_open_mode' => $m->external_open_mode ?? 'new_tab',
+            'video_provider' => $m->video_provider,
+            'video_id' => $m->video_id,
+            'video_url' => $m->video_url,
+            'embed_url' => $m->embed_url,
             'publication_year' => $m->publication_year,
             'page_count' => $m->page_count,
-            'is_downloadable' => (bool) $m->is_downloadable,
+            'is_downloadable' => (bool) ($m->allow_download || $m->is_downloadable),
+            'allow_download' => (bool) ($m->allow_download || $m->is_downloadable),
             'is_featured' => (bool) $m->is_featured,
-            'file_format' => 'PDF',
+            'file_format' => match ($sourceType) {
+                'video' => 'VIDEO',
+                'external_link' => 'LINK',
+                default => 'PDF',
+            },
             'file_size' => $m->activeFile ? $m->activeFile->formatted_size : null,
+            'cta_label' => match ($sourceType) {
+                'video' => 'Tonton Video',
+                'external_link' => 'Buka Buku Digital',
+                default => 'Baca E-Book',
+            },
+            'cta_type' => match ($sourceType) {
+                'video' => 'video',
+                'external_link' => 'external',
+                default => 'reader',
+            },
             'category' => $primaryCategory ? [
                 'id' => $primaryCategory->id,
                 'name' => $primaryCategory->name,

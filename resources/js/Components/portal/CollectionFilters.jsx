@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
-import { Search, Filter, X, RotateCcw } from 'lucide-react';
+import { Search, Filter, X, RotateCcw, FileText, ExternalLink, Play, Layers } from 'lucide-react';
 import Button from '../ui/Button';
 
 export default function CollectionFilters({
@@ -8,10 +8,12 @@ export default function CollectionFilters({
     categories = [],
     availableYears = [],
     materialTypes = [],
+    sourceTypes = [],
 }) {
     const [search, setSearch] = useState(filters.q || '');
     const [selectedCategory, setSelectedCategory] = useState(filters.category || '');
     const [selectedType, setSelectedType] = useState(filters.type || '');
+    const [selectedSourceType, setSelectedSourceType] = useState(filters.source_type || '');
     const [selectedYear, setSelectedYear] = useState(filters.year || '');
     const [selectedSort, setSelectedSort] = useState(filters.sort || 'latest');
     const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
@@ -21,6 +23,7 @@ export default function CollectionFilters({
             q: search,
             category: selectedCategory,
             type: selectedType,
+            source_type: selectedSourceType,
             year: selectedYear,
             sort: selectedSort,
             ...custom,
@@ -45,6 +48,7 @@ export default function CollectionFilters({
         setSearch('');
         setSelectedCategory('');
         setSelectedType('');
+        setSelectedSourceType('');
         setSelectedYear('');
         setSelectedSort('latest');
         router.get('/koleksi', {}, {
@@ -54,7 +58,7 @@ export default function CollectionFilters({
     };
 
     const hasActiveFilters = Boolean(
-        search || selectedCategory || selectedType || selectedYear || (selectedSort && selectedSort !== 'latest')
+        search || selectedCategory || selectedType || selectedSourceType || selectedYear || (selectedSort && selectedSort !== 'latest')
     );
 
     return (
@@ -122,12 +126,94 @@ export default function CollectionFilters({
                 </div>
             </div>
 
+            {/* Source Type Filter Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setSelectedSourceType('');
+                        applyFilters({ source_type: '' });
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                        !selectedSourceType
+                            ? 'bg-[#0B63CE] text-white shadow-xs'
+                            : 'bg-white text-[#112743] border border-[#DCE7F3] hover:border-[#0B63CE] hover:text-[#0B63CE]'
+                    }`}
+                >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Semua Format</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        const val = selectedSourceType === 'uploaded_pdf' ? '' : 'uploaded_pdf';
+                        setSelectedSourceType(val);
+                        applyFilters({ source_type: val });
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                        selectedSourceType === 'uploaded_pdf'
+                            ? 'bg-[#0B63CE] text-white shadow-xs'
+                            : 'bg-white text-[#112743] border border-[#DCE7F3] hover:border-[#0B63CE] hover:text-[#0B63CE]'
+                    }`}
+                >
+                    <FileText className="w-3.5 h-3.5 text-[#0B63CE]" />
+                    <span>E-Book PDF</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        const val = selectedSourceType === 'external_link' ? '' : 'external_link';
+                        setSelectedSourceType(val);
+                        applyFilters({ source_type: val });
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                        selectedSourceType === 'external_link'
+                            ? 'bg-[#EE9B25] text-white shadow-xs'
+                            : 'bg-white text-[#112743] border border-[#DCE7F3] hover:border-[#EE9B25] hover:text-[#EE9B25]'
+                    }`}
+                >
+                    <ExternalLink className="w-3.5 h-3.5 text-[#EE9B25]" />
+                    <span>Buku Digital (Tautan)</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        const val = selectedSourceType === 'video' ? '' : 'video';
+                        setSelectedSourceType(val);
+                        applyFilters({ source_type: val });
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                        selectedSourceType === 'video'
+                            ? 'bg-[#7957D5] text-white shadow-xs'
+                            : 'bg-white text-[#112743] border border-[#DCE7F3] hover:border-[#7957D5] hover:text-[#7957D5]'
+                    }`}
+                >
+                    <Play className="w-3.5 h-3.5 text-[#7957D5] fill-current" />
+                    <span>Video Pembelajaran</span>
+                </button>
+            </div>
+
             {/* Desktop Horizontal Filter Strip */}
             <div className="hidden sm:flex items-center gap-3 flex-wrap p-3 bg-white border border-[#DCE7F3] rounded-xl shadow-2xs">
                 <span className="text-xs font-bold uppercase tracking-wider text-[#0E2747] flex items-center gap-1.5 mr-1">
                     <Filter className="w-3.5 h-3.5 text-[#0B63CE]" />
                     Filter:
                 </span>
+
+                {/* Source Type Select */}
+                <select
+                    value={selectedSourceType}
+                    onChange={(e) => {
+                        setSelectedSourceType(e.target.value);
+                        applyFilters({ source_type: e.target.value });
+                    }}
+                    className="bg-[#F8FBFF] border border-[#DCE7F3] rounded-lg px-2.5 py-1.5 text-xs text-[#112743] focus:outline-none focus:border-[#0B63CE]"
+                >
+                    <option value="">Semua Sumber</option>
+                    <option value="uploaded_pdf">E-Book PDF</option>
+                    <option value="external_link">Buku Digital (Tautan)</option>
+                    <option value="video">Video Pembelajaran</option>
+                </select>
 
                 {/* Category Select */}
                 <select
@@ -228,6 +314,22 @@ export default function CollectionFilters({
                                         <option value="oldest">Terlama</option>
                                         <option value="title_asc">Judul A-Z</option>
                                         <option value="title_desc">Judul Z-A</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="font-semibold text-[#112743] block mb-1">
+                                        Sumber Materi
+                                    </label>
+                                    <select
+                                        value={selectedSourceType}
+                                        onChange={(e) => setSelectedSourceType(e.target.value)}
+                                        className="w-full bg-[#F8FBFF] border border-[#DCE7F3] rounded-lg p-2"
+                                    >
+                                        <option value="">Semua Format</option>
+                                        <option value="uploaded_pdf">E-Book PDF</option>
+                                        <option value="external_link">Buku Digital (Tautan)</option>
+                                        <option value="video">Video Pembelajaran</option>
                                     </select>
                                 </div>
 

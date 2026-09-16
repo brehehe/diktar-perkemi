@@ -8,6 +8,7 @@ import {
     ShieldCheck,
     History,
     Settings,
+    Sparkles,
     HelpCircle,
     ExternalLink,
     X,
@@ -32,6 +33,11 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
             name: 'Kategori',
             href: '/admin/kategori',
             icon: Tags,
+        },
+        {
+            name: 'Showcase Beranda',
+            href: '/admin/showcase',
+            icon: Sparkles,
         },
         {
             name: 'Pengguna',

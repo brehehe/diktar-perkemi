@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\HelpController;
 use App\Http\Controllers\Admin\MaterialController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\ShowcaseController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -41,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/koleksi/{slug}/baca', [ReaderController::class, 'show'])->name('reader.show');
     Route::get('/koleksi/{slug}/file', [ReaderController::class, 'streamFile'])->name('reader.file');
     Route::get('/koleksi/{slug}/unduh', [ReaderController::class, 'downloadFile'])->name('reader.download');
+    Route::get('/koleksi/{slug}/download', [ReaderController::class, 'downloadFile'])->name('reader.download.alias');
     Route::post('/koleksi/{slug}/progres', [ReaderController::class, 'saveProgress'])->name('reader.progress');
     Route::post('/koleksi/{slug}/bookmark', [ReaderController::class, 'storeBookmark'])->name('reader.bookmark.store');
     Route::delete('/koleksi/{slug}/bookmark/{bookmark}', [ReaderController::class, 'destroyBookmark'])->name('reader.bookmark.destroy');
@@ -80,6 +82,11 @@ Route::middleware(['auth', EnsureUserIsAdmin::class])->prefix('admin')->name('ad
     // Pengaturan Portal (Settings)
     Route::get('/pengaturan', [SettingController::class, 'index'])->name('settings.index');
     Route::put('/pengaturan', [SettingController::class, 'update'])->name('settings.update');
+
+    // Showcase Beranda (Hero Book Showcase)
+    Route::get('/showcase', [ShowcaseController::class, 'index'])->name('showcase.index');
+    Route::post('/showcase', [ShowcaseController::class, 'update'])->name('showcase.update');
+    Route::post('/showcase/reset', [ShowcaseController::class, 'reset'])->name('showcase.reset');
 
     // Bantuan Admin (Help)
     Route::get('/bantuan', [HelpController::class, 'index'])->name('help.index');

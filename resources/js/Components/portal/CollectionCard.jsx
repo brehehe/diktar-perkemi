@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
-import { BookOpen, User, Calendar, FileText, ArrowUpRight } from 'lucide-react';
+import { BookOpen, User, Calendar, FileText, ArrowUpRight, Play, Video, ExternalLink } from 'lucide-react';
+import MaterialSourceBadge from './MaterialSourceBadge';
 
 // Map type to muted badge styling
 const typeColors = {
@@ -13,6 +14,16 @@ const typeColors = {
 
 export default function CollectionCard({ material, className = '' }) {
     const typeStyle = typeColors[material.type] || { bg: '#F8FBFF', text: '#6B7C93', border: '#DCE7F3' };
+
+    const ctaLabel = material.cta_label || (
+        material.source_type === 'video' ? 'Tonton Video' :
+        material.source_type === 'external_link' ? 'Buka Buku Digital' :
+        'Baca E-Book'
+    );
+
+    const ctaHref = material.source_type === 'uploaded_pdf'
+        ? `/koleksi/${material.slug}/baca`
+        : `/koleksi/${material.slug}`;
 
     return (
         <div
@@ -42,8 +53,20 @@ export default function CollectionCard({ material, className = '' }) {
                         />
                     ) : (
                         <div className="w-full h-full flex flex-col justify-between bg-gradient-to-b from-[#EAF5FF] to-white p-3 text-center">
-                            <div className="w-7 h-7 rounded-lg bg-[#0B63CE] text-white flex items-center justify-center mx-auto shadow-sm">
-                                <BookOpen className="w-4 h-4" />
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center mx-auto shadow-sm ${
+                                material.source_type === 'video'
+                                    ? 'bg-[#7957D5] text-white'
+                                    : material.source_type === 'external_link'
+                                    ? 'bg-[#EE9B25] text-white'
+                                    : 'bg-[#0B63CE] text-white'
+                            }`}>
+                                {material.source_type === 'video' ? (
+                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                ) : material.source_type === 'external_link' ? (
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                ) : (
+                                    <BookOpen className="w-3.5 h-3.5" />
+                                )}
                             </div>
                             <div className="space-y-1">
                                 <span className="font-serif text-[10px] font-bold text-[#0E2747] line-clamp-3 leading-tight block">
@@ -130,17 +153,21 @@ export default function CollectionCard({ material, className = '' }) {
                 </div>
 
                 {/* Footer Action */}
-                <div className="pt-3 border-t border-[#DCE7F3] flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-[#9BACC0] tracking-wider">
-                        PDF
-                    </span>
+                <div className="pt-3 border-t border-[#DCE7F3] flex items-center justify-between gap-2">
+                    <MaterialSourceBadge sourceType={material.source_type} />
 
                     <Link
-                        href={`/koleksi/${material.slug}`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-[#0B63CE] hover:text-[#0A3F82] transition-colors group/link"
+                        href={ctaHref}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EAF5FF] hover:bg-[#0B63CE] text-xs font-semibold text-[#0B63CE] hover:text-white transition-all duration-150 group/cta"
                     >
-                        <span>Lihat Detail</span>
-                        <ArrowUpRight className="w-3.5 h-3.5 group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform duration-150" />
+                        {material.source_type === 'video' ? (
+                            <Play className="w-3 h-3 fill-current" />
+                        ) : material.source_type === 'external_link' ? (
+                            <ExternalLink className="w-3 h-3" />
+                        ) : (
+                            <BookOpen className="w-3 h-3" />
+                        )}
+                        <span>{ctaLabel}</span>
                     </Link>
                 </div>
             </div>

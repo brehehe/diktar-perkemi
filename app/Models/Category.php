@@ -67,10 +67,10 @@ class Category extends Model
     }
 
     /**
-     * Published materials with active file in this category.
+     * Published materials with valid sources in this category.
      */
     public function publishedMaterials(): BelongsToMany
     {
-        return $this->materials()->where('materials.status', 'published')->whereHas('activeFile');
+        return $this->materials()->where('materials.status', 'published')->withValidSource();
     }
 }

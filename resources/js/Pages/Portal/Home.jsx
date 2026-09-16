@@ -25,6 +25,7 @@ export default function Home({
     categories = [],
     latest_materials = [],
     roles = [],
+    hero_books = {},
 }) {
     const { props } = usePage();
     const user = props.auth?.user;
@@ -116,7 +117,7 @@ export default function Home({
 
                         {/* Kanan: 3D Floating Book Showcase dengan Framer Motion */}
                         <div className="lg:col-span-5 flex items-center justify-center lg:justify-end">
-                            <HeroBookShowcase />
+                            <HeroBookShowcase heroBooks={hero_books} />
                         </div>
                     </div>
                 </div>

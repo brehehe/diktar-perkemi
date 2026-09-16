@@ -32,12 +32,22 @@ class Material extends Model
         'description',
         'cover_path',
         'type',
+        'source_type',
+        'external_url',
+        'external_source_name',
+        'external_open_mode',
+        'video_provider',
+        'video_id',
+        'video_url',
+        'video_allow_portal',
+        'access_scope',
         'status',
         'publication_year',
         'language_code',
         'page_count',
         'duration_seconds',
         'is_downloadable',
+        'allow_download',
         'is_featured',
         'published_at',
         'reviewed_at',
@@ -46,6 +56,9 @@ class Material extends Model
         'reviewed_by',
         'review_notes',
         'metadata',
+        'key_points',
+        'learning_objectives',
+        'target_roles',
     ];
 
     /**
@@ -57,7 +70,12 @@ class Material extends Model
     {
         return [
             'metadata' => 'array',
+            'key_points' => 'array',
+            'learning_objectives' => 'array',
+            'target_roles' => 'array',
             'is_downloadable' => 'boolean',
+            'allow_download' => 'boolean',
+            'video_allow_portal' => 'boolean',
             'is_featured' => 'boolean',
             'published_at' => 'datetime',
             'reviewed_at' => 'datetime',
@@ -204,6 +222,31 @@ class Material extends Model
     }
 
     /**
+     * Scope for materials with valid and complete source data.
+     */
+    public function scopeWithValidSource(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where(function (Builder $pdfQ) {
+                $pdfQ->where('source_type', 'uploaded_pdf')
+                    ->whereHas('activeFile');
+            })->orWhere(function (Builder $linkQ) {
+                $linkQ->where('source_type', 'external_link')
+                    ->whereNotNull('external_url')
+                    ->where('external_url', '!=', '');
+            })->orWhere(function (Builder $videoQ) {
+                $videoQ->where('source_type', 'video')
+                    ->where(function (Builder $vSub) {
+                        $vSub->whereNotNull('video_id')->where('video_id', '!=', '')
+                            ->orWhere(function (Builder $vuSub) {
+                                $vuSub->whereNotNull('video_url')->where('video_url', '!=', '');
+                            });
+                    });
+            });
+        });
+    }
+
+    /**
      * Check if material has active file attached.
      */
     public function hasActiveFile(): bool
@@ -212,10 +255,74 @@ class Material extends Model
     }
 
     /**
-     * File status indicator: 'ready', 'missing'.
+     * Check if material has valid and complete source.
+     */
+    public function hasValidSource(): bool
+    {
+        return match ($this->source_type) {
+            'external_link' => ! empty($this->external_url),
+            'video' => ! empty($this->video_id) || ! empty($this->video_url),
+            default => $this->hasActiveFile(),
+        };
+    }
+
+    /**
+     * Label for source type in Indonesian.
+     */
+    public function getSourceTypeLabelAttribute(): string
+    {
+        return match ($this->source_type) {
+            'external_link' => 'Buku Digital (Tautan)',
+            'video' => 'Video Pembelajaran',
+            default => 'E-Book PDF',
+        };
+    }
+
+    /**
+     * CSS badge class for source type.
+     */
+    public function getSourceBadgeClassAttribute(): string
+    {
+        return match ($this->source_type) {
+            'external_link' => 'bg-[#FFF3E6] text-[#EE9B25] border-[#FFD8A8]',
+            'video' => 'bg-[#F3EDFF] text-[#7957D5] border-[#D0BFFF]',
+            default => 'bg-[#EAF5FF] text-[#0B63CE] border-[#BCE0FD]',
+        };
+    }
+
+    /**
+     * Normalized safe embed URL for video materials or embeddable links.
+     */
+    public function getEmbedUrlAttribute(): ?string
+    {
+        if ($this->source_type === 'video') {
+            if ($this->video_provider === 'vimeo' && $this->video_id) {
+                return "https://player.vimeo.com/video/{$this->video_id}?dnt=1&app_id=122963";
+            }
+            if ($this->video_id) {
+                return "https://www.youtube-nocookie.com/embed/{$this->video_id}?rel=0&modestbranding=1";
+            }
+        }
+
+        if ($this->source_type === 'external_link' && $this->external_open_mode === 'embed' && $this->external_url) {
+            return $this->external_url;
+        }
+
+        return null;
+    }
+
+    /**
+     * File status indicator: 'ready', 'missing', 'external'.
      */
     public function getFileStatusAttribute(): string
     {
+        if ($this->source_type === 'external_link') {
+            return ! empty($this->external_url) ? 'ready' : 'missing';
+        }
+        if ($this->source_type === 'video') {
+            return (! empty($this->video_id) || ! empty($this->video_url)) ? 'ready' : 'missing';
+        }
+
         return $this->hasActiveFile() ? 'ready' : 'missing';
     }
 
@@ -224,6 +331,13 @@ class Material extends Model
      */
     public function getFileStatusLabelAttribute(): string
     {
+        if ($this->source_type === 'external_link') {
+            return ! empty($this->external_url) ? 'Tautan Siap' : 'Tautan Belum Diisi';
+        }
+        if ($this->source_type === 'video') {
+            return (! empty($this->video_id) || ! empty($this->video_url)) ? 'Video Siap' : 'Video Belum Diisi';
+        }
+
         return $this->hasActiveFile() ? 'File Siap' : 'File Belum Diunggah';
     }
 }

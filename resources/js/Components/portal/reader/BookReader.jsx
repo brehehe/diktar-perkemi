@@ -60,6 +60,9 @@ export default function BookReader({
     const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
     const [sidebarTab, setSidebarTab] = useState('points'); // 'points' | 'toc' | 'bookmarks' | 'details' | 'settings'
 
+    // Page flip direction: 1 = forward (right), −1 = backward (left)
+    const [direction, setDirection] = useState(1);
+
     // Responsive screen width state
     const [isMobile, setIsMobile] = useState(false);
 
@@ -147,12 +150,14 @@ export default function BookReader({
         }, 1200);
     }, [material?.slug]);
 
-    // Page change handler
+    // Page change handler — auto-detects flip direction from page number delta
     const handlePageChange = useCallback((newPage) => {
         const safePage = Math.min(Math.max(1, newPage), totalPages);
+        // Update direction BEFORE setCurrentPage so both fire in the same batch
+        setDirection(safePage >= currentPage ? 1 : -1);
         setCurrentPage(safePage);
         saveReadingProgress(safePage, totalPages);
-    }, [totalPages, saveReadingProgress]);
+    }, [totalPages, currentPage, saveReadingProgress]);
 
     // Next Page Step (two pages in spread, one page in single)
     const handleNextPage = useCallback(() => {
@@ -365,6 +370,9 @@ export default function BookReader({
                         isMobile={isMobile}
                         onRetry={loadPdfDocument}
                         backUrl={resolvedBackUrl}
+                        direction={direction}
+                        onSwipeLeft={handleNextPage}
+                        onSwipeRight={handlePrevPage}
                     />
 
                     {/* Side-turn buttons: absolute within <main> NOT inside the scroll viewport

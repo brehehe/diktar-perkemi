@@ -40,9 +40,9 @@ export default function PdfPage({
 
                 // Calculate HiDPI resolution
                 const pixelRatio = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-                // Base viewport at 96 DPI * scale
-                const baseViewport = page.getViewport({ scale: scale * 1.35 });
-                const renderViewport = page.getViewport({ scale: scale * 1.35 * pixelRatio });
+                // Base viewport at scale (1.0 = native PDF pt to CSS px)
+                const baseViewport = page.getViewport({ scale: scale });
+                const renderViewport = page.getViewport({ scale: scale * pixelRatio });
 
                 const canvas = canvasRef.current;
                 if (!canvas || isCancelled) return;
@@ -119,8 +119,7 @@ export default function PdfPage({
             style={{
                 width: dimensions.width ? `${dimensions.width}px` : 'auto',
                 height: dimensions.height ? `${dimensions.height}px` : 'auto',
-                minWidth: '240px',
-                minHeight: '340px',
+                aspectRatio: !dimensions.width ? '595 / 842' : undefined,
             }}
         >
             {/* Loading Indicator for page */}

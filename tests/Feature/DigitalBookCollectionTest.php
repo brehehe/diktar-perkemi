@@ -358,3 +358,239 @@ test('downloadFile respects is_downloadable flag and records activity log', func
         'subject_id' => $material->id,
     ]);
 });
+
+test('admin can create material with external digital book link', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $category = Category::create(['name' => 'Referensi', 'slug' => 'referensi']);
+
+    $response = $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Buku Referensi Daring PERKEMI',
+        'code' => 'REF-EXT-01',
+        'category_id' => $category->id,
+        'type' => 'book',
+        'source_type' => 'external_link',
+        'external_url' => 'https://perkemi.or.id/pustaka/buku-pedoman-2026',
+        'external_source_name' => 'Perpustakaan Digital Nasional',
+        'external_open_mode' => 'new_tab',
+        'status' => 'published',
+    ]);
+
+    $response->assertRedirect('/admin/koleksi');
+
+    $material = Material::where('code', 'REF-EXT-01')->first();
+    expect($material)->not->toBeNull()
+        ->and($material->source_type)->toBe('external_link')
+        ->and($material->external_url)->toBe('https://perkemi.or.id/pustaka/buku-pedoman-2026')
+        ->and($material->external_source_name)->toBe('Perpustakaan Digital Nasional')
+        ->and($material->hasValidSource())->toBeTrue();
+});
+
+test('admin can create material with video lecture from YouTube', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $category = Category::create(['name' => 'Video', 'slug' => 'video']);
+
+    $response = $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Video Pembelajaran Goho & Juho',
+        'code' => 'VID-001',
+        'category_id' => $category->id,
+        'type' => 'video',
+        'source_type' => 'video',
+        'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        'video_allow_portal' => true,
+        'status' => 'published',
+    ]);
+
+    $response->assertRedirect('/admin/koleksi');
+
+    $material = Material::where('code', 'VID-001')->first();
+    expect($material)->not->toBeNull()
+        ->and($material->source_type)->toBe('video')
+        ->and($material->video_provider)->toBe('youtube')
+        ->and($material->video_id)->toBe('dQw4w9WgXcQ')
+        ->and($material->embed_url)->toContain('youtube-nocookie.com/embed/dQw4w9WgXcQ')
+        ->and($material->hasValidSource())->toBeTrue();
+});
+
+test('store material rejects invalid video provider or dangerous external url', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $category = Category::create(['name' => 'Validasi', 'slug' => 'validasi']);
+
+    // Dangerous external URL: localhost / private IP
+    $respLocalhost = $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Link Localhost Ilegal',
+        'category_id' => $category->id,
+        'type' => 'book',
+        'source_type' => 'external_link',
+        'external_url' => 'https://localhost/buku.pdf',
+        'status' => 'draft',
+    ]);
+    $respLocalhost->assertSessionHasErrors('external_url');
+
+    // Unsupported video provider (e.g. dailymotion or raw iframe)
+    $respVideo = $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Video Ilegal',
+        'category_id' => $category->id,
+        'type' => 'video',
+        'source_type' => 'video',
+        'video_url' => 'https://dailymotion.com/video/x7xyz',
+        'status' => 'draft',
+    ]);
+    $respVideo->assertSessionHasErrors('video_url');
+});
+
+test('portal collections catalog displays published materials with valid sources across all source types', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $category = Category::create(['name' => 'Kategori Uji', 'slug' => 'kategori-uji']);
+
+    // 1. PDF
+    $pdf = UploadedFile::fake()->create('modul-pdf.pdf', 500, 'application/pdf');
+    $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Modul PDF Terbit',
+        'code' => 'MOD-PDF',
+        'category_id' => $category->id,
+        'type' => 'module',
+        'source_type' => 'uploaded_pdf',
+        'status' => 'published',
+        'book_file' => $pdf,
+    ]);
+
+    // 2. External Link
+    $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Buku Tautan Eksternal',
+        'code' => 'EXT-BOOK',
+        'category_id' => $category->id,
+        'type' => 'book',
+        'source_type' => 'external_link',
+        'external_url' => 'https://perkemi.or.id/buku-terbit',
+        'status' => 'published',
+    ]);
+
+    // 3. Video
+    $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Video Pembelajaran Terbit',
+        'code' => 'VID-PLAY',
+        'category_id' => $category->id,
+        'type' => 'video',
+        'source_type' => 'video',
+        'video_url' => 'https://youtu.be/dQw4w9WgXcQ',
+        'status' => 'published',
+    ]);
+
+    $response = $this->get('/koleksi');
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Portal/Collections/Index')
+            ->has('materials.data', 3)
+            ->where('materials.data.0.cta_label', fn ($val) => in_array($val, ['Baca E-Book', 'Buka Buku Digital', 'Tonton Video']))
+        );
+});
+
+test('download route alias /koleksi/{slug}/download functions identically to /unduh', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $reader = User::factory()->create(['role' => 'Peserta']);
+    $category = Category::create(['name' => 'Modul', 'slug' => 'modul']);
+
+    $pdfFile = UploadedFile::fake()->create('buku-download-alias.pdf', 600, 'application/pdf');
+    $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Buku Download Alias',
+        'code' => 'ALIAS-01',
+        'category_id' => $category->id,
+        'type' => 'book',
+        'source_type' => 'uploaded_pdf',
+        'status' => 'published',
+        'allow_download' => true,
+        'book_file' => $pdfFile,
+    ]);
+
+    $material = Material::where('code', 'ALIAS-01')->first();
+
+    $responseUnduh = $this->actingAs($reader)->get("/koleksi/{$material->slug}/unduh");
+    $responseUnduh->assertOk();
+
+    $responseDownload = $this->actingAs($reader)->get("/koleksi/{$material->slug}/download");
+    $responseDownload->assertOk();
+});
+
+test('admin can update material and replace book file via update route', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $category = Category::create(['name' => 'Modul Update', 'slug' => 'modul-update']);
+
+    $pdfFile = UploadedFile::fake()->create('buku-awal.pdf', 600, 'application/pdf');
+    $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Buku Versi Pertama',
+        'code' => 'VER-01',
+        'category_id' => $category->id,
+        'type' => 'book',
+        'source_type' => 'uploaded_pdf',
+        'status' => 'published',
+        'book_file' => $pdfFile,
+    ]);
+
+    $material = Material::where('code', 'VER-01')->first();
+    expect($material->activeFile->version)->toBe(1);
+
+    $updatedPdf = UploadedFile::fake()->create('buku-versi-dua.pdf', 800, 'application/pdf');
+    $response = $this->actingAs($admin)->put("/admin/koleksi/{$material->id}", [
+        'title' => 'Buku Versi Pertama (Revisi)',
+        'category_id' => $category->id,
+        'type' => 'book',
+        'source_type' => 'uploaded_pdf',
+        'status' => 'published',
+        'book_file' => $updatedPdf,
+    ]);
+
+    $response->assertRedirect('/admin/koleksi');
+
+    $material->refresh();
+    expect($material->title)->toBe('Buku Versi Pertama (Revisi)')
+        ->and($material->activeFile->version)->toBe(2)
+        ->and($material->activeFile->original_name)->toBe('buku-versi-dua.pdf')
+        ->and($material->files()->count())->toBe(2);
+});
+
+test('admin can access collection create page with required props', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    Category::create(['name' => 'Kategori Baru', 'slug' => 'kategori-baru']);
+
+    $response = $this->actingAs($admin)->get('/admin/koleksi/create');
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Collections/Create')
+            ->has('categories')
+            ->has('source_types')
+            ->has('material_types')
+            ->has('status_options')
+            ->has('max_file_size_mb')
+        );
+});
+
+test('admin can access collection edit page with active_file and file_history props', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $category = Category::create(['name' => 'Modul Edit', 'slug' => 'modul-edit']);
+
+    $pdfFile = UploadedFile::fake()->create('modul-edit-test.pdf', 500, 'application/pdf');
+    $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Modul Edit Test',
+        'code' => 'EDIT-01',
+        'category_id' => $category->id,
+        'type' => 'module',
+        'source_type' => 'uploaded_pdf',
+        'status' => 'draft',
+        'book_file' => $pdfFile,
+    ]);
+
+    $material = Material::where('code', 'EDIT-01')->first();
+
+    $response = $this->actingAs($admin)->get("/admin/koleksi/{$material->id}/edit");
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Collections/Edit')
+            ->has('material')
+            ->where('material.title', 'Modul Edit Test')
+            ->has('active_file')
+            ->where('active_file.original_name', 'modul-edit-test.pdf')
+            ->where('active_file.version', 1)
+            ->has('file_history', 1)
+            ->has('max_file_size_mb')
+        );
+});

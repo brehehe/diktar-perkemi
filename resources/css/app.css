@@ -2186,6 +2186,13 @@ button, a, .pp-chip, .pp-faq-trigger {
     touch-action: pan-y;
 }
 
+.reader-zoomed .stf__parent,
+.reader-zoomed .st-page-flip,
+.reader-zoomed canvas {
+    -ms-touch-action: pan-x pan-y !important;
+    touch-action: pan-x pan-y !important;
+}
+
 .sft__wrapper {
     position: relative;
     width: 100%;

@@ -38,11 +38,12 @@ export default function PdfPage({
                 const page = await pdfDoc.getPage(pageNumber);
                 if (isCancelled) return;
 
-                // Calculate HiDPI resolution
+                // Calculate HiDPI resolution with boost for zoom crispness
                 const pixelRatio = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+                const renderFactor = Math.max(pixelRatio, 1.8);
                 // Base viewport at scale (1.0 = native PDF pt to CSS px)
                 const baseViewport = page.getViewport({ scale: scale });
-                const renderViewport = page.getViewport({ scale: scale * pixelRatio });
+                const renderViewport = page.getViewport({ scale: scale * renderFactor });
 
                 const canvas = canvasRef.current;
                 if (!canvas || isCancelled) return;

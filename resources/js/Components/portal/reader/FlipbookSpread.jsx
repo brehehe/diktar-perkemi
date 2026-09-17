@@ -87,9 +87,66 @@ export default function FlipbookSpread({
     onNext,
     canGoPrev = true,
     canGoNext = true,
+    zoom = 100,
+    onToggleZoom = null,
 }) {
     const flipBookRef = useRef(null);
     const isInternalFlip = useRef(false);
+    const isExternalSync = useRef(false);
+    const syncTimeoutRef = useRef(null);
+
+    // Double-click / double-tap detection to toggle zoom without turning pages
+    const lastClickRef = useRef({ time: 0, x: 0, y: 0 });
+    const lastToggleRef = useRef(0);
+
+    const triggerToggleZoom = useCallback((clientX, clientY) => {
+        const now = Date.now();
+        if (now - lastToggleRef.current < 350) return;
+        lastToggleRef.current = now;
+        onToggleZoom?.({ clientX, clientY });
+    }, [onToggleZoom]);
+
+    const handleMouseUp = useCallback((e) => {
+        if (e.button !== 0) return;
+        if (e.target.closest?.('button, a, input, select')) return;
+
+        const now = Date.now();
+        const timeDiff = now - lastClickRef.current.time;
+        const dist = Math.hypot(
+            e.clientX - lastClickRef.current.x,
+            e.clientY - lastClickRef.current.y
+        );
+
+        if (timeDiff > 40 && timeDiff < 380 && dist < 25) {
+            lastClickRef.current = { time: 0, x: 0, y: 0 };
+            triggerToggleZoom(e.clientX, e.clientY);
+        } else {
+            lastClickRef.current = { time: now, x: e.clientX, y: e.clientY };
+        }
+    }, [triggerToggleZoom]);
+
+    const handleTouchEnd = useCallback((e) => {
+        if (e.changedTouches?.length !== 1) return;
+        const touch = e.changedTouches[0];
+        const now = Date.now();
+        const timeDiff = now - lastClickRef.current.time;
+        const dist = Math.hypot(
+            touch.clientX - lastClickRef.current.x,
+            touch.clientY - lastClickRef.current.y
+        );
+
+        if (timeDiff > 40 && timeDiff < 380 && dist < 30) {
+            lastClickRef.current = { time: 0, x: 0, y: 0 };
+            triggerToggleZoom(touch.clientX, touch.clientY);
+        } else {
+            lastClickRef.current = { time: now, x: touch.clientX, y: touch.clientY };
+        }
+    }, [triggerToggleZoom]);
+
+    const handleDoubleClick = useCallback((e) => {
+        e.preventDefault();
+        triggerToggleZoom(e.clientX, e.clientY);
+    }, [triggerToggleZoom]);
 
     // Array of page numbers 1..totalPages
     const pageNumbers = useMemo(
@@ -132,6 +189,9 @@ export default function FlipbookSpread({
     // Handle flip event from react-pageflip (drag corner or click flip)
     const handleFlip = useCallback((e) => {
         enforceSoftPages();
+        if (isExternalSync.current) {
+            return;
+        }
         const newPageNum = e.data + 1; // 0-indexed to 1-indexed page
         isInternalFlip.current = true;
         onPageChange?.(newPageNum);
@@ -143,7 +203,15 @@ export default function FlipbookSpread({
 
     const handleInit = useCallback(() => {
         enforceSoftPages();
-    }, [enforceSoftPages]);
+        const pageFlip = flipBookRef.current?.pageFlip?.();
+        if (pageFlip && isMobile) {
+            try {
+                if (pageFlip.getRender?.()?.getOrientation?.() !== 'portrait') {
+                    pageFlip.updateOrientation?.('portrait');
+                }
+            } catch (e) {}
+        }
+    }, [enforceSoftPages, isMobile]);
 
     const handleChangeState = useCallback(() => {
         enforceSoftPages();
@@ -157,15 +225,97 @@ export default function FlipbookSpread({
 
         try {
             enforceSoftPages();
-            const currentFlipIndex = pageFlip.getCurrentPageIndex();
+
+            // If an animation is still in progress from rapid clicks, finish it immediately
+            // so internal PageFlip state finishes updating before starting the next flip
+            if (pageFlip.getState?.() !== 'read') {
+                pageFlip.getRender?.()?.finishAnimation?.();
+                enforceSoftPages();
+            }
+
+            if (syncTimeoutRef.current) {
+                clearTimeout(syncTimeoutRef.current);
+                syncTimeoutRef.current = null;
+            }
+
+            const pageCollection = pageFlip.getPageCollection?.();
             const targetIndex = Math.max(0, Math.min(currentPage - 1, totalPages - 1));
-            if (currentFlipIndex !== targetIndex) {
-                pageFlip.flip(targetIndex);
+
+            if (pageCollection) {
+                const currentSpread = pageCollection.getCurrentSpreadIndex();
+                const targetSpread = pageCollection.getSpreadIndexByPage(targetIndex);
+
+                if (targetSpread !== null) {
+                    if (currentSpread !== targetSpread) {
+                        isExternalSync.current = true;
+
+                        if (targetSpread === currentSpread + 1) {
+                            pageFlip.flipNext();
+                            syncTimeoutRef.current = setTimeout(() => {
+                                isExternalSync.current = false;
+                                enforceSoftPages();
+                                if (pageFlip.getCurrentPageIndex?.() !== targetIndex) {
+                                    pageFlip.turnToPage?.(targetIndex);
+                                }
+                            }, 440);
+                        } else if (targetSpread === currentSpread - 1) {
+                            // In portrait mode, page-flip's internal flipPrev() passes hardcoded x: 10,
+                            // which fails isPointOnCorners() when disableFlipByClick is true because
+                            // rect.left is negative in portrait mode.
+                            // Passing rect.left + 10 ensures the coordinate is on the top-left corner.
+                            const rect = pageFlip.getRender?.()?.getRect?.();
+                            const flipController = pageFlip.flipController;
+                            if (isMobile && rect && flipController?.flip) {
+                                flipController.flip({
+                                    x: rect.left + 10,
+                                    y: 1,
+                                });
+                            } else {
+                                pageFlip.flipPrev();
+                            }
+
+                            syncTimeoutRef.current = setTimeout(() => {
+                                isExternalSync.current = false;
+                                enforceSoftPages();
+                                // Guaranteed fallback: ensure internal page index matches targetIndex
+                                if (pageFlip.getCurrentPageIndex?.() !== targetIndex) {
+                                    pageFlip.turnToPage?.(targetIndex);
+                                }
+                            }, 440);
+                        } else {
+                            // Multi-page jump (from slider, thumbnail, TOC, input)
+                            pageFlip.turnToPage(targetIndex);
+                            syncTimeoutRef.current = setTimeout(() => {
+                                isExternalSync.current = false;
+                                enforceSoftPages();
+                            }, 120);
+                        }
+                    } else if (pageFlip.getCurrentPageIndex?.() !== targetIndex) {
+                        // Resync if spread matches but page index differs
+                        pageFlip.turnToPage(targetIndex);
+                    }
+                }
+            } else {
+                const currentFlipIndex = pageFlip.getCurrentPageIndex();
+                if (currentFlipIndex !== targetIndex) {
+                    isExternalSync.current = true;
+                    pageFlip.turnToPage(targetIndex);
+                    syncTimeoutRef.current = setTimeout(() => {
+                        isExternalSync.current = false;
+                        enforceSoftPages();
+                    }, 120);
+                }
             }
         } catch (err) {
-            // Ignore temporary animation busy state
+            isExternalSync.current = false;
         }
-    }, [currentPage, totalPages, enforceSoftPages]);
+
+        return () => {
+            if (syncTimeoutRef.current) {
+                clearTimeout(syncTimeoutRef.current);
+            }
+        };
+    }, [currentPage, totalPages, isMobile, enforceSoftPages]);
 
     // Ensure soft density is locked whenever dimensions or pages change
     useEffect(() => {
@@ -221,12 +371,19 @@ export default function FlipbookSpread({
 
             {/* Realtime Interactive 3D FlipBook with dynamic centering translation */}
             <div
-                className="relative overflow-visible"
+                className={`relative overflow-visible ${zoom > 100 ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                 style={{
+                    width: isMobile ? `${pageWidth}px` : `${pageWidth * 2}px`,
+                    maxWidth: isMobile ? `${pageWidth}px` : `${pageWidth * 2}px`,
+                    height: `${pageHeight}px`,
+                    margin: '0 auto',
                     transform: `translate3d(${shiftX}px, 0, 0)`,
                     transition: 'transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)',
                     willChange: 'transform',
                 }}
+                onDoubleClick={handleDoubleClick}
+                onMouseUp={handleMouseUp}
+                onTouchEnd={handleTouchEnd}
             >
                 <HTMLFlipBook
                     key={`flipbook-${isMobile ? 'portrait' : 'landscape'}-${pageWidth}-${pageHeight}`}
@@ -234,25 +391,32 @@ export default function FlipbookSpread({
                     width={pageWidth}
                     height={pageHeight}
                     size="fixed"
-                    minWidth={120}
-                    maxWidth={1600}
-                    minHeight={160}
-                    maxHeight={1800}
+                    minWidth={pageWidth}
+                    maxWidth={isMobile ? pageWidth : pageWidth * 2}
+                    minHeight={pageHeight}
+                    maxHeight={pageHeight}
+                    autoSize={false}
                     showCover={!isMobile}
                     drawShadow={true}
                     maxShadowOpacity={0.6}
-                    flippingTime={600}
+                    flippingTime={400}
                     usePortrait={isMobile}
                     startPage={Math.max(0, Math.min(currentPage - 1, totalPages - 1))}
                     onFlip={handleFlip}
                     onChangeState={handleChangeState}
                     onInit={handleInit}
                     className="st-page-flip"
-                    style={{ margin: '0 auto', background: 'transparent' }}
+                    style={{
+                        margin: '0 auto',
+                        background: 'transparent',
+                        width: isMobile ? `${pageWidth}px` : `${pageWidth * 2}px`,
+                        maxWidth: isMobile ? `${pageWidth}px` : `${pageWidth * 2}px`,
+                    }}
                     showPageCorners={true}
-                    useMouseEvents={true}
+                    useMouseEvents={zoom <= 100}
                     swipeDistance={20}
                     clickEventForward={true}
+                    disableFlipByClick={true}
                 >
                     {pageNumbers.map((num) => (
                         <FlipPage

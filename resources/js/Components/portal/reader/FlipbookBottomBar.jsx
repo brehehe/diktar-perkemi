@@ -25,6 +25,7 @@ export default function FlipbookBottomBar({
     onZoomIn,
     onZoomOut,
     onResetZoom,
+    onToggleZoom = null,
     onSetZoom,
     onPageChange,
     onPrevPage,
@@ -44,28 +45,59 @@ export default function FlipbookBottomBar({
     isMobile = false,
 }) {
     const [pageInput, setPageInput] = useState(String(currentPage));
+    const [sliderValue, setSliderValue] = useState(currentPage);
+    const isDraggingRef = useRef(false);
     const [showZoomMenu, setShowZoomMenu] = useState(false);
     const zoomMenuRef = useRef(null);
+    const zoomMenuMobileRef = useRef(null);
 
-    useEffect(() => setPageInput(String(currentPage)), [currentPage]);
+    useEffect(() => {
+        setPageInput(String(currentPage));
+        if (!isDraggingRef.current) {
+            setSliderValue(currentPage);
+        }
+    }, [currentPage]);
 
     useEffect(() => {
         if (!showZoomMenu) return;
         const handler = (e) => {
-            if (!zoomMenuRef.current?.contains(e.target)) setShowZoomMenu(false);
+            if (
+                !zoomMenuRef.current?.contains(e.target) &&
+                !zoomMenuMobileRef.current?.contains(e.target)
+            ) {
+                setShowZoomMenu(false);
+            }
         };
         document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
+        document.addEventListener('touchstart', handler);
+        return () => {
+            document.removeEventListener('mousedown', handler);
+            document.removeEventListener('touchstart', handler);
+        };
     }, [showZoomMenu]);
+
+    const handleSliderChange = (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (!isNaN(val)) {
+            setSliderValue(val);
+            setPageInput(String(val));
+            onPageChange?.(val);
+        }
+    };
 
     const handlePageSubmit = (e) => {
         e?.preventDefault();
         const n = parseInt(pageInput, 10);
-        if (!isNaN(n) && n >= 1 && n <= totalPages) onPageChange?.(n);
-        else setPageInput(String(currentPage));
+        if (!isNaN(n) && n >= 1 && n <= totalPages) {
+            setSliderValue(n);
+            onPageChange?.(n);
+        } else {
+            setPageInput(String(currentPage));
+            setSliderValue(currentPage);
+        }
     };
 
-    const sliderFill = ((currentPage - 1) / Math.max(1, totalPages - 1)) * 100;
+    const sliderFill = ((sliderValue - 1) / Math.max(1, totalPages - 1)) * 100;
 
     /** Reusable icon button */
     const IBtn = ({ label, Icon, onClick, active = false, disabled = false, className = '' }) => (
@@ -141,8 +173,12 @@ export default function FlipbookBottomBar({
                     type="range"
                     min={1}
                     max={Math.max(1, totalPages)}
-                    value={currentPage}
-                    onChange={(e) => onPageChange?.(parseInt(e.target.value, 10))}
+                    value={sliderValue}
+                    onMouseDown={() => { isDraggingRef.current = true; }}
+                    onTouchStart={() => { isDraggingRef.current = true; }}
+                    onMouseUp={() => { isDraggingRef.current = false; }}
+                    onTouchEnd={() => { isDraggingRef.current = false; }}
+                    onChange={handleSliderChange}
                     aria-label="Geser untuk memilih halaman"
                     className="flex-1 h-[3px] rounded-full appearance-none cursor-pointer min-w-0"
                     style={{
@@ -181,7 +217,80 @@ export default function FlipbookBottomBar({
             {/* ── RIGHT: Controls ────────────────────────────────────── */}
             <div className="flex items-center gap-0.5 shrink-0">
 
-                {/* Zoom group */}
+                {/* Mobile Zoom Control (visible on < sm screens) */}
+                <div className="relative sm:hidden" ref={zoomMenuMobileRef}>
+                    <button
+                        type="button"
+                        onClick={() => setShowZoomMenu(v => !v)}
+                        aria-label={`Zoom saat ini ${zoom}%, ketuk untuk opsi zoom`}
+                        title="Zoom"
+                        className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
+                            zoom !== 100
+                                ? 'bg-[#EAF5FF] text-[#0B63CE] font-mono text-[10px] font-bold ring-1 ring-[#0B63CE]/30'
+                                : 'text-[#0E2747]/55 hover:text-[#0E2747] hover:bg-slate-100'
+                        }`}
+                    >
+                        {zoom === 100 ? (
+                            <ZoomIn className="w-3.5 h-3.5" />
+                        ) : (
+                            <span>{zoom}%</span>
+                        )}
+                    </button>
+
+                    {showZoomMenu && (
+                        <div className="absolute bottom-full right-0 mb-2 bg-white border border-[#DCE7F3] rounded-xl shadow-xl py-1.5 w-36 z-50">
+                            <div className="flex items-center justify-between px-2.5 pb-1.5 mb-1 border-b border-[#DCE7F3]">
+                                <button
+                                    type="button"
+                                    onClick={onZoomOut}
+                                    disabled={zoom <= 60}
+                                    className="p-1 rounded hover:bg-slate-100 text-[#0E2747] disabled:opacity-25 transition-colors"
+                                    title="Perkecil"
+                                    aria-label="Perkecil"
+                                >
+                                    <ZoomOut className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="text-xs font-mono font-bold text-[#0B63CE]">{zoom}%</span>
+                                <button
+                                    type="button"
+                                    onClick={onZoomIn}
+                                    disabled={zoom >= 200}
+                                    className="p-1 rounded hover:bg-slate-100 text-[#0E2747] disabled:opacity-25 transition-colors"
+                                    title="Perbesar"
+                                    aria-label="Perbesar"
+                                >
+                                    <ZoomIn className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                            {ZOOM_PRESETS.map(p => (
+                                <button
+                                    key={p}
+                                    type="button"
+                                    onClick={() => { onSetZoom?.(p); setShowZoomMenu(false); }}
+                                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition-colors ${
+                                        zoom === p
+                                            ? 'bg-[#EAF5FF] text-[#0B63CE] font-semibold'
+                                            : 'text-[#112743] hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <span>{p}%</span>
+                                    {zoom === p && <span className="w-1.5 h-1.5 rounded-full bg-[#0B63CE]" />}
+                                </button>
+                            ))}
+                            <div className="border-t border-[#DCE7F3] mt-1 pt-1 px-1">
+                                <button
+                                    type="button"
+                                    onClick={() => { onResetZoom?.(); setShowZoomMenu(false); }}
+                                    className="w-full text-left px-2 py-1 text-xs text-[#6B7C93] hover:bg-slate-50 rounded"
+                                >
+                                    Reset 100%
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop Zoom group (visible on sm+ screens) */}
                 <div className="hidden sm:flex items-center border border-[#DCE7F3] rounded-md overflow-hidden bg-white">
                     <IBtn label="Perkecil" Icon={ZoomOut} onClick={onZoomOut} disabled={zoom <= 60} />
 

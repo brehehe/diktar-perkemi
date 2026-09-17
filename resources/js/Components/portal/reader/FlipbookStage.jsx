@@ -56,6 +56,7 @@ export default function FlipbookStage({
     const [stageDimensions, setStageDimensions] = useState({ width: 0, height: 0 });
     const stageRef = useRef(null);
     const containerRef = useRef(null);
+    const scrollContainerRef = useRef(null);
     const progressTimeoutRef = useRef(null);
     const touchStartX = useRef(null);
     const touchStartY = useRef(null);
@@ -155,9 +156,19 @@ export default function FlipbookStage({
         return Math.min(scaleX, scaleY);
     }, [stageDimensions, baseDimensions, isMobile]);
 
-    const effectiveScale = fitScale * (zoom / 100);
-    const pageWidth = Math.max(140, Math.round(baseDimensions.width * effectiveScale));
-    const pageHeight = Math.max(200, Math.round(baseDimensions.height * effectiveScale));
+    const basePageWidth = Math.max(140, Math.round(baseDimensions.width * fitScale));
+    const basePageHeight = Math.max(200, Math.round(baseDimensions.height * fitScale));
+    const zoomFactor = zoom / 100;
+    const bookWidth = isMobile ? basePageWidth : basePageWidth * 2;
+    const scaledWidth = Math.round(bookWidth * zoomFactor);
+    const scaledHeight = Math.round(basePageHeight * zoomFactor);
+
+    // Margins when zoom > 100:
+    // Ensures min padding when zoomed in so the left and top edges are never cut off in negative scroll space
+    const padX = isMobile ? 20 : 48;
+    const padY = isMobile ? 28 : 48;
+    const horizontalMargin = Math.max(padX, Math.round((stageDimensions.width - scaledWidth) / 2));
+    const verticalMargin = Math.max(padY, Math.round((stageDimensions.height - scaledHeight) / 2));
 
     // ── Reading progress (debounced) ─────────────────────────────────────────
     const saveReadingProgress = useCallback((page, total) => {
@@ -180,10 +191,14 @@ export default function FlipbookStage({
     // ── Page navigation ──────────────────────────────────────────────────────
     const handlePageChange = useCallback((newPage) => {
         const safePage = Math.min(Math.max(1, newPage), totalPages);
-        setDirection(safePage >= currentPage ? 1 : -1);
-        setCurrentPage(safePage);
+        setCurrentPage((curr) => {
+            if (curr !== safePage) {
+                setDirection(safePage >= curr ? 1 : -1);
+            }
+            return safePage;
+        });
         saveReadingProgress(safePage, totalPages);
-    }, [totalPages, currentPage, saveReadingProgress]);
+    }, [totalPages, saveReadingProgress]);
 
     // Compute the left page in spread mode (even page)
     const getSpreadLeftPage = useCallback((page) => {
@@ -207,42 +222,160 @@ export default function FlipbookStage({
     })();
 
     const handleNextPage = useCallback(() => {
-        if (!canGoNext) return;
-        if (isMobile) {
-            handlePageChange(currentPage + 1);
-            return;
-        }
-        if (currentPage === 1) {
-            handlePageChange(2);
-        } else {
-            const leftPage = currentPage % 2 === 0 ? currentPage : currentPage - 1;
+        setCurrentPage((curr) => {
+            if (curr >= totalPages) return curr;
+            if (isMobile) {
+                const next = Math.min(curr + 1, totalPages);
+                setDirection(1);
+                saveReadingProgress(next, totalPages);
+                return next;
+            }
+            if (curr === 1) {
+                setDirection(1);
+                saveReadingProgress(2, totalPages);
+                return 2;
+            }
+            const leftPage = curr % 2 === 0 ? curr : curr - 1;
+            if (!isBackCoverStandalone && totalPages > 1 && leftPage + 1 >= totalPages) {
+                return curr;
+            }
             const target = leftPage + 2;
-            handlePageChange(Math.min(target, totalPages));
-        }
-    }, [canGoNext, isMobile, currentPage, totalPages, handlePageChange]);
+            const next = Math.min(target, totalPages);
+            setDirection(1);
+            saveReadingProgress(next, totalPages);
+            return next;
+        });
+    }, [isMobile, totalPages, isBackCoverStandalone, saveReadingProgress]);
 
     const handlePrevPage = useCallback(() => {
-        if (!canGoPrev) return;
-        if (isMobile) {
-            handlePageChange(currentPage - 1);
-            return;
-        }
-        if (isBackCoverStandalone && currentPage === totalPages) {
-            handlePageChange(Math.max(1, totalPages - 2));
-        } else {
-            const leftPage = currentPage % 2 === 0 ? currentPage : currentPage - 1;
-            if (leftPage <= 2) {
-                handlePageChange(1);
-            } else {
-                handlePageChange(leftPage - 2);
+        setCurrentPage((curr) => {
+            if (curr <= 1) return curr;
+            if (isMobile) {
+                const prev = Math.max(1, curr - 1);
+                setDirection(-1);
+                saveReadingProgress(prev, totalPages);
+                return prev;
             }
-        }
-    }, [canGoPrev, isMobile, currentPage, totalPages, isBackCoverStandalone, handlePageChange]);
+            if (isBackCoverStandalone && curr === totalPages) {
+                const prev = Math.max(1, totalPages - 2);
+                setDirection(-1);
+                saveReadingProgress(prev, totalPages);
+                return prev;
+            }
+            const leftPage = curr % 2 === 0 ? curr : curr - 1;
+            const prev = leftPage <= 2 ? 1 : leftPage - 2;
+            setDirection(-1);
+            saveReadingProgress(prev, totalPages);
+            return prev;
+        });
+    }, [isMobile, totalPages, isBackCoverStandalone, saveReadingProgress]);
 
     // ── Zoom ─────────────────────────────────────────────────────────────────
     const handleZoomIn  = () => setZoom(z => Math.min(z + 15, 200));
     const handleZoomOut = () => setZoom(z => Math.max(z - 15, 60));
-    const handleResetZoom = () => setZoom(100);
+    const handleResetZoom = useCallback(() => {
+        setZoom(100);
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+        }
+    }, []);
+
+    const handleToggleZoom = useCallback(({ clientX, clientY } = {}) => {
+        setZoom((prevZoom) => {
+            if (prevZoom <= 100) {
+                // Zoom in to 160% and center on click target if coordinates exist
+                setTimeout(() => {
+                    if (!scrollContainerRef.current) return;
+                    const el = scrollContainerRef.current;
+                    const maxScrollX = el.scrollWidth - el.clientWidth;
+                    const maxScrollY = el.scrollHeight - el.clientHeight;
+
+                    if (clientX !== undefined && clientY !== undefined) {
+                        const rect = el.getBoundingClientRect();
+                        const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+                        const relY = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+                        const targetX = Math.max(0, maxScrollX * relX);
+                        const targetY = Math.max(0, maxScrollY * relY);
+                        el.scrollTo({ left: targetX, top: targetY, behavior: 'smooth' });
+                    } else {
+                        el.scrollTo({
+                            left: Math.max(0, maxScrollX / 2),
+                            top: Math.max(0, maxScrollY / 2),
+                            behavior: 'smooth',
+                        });
+                    }
+                }, 60);
+                return 160;
+            } else {
+                if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+                }
+                return 100;
+            }
+        });
+    }, []);
+
+    // ── Panning when zoom > 100 ──────────────────────────────────────────────
+    const isPanningRef = useRef(false);
+    const panStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+
+    const handleMouseDownPan = useCallback((e) => {
+        if (zoom <= 100) return;
+        if (e.button !== 0) return;
+        if (e.target.closest?.('button, a, input, select')) return;
+
+        isPanningRef.current = true;
+        const container = scrollContainerRef.current;
+        panStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            scrollLeft: container ? container.scrollLeft : 0,
+            scrollTop: container ? container.scrollTop : 0,
+        };
+    }, [zoom]);
+
+    const handleMouseMovePan = useCallback((e) => {
+        if (!isPanningRef.current || zoom <= 100) return;
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const dx = e.clientX - panStartRef.current.x;
+        const dy = e.clientY - panStartRef.current.y;
+        container.scrollLeft = panStartRef.current.scrollLeft - dx;
+        container.scrollTop = panStartRef.current.scrollTop - dy;
+    }, [zoom]);
+
+    const handleMouseUpPan = useCallback(() => {
+        isPanningRef.current = false;
+    }, []);
+
+    useEffect(() => {
+        const onGlobalMouseUp = () => {
+            isPanningRef.current = false;
+        };
+        window.addEventListener('mouseup', onGlobalMouseUp);
+        return () => window.removeEventListener('mouseup', onGlobalMouseUp);
+    }, []);
+
+    // ── Wheel / Pinch to Zoom (Ctrl+Wheel or Trackpad Pinch) ──────────────────
+    useEffect(() => {
+        const stageEl = stageRef.current;
+        if (!stageEl) return;
+
+        const onWheel = (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                if (e.deltaY < 0) {
+                    setZoom(z => Math.min(z + 10, 200));
+                } else if (e.deltaY > 0) {
+                    setZoom(z => Math.max(z - 10, 60));
+                }
+            }
+        };
+
+        stageEl.addEventListener('wheel', onWheel, { passive: false });
+        return () => stageEl.removeEventListener('wheel', onWheel);
+    }, []);
 
     // ── Fullscreen ───────────────────────────────────────────────────────────
     const handleToggleFullscreen = () => {
@@ -268,6 +401,7 @@ export default function FlipbookStage({
     // ── Touch swipe ──────────────────────────────────────────────────────────
     const SWIPE_THRESHOLD = 40;
     const handleTouchStart = useCallback((e) => {
+        if (zoom > 100) return;
         // Let st-page-flip handle its own 3D drag physics when touching the book canvas directly
         if (e.target.closest?.('.st-page-flip') || e.target.closest?.('button') || e.target.closest?.('input')) {
             touchStartX.current = null;
@@ -276,8 +410,9 @@ export default function FlipbookStage({
         }
         touchStartX.current = e.touches[0].clientX;
         touchStartY.current = e.touches[0].clientY;
-    }, []);
+    }, [zoom]);
     const handleTouchEnd = useCallback((e) => {
+        if (zoom > 100) return;
         if (touchStartX.current === null) return;
         const dx = e.changedTouches[0].clientX - touchStartX.current;
         const dy = e.changedTouches[0].clientY - touchStartY.current;
@@ -287,7 +422,7 @@ export default function FlipbookStage({
         if (Math.abs(dx) < SWIPE_THRESHOLD) return;
         if (dx < 0) handleNextPage();
         else handlePrevPage();
-    }, [handleNextPage, handlePrevPage]);
+    }, [zoom, handleNextPage, handlePrevPage]);
 
     // ── Keyboard navigation ──────────────────────────────────────────────────
     useEffect(() => {
@@ -398,28 +533,116 @@ export default function FlipbookStage({
                     />
                 )}
 
+                {/* Floating zoom indicator & reset pill (Concise, single-line / sebaris) */}
+                {zoom > 100 && (
+                    <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30 bg-[#0E2747]/90 backdrop-blur-md text-white text-xs font-medium px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 whitespace-nowrap pointer-events-auto border border-white/15 animate-in fade-in zoom-in-95 duration-200 select-none">
+                        <span className="font-mono font-bold text-[#60A5FA] text-[11px] whitespace-nowrap">{zoom}%</span>
+                        <span className="text-white/30 text-[10px] select-none">•</span>
+                        <span className="text-[11px] text-white/80 whitespace-nowrap hidden sm:inline">Klik 2x / geser untuk membaca</span>
+                        <span className="text-[10.5px] text-white/80 whitespace-nowrap sm:hidden">Geser untuk baca</span>
+                        <button
+                            type="button"
+                            onClick={handleResetZoom}
+                            className="ml-0.5 bg-white/20 hover:bg-white/30 active:bg-white/40 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors cursor-pointer whitespace-nowrap"
+                            title="Kembalikan ke ukuran normal (100%)"
+                        >
+                            Reset
+                        </button>
+                    </div>
+                )}
+
                 {/* Main flipbook spread */}
                 {pdfDoc && !loadError && (
-                    <div className="w-full h-full overflow-hidden flex items-center justify-center"
-                         style={{ scrollbarWidth: 'none' }}>
-                        <div className={`min-h-full min-w-full flex items-center justify-center ${isMobile ? 'p-1' : 'py-4 px-4 sm:px-14'}`}>
-                            <FlipbookSpread
-                                pdfDoc={pdfDoc}
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                scale={effectiveScale}
-                                pageWidth={pageWidth}
-                                pageHeight={pageHeight}
-                                viewMode={viewMode}
-                                isMobile={isMobile}
-                                direction={direction}
-                                onPageChange={handlePageChange}
-                                onPrev={handlePrevPage}
-                                onNext={handleNextPage}
-                                canGoPrev={canGoPrev}
-                                canGoNext={canGoNext}
-                            />
-                        </div>
+                    <div
+                        ref={scrollContainerRef}
+                        className={`w-full h-full ${
+                            zoom > 100
+                                ? 'overflow-auto cursor-grab active:cursor-grabbing reader-zoomed'
+                                : 'overflow-hidden flex items-center justify-center'
+                        }`}
+                        style={{
+                            scrollbarWidth: 'thin',
+                            WebkitOverflowScrolling: 'touch',
+                            touchAction: zoom > 100 ? 'pan-x pan-y' : 'auto',
+                        }}
+                        onMouseDown={handleMouseDownPan}
+                        onMouseMove={handleMouseMovePan}
+                        onMouseUp={handleMouseUpPan}
+                    >
+                        {zoom <= 100 ? (
+                            <div
+                                className={`flex items-center justify-center transition-all duration-300 ease-out ${
+                                    isMobile ? 'p-1' : 'py-4 px-4 sm:px-14'
+                                }`}
+                                style={{
+                                    width: `${bookWidth}px`,
+                                    height: `${basePageHeight}px`,
+                                }}
+                            >
+                                <FlipbookSpread
+                                    pdfDoc={pdfDoc}
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    scale={fitScale}
+                                    pageWidth={basePageWidth}
+                                    pageHeight={basePageHeight}
+                                    viewMode={viewMode}
+                                    isMobile={isMobile}
+                                    direction={direction}
+                                    onPageChange={handlePageChange}
+                                    onPrev={handlePrevPage}
+                                    onNext={handleNextPage}
+                                    canGoPrev={canGoPrev}
+                                    canGoNext={canGoNext}
+                                    zoom={zoom}
+                                    onToggleZoom={handleToggleZoom}
+                                />
+                            </div>
+                        ) : (
+                            <div
+                                className="transition-all duration-200 ease-out"
+                                style={{
+                                    width: `${scaledWidth}px`,
+                                    height: `${scaledHeight}px`,
+                                    margin: `${verticalMargin}px ${horizontalMargin}px`,
+                                    minWidth: `${scaledWidth}px`,
+                                    minHeight: `${scaledHeight}px`,
+                                    flexShrink: 0,
+                                    position: 'relative',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        width: `${bookWidth}px`,
+                                        height: `${basePageHeight}px`,
+                                        transform: `scale(${zoomFactor})`,
+                                        transformOrigin: 'top left',
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                    }}
+                                >
+                                    <FlipbookSpread
+                                        pdfDoc={pdfDoc}
+                                        currentPage={currentPage}
+                                        totalPages={totalPages}
+                                        scale={fitScale}
+                                        pageWidth={basePageWidth}
+                                        pageHeight={basePageHeight}
+                                        viewMode={viewMode}
+                                        isMobile={isMobile}
+                                        direction={direction}
+                                        onPageChange={handlePageChange}
+                                        onPrev={handlePrevPage}
+                                        onNext={handleNextPage}
+                                        canGoPrev={canGoPrev}
+                                        canGoNext={canGoNext}
+                                        zoom={zoom}
+                                        onToggleZoom={handleToggleZoom}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </main>
@@ -436,6 +659,7 @@ export default function FlipbookStage({
                 onZoomIn={handleZoomIn}
                 onZoomOut={handleZoomOut}
                 onResetZoom={handleResetZoom}
+                onToggleZoom={handleToggleZoom}
                 onSetZoom={setZoom}
                 onPageChange={handlePageChange}
                 onPrevPage={handlePrevPage}

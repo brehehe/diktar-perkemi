@@ -49,8 +49,11 @@ export default function FlipbookDrawer({
     }, [isOpen]);
 
     const handleSelectPage = (page) => {
-        onSelectPage?.(page);
-        onClose?.();
+        const num = typeof page === "number" ? page : parseInt(page, 10);
+        if (!isNaN(num) && num >= 1) {
+            onSelectPage?.(num);
+            onClose?.();
+        }
     };
 
     return (

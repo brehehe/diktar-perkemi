@@ -205,7 +205,11 @@ class MaterialController extends Controller
         if ($request->hasFile('cover_file')) {
             $file = $request->file('cover_file');
             $filename = time().'_'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.$file->getClientOriginalExtension();
-            $file->move(public_path('images'), $filename);
+            $targetDir = public_path('images');
+            if (! is_dir($targetDir)) {
+                @mkdir($targetDir, 0775, true);
+            }
+            $file->move($targetDir, $filename);
             $coverPath = '/images/'.$filename;
         }
 
@@ -476,7 +480,11 @@ class MaterialController extends Controller
         if ($request->hasFile('cover_file')) {
             $file = $request->file('cover_file');
             $filename = time().'_'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.$file->getClientOriginalExtension();
-            $file->move(public_path('images'), $filename);
+            $targetDir = public_path('images');
+            if (! is_dir($targetDir)) {
+                @mkdir($targetDir, 0775, true);
+            }
+            $file->move($targetDir, $filename);
             $material->cover_path = '/images/'.$filename;
         }
 

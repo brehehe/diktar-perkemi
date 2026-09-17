@@ -13,6 +13,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    config(['pustaka.disk' => 'local']);
     Storage::fake('local');
 });
 
@@ -668,4 +669,63 @@ test('portal detail page passes embed_url for embeddable external links', functi
             ->component('Portal/Collections/Show')
             ->where('material.embed_url', 'https://drive.google.com/file/d/1a2b3c4d5e/preview')
         );
+});
+
+test('admin can upload cover image when creating and updating material', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $category = Category::create(['name' => 'Buku Panduan', 'slug' => 'buku-panduan-cover']);
+
+    $coverFile = UploadedFile::fake()->image('test-cover.jpg', 600, 800);
+    $pdfFile = UploadedFile::fake()->create('sample.pdf', 100, 'application/pdf');
+
+    $response = $this->actingAs($admin)->post('/admin/koleksi', [
+        'title' => 'Buku dengan Sampul',
+        'code' => 'COV-001',
+        'category_id' => $category->id,
+        'type' => 'book',
+        'publication_year' => 2026,
+        'status' => 'published',
+        'cover_file' => $coverFile,
+        'book_file' => $pdfFile,
+    ]);
+
+    $response->assertRedirect('/admin/koleksi');
+
+    $material = Material::where('code', 'COV-001')->first();
+    expect($material)->not->toBeNull()
+        ->and($material->cover_path)->not->toBeNull()
+        ->and($material->cover_path)->toStartWith('/images/');
+
+    $createdFilePath = public_path(ltrim($material->cover_path, '/'));
+    expect(file_exists($createdFilePath))->toBeTrue();
+
+    // Clean up created file
+    if (file_exists($createdFilePath)) {
+        unlink($createdFilePath);
+    }
+
+    // Update with new cover
+    $newCoverFile = UploadedFile::fake()->image('updated-cover.png', 400, 400);
+    $updateResponse = $this->actingAs($admin)->put("/admin/koleksi/{$material->id}", [
+        'title' => 'Buku dengan Sampul Diperbarui',
+        'code' => 'COV-001',
+        'category_id' => $category->id,
+        'type' => 'book',
+        'publication_year' => 2026,
+        'status' => 'published',
+        'cover_file' => $newCoverFile,
+    ]);
+
+    $updateResponse->assertRedirect('/admin/koleksi');
+    $material->refresh();
+    expect($material->title)->toBe('Buku dengan Sampul Diperbarui')
+        ->and($material->cover_path)->toStartWith('/images/')
+        ->and($material->cover_path)->toContain('updated-cover');
+
+    $updatedFilePath = public_path(ltrim($material->cover_path, '/'));
+    expect(file_exists($updatedFilePath))->toBeTrue();
+
+    if (file_exists($updatedFilePath)) {
+        unlink($updatedFilePath);
+    }
 });

@@ -594,3 +594,78 @@ test('admin can access collection edit page with active_file and file_history pr
             ->has('max_file_size_mb')
         );
 });
+
+test('reader route redirects to external url when accessing external link with new_tab', function () {
+    $user = User::factory()->create(['role' => 'Peserta']);
+    $material = Material::create([
+        'title' => 'Buku Eksternal Tab Baru',
+        'slug' => 'buku-eksternal-tab-baru',
+        'code' => 'EXT-01',
+        'type' => 'book',
+        'source_type' => 'external_link',
+        'external_url' => 'https://perpusnas.go.id/buku-kempo',
+        'external_open_mode' => 'new_tab',
+        'status' => 'published',
+        'created_by' => 1,
+    ]);
+
+    $response = $this->actingAs($user)->get("/koleksi/{$material->slug}/baca");
+    $response->assertRedirect('https://perpusnas.go.id/buku-kempo');
+});
+
+test('reader route redirects to detail page when accessing external link with embed', function () {
+    $user = User::factory()->create(['role' => 'Peserta']);
+    $material = Material::create([
+        'title' => 'Buku Eksternal Tersemat',
+        'slug' => 'buku-eksternal-tersemat',
+        'code' => 'EXT-02',
+        'type' => 'book',
+        'source_type' => 'external_link',
+        'external_url' => 'https://player.flipsnack.com/?hash=123',
+        'external_open_mode' => 'embed',
+        'status' => 'published',
+        'created_by' => 1,
+    ]);
+
+    $response = $this->actingAs($user)->get("/koleksi/{$material->slug}/baca");
+    $response->assertRedirect("/koleksi/{$material->slug}");
+});
+
+test('reader route redirects to detail page when accessing uploaded_pdf without file', function () {
+    $user = User::factory()->create(['role' => 'Peserta']);
+    $material = Material::create([
+        'title' => 'PDF Tanpa File',
+        'slug' => 'pdf-tanpa-file',
+        'code' => 'PDF-99',
+        'type' => 'book',
+        'source_type' => 'uploaded_pdf',
+        'status' => 'published',
+        'created_by' => 1,
+    ]);
+
+    $response = $this->actingAs($user)->get("/koleksi/{$material->slug}/baca");
+    $response->assertRedirect("/koleksi/{$material->slug}");
+    $response->assertSessionHas('error');
+});
+
+test('portal detail page passes embed_url for embeddable external links', function () {
+    $user = User::factory()->create(['role' => 'Peserta']);
+    $material = Material::create([
+        'title' => 'Dokumen Google Drive Tersemat',
+        'slug' => 'drive-tersemat',
+        'code' => 'DRV-01',
+        'type' => 'book',
+        'source_type' => 'external_link',
+        'external_url' => 'https://drive.google.com/file/d/1a2b3c4d5e/view?usp=sharing',
+        'external_open_mode' => 'embed',
+        'status' => 'published',
+        'created_by' => 1,
+    ]);
+
+    $response = $this->actingAs($user)->get("/koleksi/{$material->slug}");
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Portal/Collections/Show')
+            ->where('material.embed_url', 'https://drive.google.com/file/d/1a2b3c4d5e/preview')
+        );
+});

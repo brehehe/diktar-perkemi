@@ -79,6 +79,9 @@ export default function FlipbookSpread({
     scale = 1.0,
     pageWidth = 480,
     pageHeight = 680,
+    isMobile = false,
+    viewMode = 'spread',
+    direction = 0,
     onPageChange,
     onPrev,
     onNext,
@@ -174,11 +177,12 @@ export default function FlipbookSpread({
     if (!pdfDoc || totalPages < 1) return null;
 
     // Centering shift:
-    // - Page 1 (Front Cover): sits in right slot -> shift left by pageWidth/2 to align center
+    // - On mobile: 0 (single page portrait is automatically centered by StPageFlip)
+    // - Page 1 (Front Cover on desktop): sits in right slot -> shift left by pageWidth/2 to align center
     // - Even totalPages last page: sits in left slot -> shift right by pageWidth/2 to align center
     // - All 2-page spreads (including 4 & 5 when totalPages is odd): shift 0 (centered)
     const shiftX = useMemo(() => {
-        if (totalPages <= 1) return 0;
+        if (isMobile || totalPages <= 1) return 0;
         if (currentPage === 1) {
             return -Math.round(pageWidth / 2);
         }
@@ -186,9 +190,9 @@ export default function FlipbookSpread({
             return Math.round(pageWidth / 2);
         }
         return 0;
-    }, [totalPages, currentPage, pageWidth, isBackCoverStandalone]);
+    }, [isMobile, totalPages, currentPage, pageWidth, isBackCoverStandalone]);
 
-    const isSingleVisible = totalPages <= 1 || currentPage === 1 || (isBackCoverStandalone && currentPage === totalPages);
+    const isSingleVisible = isMobile || totalPages <= 1 || currentPage === 1 || (isBackCoverStandalone && currentPage === totalPages);
 
     return (
         <motion.div
@@ -225,20 +229,20 @@ export default function FlipbookSpread({
                 }}
             >
                 <HTMLFlipBook
-                    key={`flipbook-${pageWidth}-${pageHeight}-landscape`}
+                    key={`flipbook-${isMobile ? 'portrait' : 'landscape'}-${pageWidth}-${pageHeight}`}
                     ref={flipBookRef}
                     width={pageWidth}
                     height={pageHeight}
                     size="fixed"
-                    minWidth={200}
+                    minWidth={120}
                     maxWidth={1600}
-                    minHeight={280}
+                    minHeight={160}
                     maxHeight={1800}
-                    showCover={true}
+                    showCover={!isMobile}
                     drawShadow={true}
                     maxShadowOpacity={0.6}
-                    flippingTime={650}
-                    usePortrait={false}
+                    flippingTime={600}
+                    usePortrait={isMobile}
                     startPage={Math.max(0, Math.min(currentPage - 1, totalPages - 1))}
                     onFlip={handleFlip}
                     onChangeState={handleChangeState}
@@ -247,7 +251,7 @@ export default function FlipbookSpread({
                     style={{ margin: '0 auto', background: 'transparent' }}
                     showPageCorners={true}
                     useMouseEvents={true}
-                    swipeDistance={25}
+                    swipeDistance={20}
                     clickEventForward={true}
                 >
                     {pageNumbers.map((num) => (

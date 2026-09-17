@@ -152,21 +152,61 @@ export default function Show({
                                             </Button>
                                         </a>
                                     ) : material.source_type === 'external_link' ? (
-                                        <a
-                                            href={material.external_url || '#'}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="block w-full"
-                                        >
-                                            <Button
-                                                variant="primary"
-                                                size="lg"
-                                                icon={ExternalLink}
-                                                className="w-full justify-center"
+                                        material.external_open_mode === 'embed' ? (
+                                            <div className="space-y-2 w-full">
+                                                <a
+                                                    href="#external-viewer-section"
+                                                    className="block w-full"
+                                                    onClick={(e) => {
+                                                        const el = document.getElementById('external-viewer-section');
+                                                        if (el) {
+                                                            e.preventDefault();
+                                                            el.scrollIntoView({ behavior: 'smooth' });
+                                                        }
+                                                    }}
+                                                >
+                                                    <Button
+                                                        variant="primary"
+                                                        size="lg"
+                                                        icon={BookOpen}
+                                                        className="w-full justify-center"
+                                                    >
+                                                        Baca di Portal
+                                                    </Button>
+                                                </a>
+                                                <a
+                                                    href={material.external_url || '#'}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="block w-full"
+                                                >
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="md"
+                                                        icon={ExternalLink}
+                                                        className="w-full justify-center"
+                                                    >
+                                                        Buka Buku di Tab Baru
+                                                    </Button>
+                                                </a>
+                                            </div>
+                                        ) : (
+                                            <a
+                                                href={material.external_url || '#'}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block w-full"
                                             >
-                                                Buka Buku Digital
-                                            </Button>
-                                        </a>
+                                                <Button
+                                                    variant="primary"
+                                                    size="lg"
+                                                    icon={ExternalLink}
+                                                    className="w-full justify-center"
+                                                >
+                                                    Buka Buku Digital
+                                                </Button>
+                                            </a>
+                                        )
                                     ) : can_read ? (
                                         <Link
                                             href={readUrl}
@@ -291,12 +331,15 @@ export default function Show({
 
                         {/* External Viewer (if external link) */}
                         {material.source_type === 'external_link' && (
-                            <ExternalMaterialViewer
-                                url={material.external_url}
-                                sourceName={material.external_source_name}
-                                openMode={material.external_open_mode}
-                                title={material.title}
-                            />
+                            <div id="external-viewer-section" className="scroll-mt-6">
+                                <ExternalMaterialViewer
+                                    url={material.embed_url || material.external_url}
+                                    externalUrl={material.external_url}
+                                    sourceName={material.external_source_name}
+                                    openMode={material.external_open_mode}
+                                    title={material.title}
+                                />
+                            </div>
                         )}
 
                         {/* Summary Block */}

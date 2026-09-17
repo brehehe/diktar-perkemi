@@ -125,7 +125,7 @@ export default function FeaturedCollection({ materials = [] }) {
                             <div className="pt-5 mt-5 border-t border-[#DCE7F3] flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <span className="font-mono text-xs font-bold text-[#0A3F82] bg-white px-2 py-1 rounded border border-[#DCE7F3]">
-                                        Format: PDF
+                                        Format: {primaryItem.file_format || (primaryItem.source_type === 'video' ? 'VIDEO' : primaryItem.source_type === 'external_link' ? 'LINK' : 'PDF')}
                                     </span>
                                     {primaryItem.page_count && (
                                         <span className="text-xs text-[#6B7C93]">
@@ -182,7 +182,9 @@ export default function FeaturedCollection({ materials = [] }) {
                                     <span className="text-[#DCE7F3]">•</span>
                                     <span>Tahun {item.publication_year || '—'}</span>
                                     <span className="text-[#DCE7F3]">•</span>
-                                    <span className="font-mono text-[10px] font-semibold text-[#0A3F82]">PDF</span>
+                                    <span className="font-mono text-[10px] font-semibold text-[#0A3F82]">
+                                        {item.file_format || (item.source_type === 'video' ? 'VIDEO' : item.source_type === 'external_link' ? 'LINK' : 'PDF')}
+                                    </span>
                                 </div>
 
                                 <h4 className="font-serif text-sm font-bold text-[#112743] group-hover:text-[#0B63CE] transition-colors line-clamp-2 leading-snug">

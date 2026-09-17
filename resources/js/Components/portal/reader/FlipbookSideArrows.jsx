@@ -14,6 +14,7 @@ export default function FlipbookSideArrows({
     canGoNext: propCanGoNext = null,
     onPrev,
     onNext,
+    isMobile = false,
 }) {
     const canGoPrev = propCanGoPrev !== null ? propCanGoPrev : currentPage > 1;
     const canGoNext = propCanGoNext !== null ? propCanGoNext : currentPage < totalPages;
@@ -28,19 +29,19 @@ export default function FlipbookSideArrows({
                 aria-label="Halaman Sebelumnya"
                 title="Halaman Sebelumnya"
                 className={[
-                    'absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10',
+                    'absolute left-1.5 sm:left-4 top-1/2 -translate-y-1/2 z-20',
                     'w-9 h-9 sm:w-10 sm:h-10 rounded-full',
-                    'border border-[#0E2747]/20 bg-white/70 backdrop-blur-[2px]',
+                    'border border-black/10 bg-white/85 sm:bg-white/70 backdrop-blur-sm shadow-md sm:shadow-none',
                     'flex items-center justify-center',
-                    'text-[#0E2747]/60',
+                    'text-[#0E2747]/80 sm:text-[#0E2747]/60',
                     'transition-all duration-200',
-                    'hover:border-[#0B63CE] hover:text-[#0B63CE] hover:bg-white hover:shadow-md',
+                    'hover:border-[#0B63CE] hover:text-[#0B63CE] hover:bg-white hover:shadow-lg',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE] focus-visible:ring-offset-1',
                     'disabled:opacity-0 disabled:pointer-events-none',
                     'active:scale-95',
                 ].join(' ')}
             >
-                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                <ChevronLeft className="w-5 h-5 sm:w-5 sm:h-5" />
             </button>
 
             {/* Right arrow — Halaman Berikutnya */}
@@ -51,19 +52,19 @@ export default function FlipbookSideArrows({
                 aria-label="Halaman Berikutnya"
                 title="Halaman Berikutnya"
                 className={[
-                    'absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10',
+                    'absolute right-1.5 sm:right-4 top-1/2 -translate-y-1/2 z-20',
                     'w-9 h-9 sm:w-10 sm:h-10 rounded-full',
-                    'border border-[#0E2747]/20 bg-white/70 backdrop-blur-[2px]',
+                    'border border-black/10 bg-white/85 sm:bg-white/70 backdrop-blur-sm shadow-md sm:shadow-none',
                     'flex items-center justify-center',
-                    'text-[#0E2747]/60',
+                    'text-[#0E2747]/80 sm:text-[#0E2747]/60',
                     'transition-all duration-200',
-                    'hover:border-[#0B63CE] hover:text-[#0B63CE] hover:bg-white hover:shadow-md',
+                    'hover:border-[#0B63CE] hover:text-[#0B63CE] hover:bg-white hover:shadow-lg',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE] focus-visible:ring-offset-1',
                     'disabled:opacity-0 disabled:pointer-events-none',
                     'active:scale-95',
                 ].join(' ')}
             >
-                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                <ChevronRight className="w-5 h-5 sm:w-5 sm:h-5" />
             </button>
         </>
     );

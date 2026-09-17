@@ -156,19 +156,37 @@ export default function CollectionCard({ material, className = '' }) {
                 <div className="pt-3 border-t border-[#DCE7F3] flex items-center justify-between gap-2">
                     <MaterialSourceBadge sourceType={material.source_type} />
 
-                    <Link
-                        href={ctaHref}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EAF5FF] hover:bg-[#0B63CE] text-xs font-semibold text-[#0B63CE] hover:text-white transition-all duration-150 group/cta"
-                    >
-                        {material.source_type === 'video' ? (
-                            <Play className="w-3 h-3 fill-current" />
-                        ) : material.source_type === 'external_link' ? (
+                    {material.source_type === 'external_link' && material.external_open_mode === 'new_tab' ? (
+                        <a
+                            href={material.external_url || `/koleksi/${material.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EAF5FF] hover:bg-[#0B63CE] text-xs font-semibold text-[#0B63CE] hover:text-white transition-all duration-150 group/cta"
+                        >
                             <ExternalLink className="w-3 h-3" />
-                        ) : (
-                            <BookOpen className="w-3 h-3" />
-                        )}
-                        <span>{ctaLabel}</span>
-                    </Link>
+                            <span>{ctaLabel}</span>
+                        </a>
+                    ) : (
+                        <Link
+                            href={
+                                material.source_type === 'video'
+                                    ? `/koleksi/${material.slug}#video-player-section`
+                                    : material.source_type === 'uploaded_pdf'
+                                    ? `/koleksi/${material.slug}/baca`
+                                    : `/koleksi/${material.slug}`
+                            }
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EAF5FF] hover:bg-[#0B63CE] text-xs font-semibold text-[#0B63CE] hover:text-white transition-all duration-150 group/cta"
+                        >
+                            {material.source_type === 'video' ? (
+                                <Play className="w-3 h-3 fill-current" />
+                            ) : material.source_type === 'external_link' ? (
+                                <ExternalLink className="w-3 h-3" />
+                            ) : (
+                                <BookOpen className="w-3 h-3" />
+                            )}
+                            <span>{ctaLabel}</span>
+                        </Link>
+                    )}
                 </div>
             </div>
         </div>

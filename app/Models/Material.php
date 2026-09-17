@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 
 class Material extends Model
 {
@@ -305,10 +307,84 @@ class Material extends Model
         }
 
         if ($this->source_type === 'external_link' && $this->external_open_mode === 'embed' && $this->external_url) {
-            return $this->external_url;
+            return static::resolveExternalEmbedUrl($this->external_url, $this);
         }
 
         return null;
+    }
+
+    /**
+     * Resolve and optimize third-party digital reader links into embeddable player URLs.
+     */
+    public static function resolveExternalEmbedUrl(string $url, ?self $material = null): string
+    {
+        $trimmed = trim($url);
+
+        // Pre-stored embed_url in material metadata
+        if ($material && ! empty($material->metadata['embed_url'])) {
+            return $material->metadata['embed_url'];
+        }
+
+        // 1. Flipsnack player URL
+        if (str_contains($trimmed, 'flipsnack.com')) {
+            if (str_contains($trimmed, 'player.flipsnack.com')) {
+                return $trimmed;
+            }
+
+            $cacheKey = 'flipsnack_embed_'.md5($trimmed);
+
+            return Cache::remember($cacheKey, 86400 * 7, function () use ($trimmed) {
+                try {
+                    $response = Http::timeout(4)->get($trimmed);
+                    if ($response->successful() && preg_match('/data-src=[\x22\x27](https:\/\/player\.flipsnack\.com\/[^\x22\x27]+)[\x22\x27]/i', $response->body(), $matches)) {
+                        return html_entity_decode($matches[1]);
+                    }
+                } catch (\Throwable $e) {
+                    // Fallback to original URL
+                }
+
+                return $trimmed;
+            });
+        }
+
+        // 2. Google Drive preview
+        if (str_contains($trimmed, 'drive.google.com')) {
+            if (preg_match('/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/', $trimmed, $m)) {
+                return "https://drive.google.com/file/d/{$m[1]}/preview";
+            }
+            if (preg_match('/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/', $trimmed, $m)) {
+                return "https://drive.google.com/file/d/{$m[1]}/preview";
+            }
+        }
+
+        // 3. Google Docs / Sheets / Slides
+        if (str_contains($trimmed, 'docs.google.com')) {
+            if (preg_match('/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/', $trimmed, $m)) {
+                return "https://docs.google.com/document/d/{$m[1]}/preview";
+            }
+            if (preg_match('/docs\.google\.com\/presentation\/d\/([a-zA-Z0-9_-]+)/', $trimmed, $m)) {
+                return "https://docs.google.com/presentation/d/{$m[1]}/embed";
+            }
+            if (preg_match('/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/', $trimmed, $m)) {
+                return "https://docs.google.com/spreadsheets/d/{$m[1]}/preview";
+            }
+        }
+
+        // 4. YouTube links pasted as external link
+        if (str_contains($trimmed, 'youtube.com') || str_contains($trimmed, 'youtu.be')) {
+            if (preg_match('/(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/', $trimmed, $m)) {
+                return "https://www.youtube-nocookie.com/embed/{$m[1]}?rel=0&modestbranding=1";
+            }
+        }
+
+        // 5. Vimeo links pasted as external link
+        if (str_contains($trimmed, 'vimeo.com')) {
+            if (preg_match('/vimeo\.com\/(\d+)/', $trimmed, $m)) {
+                return "https://player.vimeo.com/video/{$m[1]}?dnt=1&app_id=122963";
+            }
+        }
+
+        return $trimmed;
     }
 
     /**

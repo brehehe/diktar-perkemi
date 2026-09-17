@@ -303,6 +303,9 @@ class MaterialController extends Controller
                     'metadata' => [
                         'key_points' => $keyPoints,
                         'learning_objectives' => $learningObjectives,
+                        'embed_url' => ($sourceType === 'external_link' && $externalOpenMode === 'embed' && $externalUrl)
+                            ? Material::resolveExternalEmbedUrl($externalUrl)
+                            : null,
                     ],
                 ]);
 
@@ -544,6 +547,11 @@ class MaterialController extends Controller
         }
         if ($request->has('table_of_contents')) {
             $metadata['table_of_contents'] = array_values(array_filter((array) $request->input('table_of_contents'), fn ($item) => ! empty($item['title'])));
+        }
+        if ($sourceType === 'external_link' && $externalOpenMode === 'embed' && $externalUrl) {
+            $metadata['embed_url'] = Material::resolveExternalEmbedUrl($externalUrl, $material);
+        } elseif ($sourceType !== 'external_link' || $externalOpenMode !== 'embed') {
+            unset($metadata['embed_url']);
         }
         $material->metadata = $metadata;
 

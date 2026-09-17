@@ -41,7 +41,7 @@ export default function FlipbookStage({
     const [currentPage, setCurrentPage] = useState(initialPage || lastReadPage || 1);
     const [direction, setDirection] = useState(0); // 0 = initial, 1 = forward, -1 = backward
     const [viewMode, setViewMode] = useState('spread'); // 'spread' | 'single'
-    const [isMobile, setIsMobile] = useState(false);
+    const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
     // ── UI State ─────────────────────────────────────────────────────────────
     const [zoom, setZoom] = useState(100);
@@ -132,15 +132,20 @@ export default function FlipbookStage({
     const fitScale = useMemo(() => {
         if (!stageDimensions.width || !stageDimensions.height) return 0.85;
 
-        // Vertical breathing room: leave 56px (28px top, 28px bottom)
-        const availHeight = Math.max(160, stageDimensions.height - 56);
+        // Vertical breathing room:
+        // Mobile: 24px (12px top, 12px bottom) so single page maximizes screen height
+        // Desktop: 56px (28px top, 28px bottom)
+        const vertPadding = isMobile ? 24 : 56;
+        const availHeight = Math.max(160, stageDimensions.height - vertPadding);
 
-        // Horizontal breathing room: leave room for floating side navigation arrows
-        const sideMargins = isMobile ? 32 : 160;
+        // Horizontal breathing room:
+        // Mobile: 16px (8px each side) so single page fills screen width cleanly (Image 1)
+        // Desktop: 160px for side navigation arrows and spread breathing room
+        const sideMargins = isMobile ? 16 : 160;
         const availWidth = Math.max(160, stageDimensions.width - sideMargins);
 
-        // Always calculate fit based on 2-page spread width
-        const targetWidth = baseDimensions.width * 2;
+        // Target width: In mobile, display 1 single page; in desktop, display 2-page book spread
+        const targetWidth = isMobile ? baseDimensions.width : baseDimensions.width * 2;
         const targetHeight = baseDimensions.height;
 
         const scaleX = availWidth / targetWidth;
@@ -151,8 +156,8 @@ export default function FlipbookStage({
     }, [stageDimensions, baseDimensions, isMobile]);
 
     const effectiveScale = fitScale * (zoom / 100);
-    const pageWidth = Math.max(180, Math.round(baseDimensions.width * effectiveScale));
-    const pageHeight = Math.max(260, Math.round(baseDimensions.height * effectiveScale));
+    const pageWidth = Math.max(140, Math.round(baseDimensions.width * effectiveScale));
+    const pageHeight = Math.max(200, Math.round(baseDimensions.height * effectiveScale));
 
     // ── Reading progress (debounced) ─────────────────────────────────────────
     const saveReadingProgress = useCallback((page, total) => {
@@ -191,6 +196,7 @@ export default function FlipbookStage({
     const canGoPrev = currentPage > 1;
     const canGoNext = (() => {
         if (currentPage >= totalPages) return false;
+        if (isMobile) return currentPage < totalPages;
         // If totalPages is odd, the last spread is (totalPages - 1) & totalPages.
         // Once viewing that spread, both are already displayed on screen, so cannot go further next.
         if (!isBackCoverStandalone && totalPages > 1) {
@@ -202,6 +208,10 @@ export default function FlipbookStage({
 
     const handleNextPage = useCallback(() => {
         if (!canGoNext) return;
+        if (isMobile) {
+            handlePageChange(currentPage + 1);
+            return;
+        }
         if (currentPage === 1) {
             handlePageChange(2);
         } else {
@@ -209,10 +219,14 @@ export default function FlipbookStage({
             const target = leftPage + 2;
             handlePageChange(Math.min(target, totalPages));
         }
-    }, [canGoNext, currentPage, totalPages, handlePageChange]);
+    }, [canGoNext, isMobile, currentPage, totalPages, handlePageChange]);
 
     const handlePrevPage = useCallback(() => {
         if (!canGoPrev) return;
+        if (isMobile) {
+            handlePageChange(currentPage - 1);
+            return;
+        }
         if (isBackCoverStandalone && currentPage === totalPages) {
             handlePageChange(Math.max(1, totalPages - 2));
         } else {
@@ -223,7 +237,7 @@ export default function FlipbookStage({
                 handlePageChange(leftPage - 2);
             }
         }
-    }, [canGoPrev, currentPage, totalPages, isBackCoverStandalone, handlePageChange]);
+    }, [canGoPrev, isMobile, currentPage, totalPages, isBackCoverStandalone, handlePageChange]);
 
     // ── Zoom ─────────────────────────────────────────────────────────────────
     const handleZoomIn  = () => setZoom(z => Math.min(z + 15, 200));
@@ -252,8 +266,14 @@ export default function FlipbookStage({
     const closeDrawer = () => setDrawerOpen(false);
 
     // ── Touch swipe ──────────────────────────────────────────────────────────
-    const SWIPE_THRESHOLD = 48;
+    const SWIPE_THRESHOLD = 40;
     const handleTouchStart = useCallback((e) => {
+        // Let st-page-flip handle its own 3D drag physics when touching the book canvas directly
+        if (e.target.closest?.('.st-page-flip') || e.target.closest?.('button') || e.target.closest?.('input')) {
+            touchStartX.current = null;
+            touchStartY.current = null;
+            return;
+        }
         touchStartX.current = e.touches[0].clientX;
         touchStartY.current = e.touches[0].clientY;
     }, []);
@@ -320,7 +340,7 @@ export default function FlipbookStage({
 
     // ── Spread page indicator ─────────────────────────────────────────────────
     const spreadIndicator = (() => {
-        if (currentPage === 1 || (isBackCoverStandalone && currentPage === totalPages)) {
+        if (isMobile || currentPage === 1 || (isBackCoverStandalone && currentPage === totalPages)) {
             return `${currentPage} / ${totalPages}`;
         }
         const leftPage = getSpreadLeftPage(currentPage);
@@ -374,14 +394,15 @@ export default function FlipbookStage({
                         canGoNext={canGoNext}
                         onPrev={handlePrevPage}
                         onNext={handleNextPage}
+                        isMobile={isMobile}
                     />
                 )}
 
                 {/* Main flipbook spread */}
                 {pdfDoc && !loadError && (
-                    <div className="w-full h-full overflow-auto flex items-start justify-center"
+                    <div className="w-full h-full overflow-hidden flex items-center justify-center"
                          style={{ scrollbarWidth: 'none' }}>
-                        <div className="min-h-full min-w-full flex items-center justify-center py-4 px-4 sm:px-14">
+                        <div className={`min-h-full min-w-full flex items-center justify-center ${isMobile ? 'p-1' : 'py-4 px-4 sm:px-14'}`}>
                             <FlipbookSpread
                                 pdfDoc={pdfDoc}
                                 currentPage={currentPage}

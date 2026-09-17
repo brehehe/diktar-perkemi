@@ -162,7 +162,7 @@ export default function ExternalUrlField({
                                 Sematkan dalam Portal
                             </span>
                             <p className="text-[11px] text-[#6B7C93] leading-relaxed">
-                                Hanya jika situs sumber mengizinkan iframe embedding (bebas dari proteksi X-Frame-Options).
+                                Tampilkan langsung di portal. Sistem otomatis mengoptimalkan tautan Flipsnack, Google Drive, FlipHTML5, dll.
                             </p>
                         </div>
                     </label>

@@ -261,6 +261,28 @@ export default function Edit({
                                 </Button>
                             </a>
                         )}
+                        {data.source_type === 'external_link' && (
+                            <a
+                                href={data.external_open_mode === 'embed' ? `/koleksi/${material.slug}` : (data.external_url || `/koleksi/${material.slug}`)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Button variant="outline" size="sm" icon={ExternalLink}>
+                                    {data.external_open_mode === 'embed' ? 'Lihat di Portal' : 'Buka Tautan'}
+                                </Button>
+                            </a>
+                        )}
+                        {data.source_type === 'video' && (
+                            <a
+                                href={`/koleksi/${material.slug}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Button variant="outline" size="sm" icon={ExternalLink}>
+                                    Lihat Video
+                                </Button>
+                            </a>
+                        )}
                     </div>
                 }
             />

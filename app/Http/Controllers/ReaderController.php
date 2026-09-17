@@ -21,13 +21,31 @@ class ReaderController extends Controller
     /**
      * Display the secure interactive digital book reader page.
      */
-    public function show(Request $request, string $slug): Response
+    public function show(Request $request, string $slug): Response|RedirectResponse
     {
         $material = Material::where('slug', $slug)
             ->with(['categories', 'audiences', 'activeFile'])
             ->firstOrFail();
 
         Gate::authorize('read', $material);
+
+        // 1. Guard against non-PDF materials accessing the flipbook reader
+        if ($material->source_type === 'external_link') {
+            if ($material->external_open_mode === 'new_tab' && $material->external_url) {
+                return redirect()->away($material->external_url);
+            }
+
+            return redirect()->route('portal.collections.show', $material->slug);
+        }
+
+        if ($material->source_type === 'video') {
+            return redirect()->route('portal.collections.show', $material->slug);
+        }
+
+        if (! $material->activeFile) {
+            return redirect()->route('portal.collections.show', $material->slug)
+                ->with('error', 'Berkas PDF buku digital belum tersedia untuk materi ini.');
+        }
 
         $activeFile = $material->activeFile;
         $primaryCategory = $material->categories->first();

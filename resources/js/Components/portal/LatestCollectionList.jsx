@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
-import { Clock, ArrowRight, BookOpen } from 'lucide-react';
+import { Clock, ArrowRight, BookOpen, ExternalLink, Play } from 'lucide-react';
 import Button from '../ui/Button';
 
 export default function LatestCollectionList({ materials = [] }) {
@@ -103,11 +103,38 @@ export default function LatestCollectionList({ materials = [] }) {
                                     Detail
                                 </Button>
                             </Link>
-                            <Link href={`/koleksi/${item.slug}/baca`}>
-                                <Button variant="primary" size="xs" icon={BookOpen}>
-                                    Baca
-                                </Button>
-                            </Link>
+
+                            {item.source_type === 'video' ? (
+                                <Link href={`/koleksi/${item.slug}#video-player-section`}>
+                                    <Button variant="primary" size="xs" icon={Play}>
+                                        Tonton
+                                    </Button>
+                                </Link>
+                            ) : item.source_type === 'external_link' ? (
+                                item.external_open_mode === 'embed' ? (
+                                    <Link href={`/koleksi/${item.slug}`}>
+                                        <Button variant="primary" size="xs" icon={BookOpen}>
+                                            Buka Buku
+                                        </Button>
+                                    </Link>
+                                ) : (
+                                    <a
+                                        href={item.external_url || `/koleksi/${item.slug}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <Button variant="primary" size="xs" icon={ExternalLink}>
+                                            Buka Tautan
+                                        </Button>
+                                    </a>
+                                )
+                            ) : (
+                                <Link href={`/koleksi/${item.slug}/baca`}>
+                                    <Button variant="primary" size="xs" icon={BookOpen}>
+                                        Baca
+                                    </Button>
+                                </Link>
+                            )}
                         </div>
                     </div>
                 ))}

@@ -1,0 +1,1113 @@
+import React, { useState } from 'react';
+import { Head, Link, useForm, usePoll } from '@inertiajs/react';
+import {
+    BookOpen,
+    Calendar,
+    MapPin,
+    Clock,
+    Award,
+    ExternalLink,
+    ArrowLeft,
+    CheckCircle2,
+    FileText,
+    Sparkles,
+    QrCode,
+    Camera,
+    Shield,
+    Check,
+    AlertCircle,
+    PlayCircle,
+    HelpCircle,
+    ChevronDown,
+    ChevronUp,
+    CheckSquare,
+    Lock,
+    Layers,
+    Video,
+} from 'lucide-react';
+import Button from '../../Components/ui/Button';
+import Badge from '../../Components/ui/Badge';
+import Toast from '../../Components/ui/Toast';
+
+export default function LearningRoom({
+    event,
+    participant,
+    activeSession,
+    scheduleDays = [],
+    sessions = [],
+    modules = [],
+    cbtPackages = [],
+    myLearningModules = [],
+    myCbtExams = [],
+    attendanceRecords = [],
+    certificate = null,
+}) {
+    usePoll(10000, {
+        only: [
+            'participant',
+            'activeSession',
+            'sessions',
+            'modules',
+            'cbtPackages',
+            'myLearningModules',
+            'myCbtExams',
+            'attendanceRecords',
+            'certificate',
+        ],
+        preserveScroll: true,
+        preserveState: true,
+    });
+
+    const availableDays = scheduleDays.length > 0
+        ? scheduleDays
+        : Array.from(new Set(sessions.map((session) => session.day_number)))
+            .sort((a, b) => a - b)
+            .map((dayNumber) => ({ day_number: dayNumber, date_label: null }));
+    const [activeTab, setActiveTab] = useState('beranda');
+    const [selectedDay, setSelectedDay] = useState(activeSession?.day_number || availableDays[0]?.day_number || 1);
+    const [expandedSessionId, setExpandedSessionId] = useState(activeSession?.id || null);
+    const [cbtFilter, setCbtFilter] = useState('all');
+
+    // Filter sessions for currently selected day
+    const daySessions = sessions.filter((s) => s.day_number === selectedDay);
+
+    return (
+        <div className="min-h-screen bg-[#F8FBFF] text-[#112743] flex flex-col justify-between font-sans antialiased">
+            <Head title={`Ruang Belajar — ${event.name}`} />
+            <Toast />
+
+            {/* Mobile-First Sticky Header */}
+            <header className="bg-white border-b border-[#DCE7F3] sticky top-0 z-30 shadow-2xs">
+                <div className="mx-auto flex min-h-16 w-full max-w-full items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0E2747] text-xs font-bold text-white shadow-xs">
+                            <Shield className="w-4 h-4 text-[#EE9B25]" />
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col">
+                            <span className="line-clamp-2 font-display text-xs font-bold leading-tight text-[#0E2747] sm:text-sm">
+                                {event.name}
+                            </span>
+                            <span className="truncate font-mono text-[10px] text-[#6B7C93]">
+                                Ruang Belajar • {participant.name} ({participant.track_code})
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Fast Navigation Quick Action */}
+                    <div className="flex shrink-0 items-center gap-2">
+                        <Link
+                            href={`/event/${event.slug}/scan`}
+                            aria-label="Pindai QR absensi"
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-[#0B63CE] px-3 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
+                        >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span className="hidden xs:inline">Scan Absensi</span>
+                        </Link>
+
+                        <Link
+                            href={`/event/${event.slug}/welcome`}
+                            aria-label="Buka sambutan event"
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[#DCE7F3] p-2 text-[#6B7C93] transition-colors hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
+                            title="Buka Animasi Buku 3D"
+                        >
+                            <Sparkles className="w-4 h-4" />
+                        </Link>
+                    </div>
+                </div>
+
+                {/* Mobile Sub-Navigation Tabs */}
+                <div className="overflow-x-auto border-t border-[#DCE7F3] bg-[#F8FBFF] px-4 sm:px-6 lg:px-8">
+                    <div className="mx-auto flex min-w-max max-w-full items-center gap-2 py-1.5 [&_button]:min-h-11 [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-[#0B63CE] [&_button]:motion-reduce:transition-none">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('beranda')}
+                            aria-pressed={activeTab === 'beranda'}
+                            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                                activeTab === 'beranda'
+                                    ? 'bg-[#0E2747] text-white shadow-xs'
+                                    : 'text-[#6B7C93] hover:text-[#0E2747]'
+                            }`}
+                        >
+                            Beranda & Sesi Aktif
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('rundown')}
+                            aria-pressed={activeTab === 'rundown'}
+                            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                                activeTab === 'rundown'
+                                    ? 'bg-[#0E2747] text-white shadow-xs'
+                                    : 'text-[#6B7C93] hover:text-[#0E2747]'
+                            }`}
+                        >
+                            Rundown & Sesi
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('materi')}
+                            aria-pressed={activeTab === 'materi'}
+                            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                                activeTab === 'materi'
+                                    ? 'bg-[#0E2747] text-white shadow-xs'
+                                    : 'text-[#6B7C93] hover:text-[#0E2747]'
+                            }`}
+                        >
+                            Modul Pembelajaran Saya ({myLearningModules?.length || modules.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('ujian')}
+                            aria-pressed={activeTab === 'ujian'}
+                            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                                activeTab === 'ujian'
+                                    ? 'bg-[#0E2747] text-white shadow-xs'
+                                    : 'text-[#6B7C93] hover:text-[#0E2747]'
+                            }`}
+                        >
+                            Ujian Saya ({myCbtExams?.length || cbtPackages.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('absensi')}
+                            aria-pressed={activeTab === 'absensi'}
+                            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                                activeTab === 'absensi'
+                                    ? 'bg-[#0E2747] text-white shadow-xs'
+                                    : 'text-[#6B7C93] hover:text-[#0E2747]'
+                            }`}
+                        >
+                            Riwayat Absensi ({attendanceRecords.length})
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('sertifikat')} aria-pressed={activeTab === 'sertifikat'} className={`min-h-11 rounded-md px-3 py-1 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] ${activeTab === 'sertifikat' ? 'bg-[#0E2747] text-white' : 'text-[#6B7C93] hover:text-[#0E2747]'}`}>
+                            Sertifikat
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            {/* Main Content Body */}
+            <main className="mx-auto w-full max-w-full flex-1 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+                {!participant.can_access_learning && <p role="status" className="border border-[#DCE7F3] bg-[#EAF5FF] p-4 text-sm text-[#112743]">Materi dan ujian event tersedia setelah kehadiran awal hari dan sesi yang diwajibkan tercatat. Pindai QR dari penyelenggara untuk melanjutkan.</p>}
+                {/* 1. STATUS CHECK-IN EVENT BANNER */}
+                <section aria-label="Status Check-in Event">
+                    {participant.is_checked_in ? (
+                        <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2 text-emerald-800">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <div>
+                                    <span className="font-bold block">Check-in Event Berhasil</span>
+                                    <span className="text-emerald-700 text-[11px]">
+                                        Tercatat pada {participant.checked_in_at} WIB. Kehadiran: {participant.attendance_percentage}% ({participant.attended_sessions_count} sesi)
+                                    </span>
+                                </div>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-mono font-bold text-[10px] shrink-0">
+                                Terverifikasi
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div className="flex items-start gap-2.5 text-amber-900">
+                                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <span className="font-bold block text-sm">Konfirmasi Kehadiran Event</span>
+                                    <span className="text-amber-800 text-xs">
+                                        Pindai QR kehadiran dari penyelenggara sebelum memulai aktivitas belajar.
+                                    </span>
+                                </div>
+                            </div>
+                            <Link href={`/event/${event.slug}/scan`} className="inline-flex min-h-11 shrink-0 items-center justify-center bg-[#0B63CE] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Scan kehadiran</Link>
+                        </div>
+                    )}
+                </section>
+
+                {/* 2. PRIORITY: ACTIVE / ONGOING SESSION CARD */}
+                {activeSession && (activeTab === 'beranda' || activeTab === 'rundown') && (
+                    <section aria-label="Sesi Berlangsung" className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-[#0E2747] uppercase tracking-wider">
+                                <span className="h-2 w-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" />
+                                <span>Sesi Sedang Berlangsung / Prioritas</span>
+                            </div>
+                            <span className="font-mono text-xs text-[#0B63CE] font-semibold bg-[#EAF5FF] px-2 py-0.5 rounded">
+                                Hari ke-{activeSession.day_number}
+                            </span>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border-2 border-[#0B63CE]/30 p-5 sm:p-6 shadow-xs space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs font-bold text-[#0B63CE] bg-[#EAF5FF] px-2 py-0.5 rounded">
+                                            {activeSession.time_slot} WIB
+                                        </span>
+                                        <span className="text-[11px] font-semibold text-[#6B7C93]">
+                                            {activeSession.session_number} • {activeSession.session_type_name}
+                                        </span>
+                                    </div>
+                                    <h2 className="font-display font-bold text-lg text-[#0E2747] leading-snug">
+                                        {activeSession.topic}
+                                    </h2>
+                                    {activeSession.subtopic && (
+                                        <p className="text-xs text-[#6B7C93]">
+                                            {activeSession.subtopic}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="text-right shrink-0">
+                                    <span className="font-mono text-xs text-[#0A3F82] font-semibold block">
+                                        {activeSession.room || 'Belum ditetapkan'}
+                                    </span>
+                                    {activeSession.speaker_name && (
+                                        <span className="text-[11px] text-[#6B7C93] block">
+                                            Pemateri: {activeSession.speaker_name}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Dynamic CTAs according to Session Rules */}
+                            <div className="pt-3 border-t border-[#DCE7F3] flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 text-xs">
+                                    {activeSession.has_attended ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-[11px]">
+                                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                            Kehadiran Tercatat
+                                        </span>
+                                    ) : activeSession.is_attendance_open ? (
+                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 motion-safe:animate-pulse">
+                                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                            Absensi Sesi Sedang Dibuka!
+                                        </span>
+                                    ) : (
+                                        <span className="text-[11px] text-[#6B7C93]">
+                                            Absensi belum dibuka panitia
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {/* Attendance CTA */}
+                                    {activeSession.is_attendance_open && !activeSession.has_attended && (
+                                        <Link
+                                            href={`/event/${event.slug}/scan`}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0B63CE] text-white text-xs font-bold hover:bg-[#0A3F82] transition-colors shadow-xs"
+                                        >
+                                            <QrCode className="w-4 h-4" />
+                                            <span>Scan QR untuk Absensi</span>
+                                        </Link>
+                                    )}
+
+                                    {/* Material Reading CTA */}
+                                    {activeSession.material_slug && (
+                                        <Link
+                                            href={activeSession.material_reader_url || `/koleksi/${activeSession.material_slug}/baca?event=${event.slug}`}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#EAF5FF] text-[#0B63CE] text-xs font-bold hover:bg-[#DCE7F3] transition-colors"
+                                        >
+                                            <BookOpen className="w-4 h-4" />
+                                            <span>Baca Buku Digital</span>
+                                        </Link>
+                                    )}
+                                    {!activeSession.material_slug && activeSession.event_material_url && (
+                                        <a href={activeSession.event_material_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 bg-[#0B63CE] px-4 text-xs font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Buka materi sesi</a>
+                                    )}
+
+                                    {/* CBT Exam CTA */}
+                                    {activeSession.cbt_package_code && (
+                                        <Link
+                                            href={`/event/${event.slug}/cbt/${activeSession.cbt_package_code}`}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition-colors shadow-xs"
+                                        >
+                                            <PlayCircle className="w-4 h-4" />
+                                            <span>Mulai Ujian CBT</span>
+                                        </Link>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                )}
+
+                {/* 3. TAB BERANDA: QUICK OVERVIEW & FEATURED MATERIALS */}
+                {activeTab === 'beranda' && (
+                    <div className="space-y-6">
+                        {/* Event Quick Overview Card */}
+                        <div className="bg-white rounded-2xl border border-[#DCE7F3] p-5 sm:p-6 shadow-xs space-y-3">
+                            <h3 className="font-display font-bold text-sm text-[#0E2747] uppercase tracking-wider">
+                                Ringkasan Kegiatan Penataran
+                            </h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-xs">
+                                <div className="p-3 bg-[#F8FBFF] rounded-xl border border-[#DCE7F3]">
+                                    <span className="text-[#6B7C93] block text-[10px] uppercase font-mono">Beban Akreditasi</span>
+                                    <span className="font-bold text-[#0B63CE] text-base">{event.total_effective_jp} JP</span>
+                                    <span className="text-[10px] text-[#6B7C93] block">Kurikulum Nasional</span>
+                                </div>
+                                <div className="p-3 bg-[#F8FBFF] rounded-xl border border-[#DCE7F3]">
+                                    <span className="text-[#6B7C93] block text-[10px] uppercase font-mono">Jalur Peserta</span>
+                                    <span className="font-bold text-[#0E2747] text-base">{participant.track_code}</span>
+                                    <span className="text-[10px] text-[#6B7C93] block truncate">{participant.track_name}</span>
+                                </div>
+                                <div className="p-3 bg-[#F8FBFF] rounded-xl border border-[#DCE7F3]">
+                                    <span className="text-[#6B7C93] block text-[10px] uppercase font-mono">Rotasi Kelas</span>
+                                    <span className="font-bold text-[#7957D5] text-base">Kelompok {participant.rotation_group || 'Belum ditetapkan'}</span>
+                                    <span className="text-[10px] text-[#6B7C93] block">Sistem Bergilir</span>
+                                </div>
+                                <div className="p-3 bg-[#F8FBFF] rounded-xl border border-[#DCE7F3]">
+                                    <span className="text-[#6B7C93] block text-[10px] uppercase font-mono">Kehadiran Sesi</span>
+                                    <span className="font-bold text-[#20A47A] text-base">{participant.attendance_percentage}%</span>
+                                    <span className="text-[10px] text-[#20A47A] block">{participant.attended_sessions_count} Sesi Hadir</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modul Pembelajaran Saya - Beranda Showcase */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-display font-bold text-sm text-[#0E2747] flex items-center gap-2">
+                                    <BookOpen className="w-4 h-4 text-[#0B63CE]" />
+                                    Modul Pembelajaran Saya ({participant.track_code})
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('materi')}
+                                    className="text-xs text-[#0B63CE] font-semibold hover:underline"
+                                >
+                                    Lihat Semua ({myLearningModules?.length || modules.length}) &rarr;
+                                </button>
+                            </div>
+
+                            {myLearningModules && myLearningModules.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {myLearningModules.slice(0, 4).map((m) => {
+                                        const firstMat = m.materials?.[0];
+                                        return (
+                                            <div
+                                                key={m.id}
+                                                className="p-4 rounded-xl bg-white border border-[#DCE7F3] shadow-2xs hover:border-[#0B63CE]/40 transition-all flex flex-col justify-between space-y-3"
+                                            >
+                                                <div className="space-y-1.5">
+                                                    <div className="flex items-center justify-between text-[10px]">
+                                                        <span className="font-mono font-bold text-[#0B63CE] bg-[#EAF5FF] px-1.5 py-0.5 rounded">
+                                                            {m.code}
+                                                        </span>
+                                                        <span className="text-[#6B7C93] font-mono">{m.total_jp} JP • {m.category}</span>
+                                                    </div>
+                                                    <h4 className="font-bold text-xs text-[#0E2747] line-clamp-2">
+                                                        {m.title}
+                                                    </h4>
+                                                    <p className="text-[11px] text-[#6B7C93]">
+                                                        {m.materials_count || m.materials?.length || 0} Materi Koleksi Digital
+                                                    </p>
+                                                </div>
+
+                                                {firstMat ? (
+                                                    <a
+                                                        href={firstMat.reader_url || `/koleksi/${firstMat.slug}/baca`}
+                                                        className={`inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-white text-xs font-semibold transition-colors ${
+                                                            firstMat.type === 'video' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#0B63CE] hover:bg-[#0A3F82]'
+                                                        }`}
+                                                    >
+                                                        {firstMat.type === 'video' ? <PlayCircle className="w-3.5 h-3.5" /> : <BookOpen className="w-3.5 h-3.5" />}
+                                                        <span>{firstMat.cta_text || (firstMat.type === 'video' ? 'Tonton Video' : 'Baca E-Book')}</span>
+                                                    </a>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setActiveTab('materi')}
+                                                        className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-[#DCE7F3] text-xs font-semibold text-[#0B63CE] hover:bg-[#F8FBFF]"
+                                                    >
+                                                        <span>Buka Modul</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {modules.slice(0, 4).map((m) => (
+                                        <div
+                                            key={m.id}
+                                            className="p-4 rounded-xl bg-white border border-[#DCE7F3] shadow-2xs hover:border-[#0B63CE]/40 transition-all flex flex-col justify-between space-y-3"
+                                        >
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-between text-[10px]">
+                                                    <span className="font-mono font-bold text-[#0B63CE] bg-[#EAF5FF] px-1.5 py-0.5 rounded">
+                                                        {m.code}
+                                                    </span>
+                                                    <span className="text-[#6B7C93] font-mono">{m.duration_jp} JP</span>
+                                                </div>
+                                                <h4 className="font-bold text-xs text-[#0E2747] line-clamp-2">
+                                                    {m.title}
+                                                </h4>
+                                                <p className="text-[11px] text-[#6B7C93] truncate">
+                                                    {m.speaker}
+                                                </p>
+                                            </div>
+
+                                            <ModuleResourceLink module={m} />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Ujian CBT Saya - Beranda Showcase */}
+                        {myCbtExams && myCbtExams.length > 0 && (
+                            <div className="space-y-3 pt-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <h3 className="font-display font-bold text-sm text-[#0E2747] flex items-center gap-2">
+                                        <Award className="w-4 h-4 text-purple-600" />
+                                        Ujian CBT Saya
+                                    </h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('ujian')}
+                                        className="inline-flex min-h-11 items-center whitespace-nowrap text-xs font-semibold text-[#0B63CE] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"
+                                    >
+                                        Buka Ujian Saya ({myCbtExams.length}) &rarr;
+                                    </button>
+                                </div>
+
+                                <div className="space-y-2">
+                                    {myCbtExams.slice(0, 2).map((pkg) => {
+                                        const isAccessible = pkg.is_accessible;
+                                        return (
+                                            <div
+                                                key={pkg.id}
+                                                className="flex flex-col items-stretch justify-between gap-3 rounded-xl border border-[#DCE7F3] bg-white p-3.5 text-xs sm:flex-row sm:items-center"
+                                            >
+                                                <div className="space-y-0.5 min-w-0">
+                                                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                                        <span className="shrink-0 rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-purple-700">
+                                                            {pkg.code}
+                                                        </span>
+                                                        <span className="min-w-0 break-words font-bold text-[#0E2747]">
+                                                            {pkg.title}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#6B7C93]">
+                                                        <span>{pkg.exam_type_label || pkg.exam_type}</span>
+                                                        <span>• {pkg.duration_minutes} Menit</span>
+                                                        <span>• KKM: {pkg.passing_score}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="shrink-0 self-start sm:self-center">
+                                                    {isAccessible ? (
+                                                        <Link
+                                                            href={pkg.exam_url || `/event/${event.slug}/cbt/${pkg.code}`}
+                                                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0B63CE] text-white font-bold text-xs hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"
+                                                        >
+                                                            <PlayCircle className="w-3.5 h-3.5" />
+                                                            <span>Mulai Ujian</span>
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 text-[11px] text-[#6B7C93] px-2 py-1 bg-slate-100 rounded-lg">
+                                                            <Lock className="w-3 h-3" />
+                                                            <span>Terkunci</span>
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* 4. TAB RUNDOWN: DAILY TIMELINE ACCORDION */}
+                {activeTab === 'rundown' && (
+                    <div className="space-y-4">
+                        {/* Day Selector Tabs */}
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                            {availableDays.map((day) => (
+                                <button
+                                    key={day.day_number}
+                                    type="button"
+                                    onClick={() => setSelectedDay(day.day_number)}
+                                    aria-pressed={selectedDay === day.day_number}
+                                    className={`min-h-11 shrink-0 rounded-lg px-4 py-2 text-left text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none ${
+                                        selectedDay === day.day_number
+                                            ? 'bg-[#0E2747] text-white shadow-xs'
+                                            : 'bg-white text-[#6B7C93] border border-[#DCE7F3] hover:bg-[#EAF5FF]'
+                                    }`}
+                                >
+                                    <span className="block">Hari ke-{day.day_number}</span>
+                                    {day.date_label && <span className="mt-0.5 block text-[10px] font-normal opacity-80">{day.date_label}</span>}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Sessions Vertical Timeline List */}
+                        <div className="space-y-3">
+                            {daySessions.length === 0 ? (
+                                <div className="p-8 text-center bg-white rounded-2xl border border-[#DCE7F3] text-xs text-[#6B7C93]">
+                                    Belum ada sesi yang dijadwalkan pada Hari ke-{selectedDay}.
+                                </div>
+                            ) : (
+                                daySessions.map((s) => {
+                                    const isExpanded = expandedSessionId === s.id;
+                                    return (
+                                        <div
+                                            key={s.id}
+                                            className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs overflow-hidden transition-all"
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => setExpandedSessionId(isExpanded ? null : s.id)}
+                                                aria-expanded={isExpanded}
+                                                aria-controls={`session-detail-${s.id}`}
+                                                className="flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-[#F8FBFF] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
+                                            >
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <span className="font-mono text-xs font-bold text-[#0B63CE] bg-[#EAF5FF] px-2 py-1 rounded shrink-0">
+                                                        {s.time_slot}
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                        <div className="break-words text-xs font-bold text-[#0E2747]">
+                                                            {s.topic}
+                                                        </div>
+                                                        <div className="text-[11px] text-[#6B7C93] flex items-center gap-2 mt-0.5">
+                                                            <span>{s.session_type_name}</span>
+                                                            {s.speaker_name && <span>• {s.speaker_name}</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    {s.has_attended ? (
+                                                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                                            <Check className="w-3.5 h-3.5" />
+                                                        </span>
+                                                    ) : s.is_attendance_open ? (
+                                                        <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 motion-safe:animate-pulse">
+                                                            Absen Buka
+                                                        </span>
+                                                    ) : null}
+
+                                                    {isExpanded ? (
+                                                        <ChevronUp className="w-4 h-4 text-[#6B7C93]" />
+                                                    ) : (
+                                                        <ChevronDown className="w-4 h-4 text-[#6B7C93]" />
+                                                    )}
+                                                </div>
+                                            </button>
+
+                                            {/* Expandable Session Detail */}
+                                            {isExpanded && (
+                                                <div id={`session-detail-${s.id}`} className="space-y-3 border-t border-[#DCE7F3]/60 bg-[#F8FBFF] px-4 pb-4 pt-1 text-xs">
+                                                    {s.subtopic && (
+                                                        <p className="text-[#112743]">{s.subtopic}</p>
+                                                    )}
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                                                        <span className="text-[11px] text-[#6B7C93]">
+                                                            Ruangan: <strong>{s.room || 'Belum ditetapkan'}</strong>
+                                                        </span>
+
+                                                        <div className="flex items-center gap-2">
+                                                            {s.is_attendance_open && !s.has_attended && (
+                                                                <Link
+                                                                    href={`/event/${event.slug}/scan`}
+                                                                    className="px-3 py-1.5 rounded-lg bg-[#0B63CE] text-white text-xs font-bold hover:bg-[#0A3F82]"
+                                                                >
+                                                                    Scan Absensi
+                                                                </Link>
+                                                            )}
+                                                            {s.material_slug && (
+                                                                <Link
+                                                                    href={s.material_reader_url || `/koleksi/${s.material_slug}/baca?event=${event.slug}`}
+                                                                    className="px-3 py-1.5 rounded-lg bg-white border border-[#DCE7F3] text-xs font-semibold text-[#0B63CE] hover:bg-[#EAF5FF]"
+                                                                >
+                                                                    Baca Materi
+                                                                </Link>
+                                                            )}
+                                                            {!s.material_slug && s.event_material_url && <a href={s.event_material_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center border border-[#DCE7F3] bg-white px-3 text-xs font-semibold text-[#0B63CE] hover:bg-[#EAF5FF] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Buka materi</a>}
+                                                            {s.cbt_package_code && (
+                                                                <Link
+                                                                    href={`/event/${event.slug}/cbt/${s.cbt_package_code}`}
+                                                                    className="px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-bold hover:bg-purple-700"
+                                                                >
+                                                                    Ikuti Ujian CBT
+                                                                </Link>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* 5. TAB MATERI: MODUL PEMBELAJARAN SAYA */}
+                {activeTab === 'materi' && (
+                    <div className="space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <h3 className="font-display font-bold text-base text-[#0E2747] flex items-center gap-2">
+                                    <BookOpen className="w-5 h-5 text-[#0B63CE]" />
+                                    Modul Pembelajaran Saya
+                                </h3>
+                                <p className="text-xs text-[#6B7C93]">
+                                    Kurikulum kompetensi dan koleksi digital yang disesuaikan dengan jalur peserta Anda ({participant.track_name} • {participant.track_code}).
+                                </p>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-[#0B63CE] bg-[#EAF5FF] px-2.5 py-1 rounded-full border border-[#DCE7F3] shrink-0 self-start sm:self-auto">
+                                {(myLearningModules && myLearningModules.length > 0 ? myLearningModules.length : modules.length)} Modul Tersedia
+                            </span>
+                        </div>
+
+                        {myLearningModules && myLearningModules.length > 0 ? (
+                            <div className="space-y-4">
+                                {myLearningModules.map((lm) => (
+                                    <div
+                                        key={lm.id}
+                                        className="p-5 rounded-2xl bg-white border border-[#DCE7F3] shadow-xs space-y-4 hover:border-[#0B63CE]/40 transition-all"
+                                    >
+                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-[#DCE7F3]">
+                                            <div className="space-y-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="font-mono text-xs font-bold text-[#0B63CE] bg-[#EAF5FF] px-2 py-0.5 rounded">
+                                                        {lm.code}
+                                                    </span>
+                                                    <span className="text-xs font-medium text-[#6B7C93] bg-slate-100 px-2 py-0.5 rounded">
+                                                        {lm.category}
+                                                    </span>
+                                                    <span className="text-xs font-medium text-[#6B7C93]">
+                                                        Tingkat {lm.level}
+                                                    </span>
+                                                    <span
+                                                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                                            lm.is_required
+                                                                ? 'bg-rose-100 text-rose-800'
+                                                                : 'bg-slate-100 text-slate-700'
+                                                        }`}
+                                                    >
+                                                        {lm.is_required ? 'Wajib' : 'Pilihan'}
+                                                    </span>
+                                                </div>
+                                                <h4 className="font-display font-bold text-base text-[#0E2747]">
+                                                    {lm.title}
+                                                </h4>
+                                            </div>
+                                            <div className="text-left sm:text-right shrink-0 font-mono text-xs text-[#6B7C93]">
+                                                <span className="font-bold text-[#0B63CE] text-sm block">{lm.total_jp} JP</span>
+                                                <span className="text-[11px]">{lm.materials?.length || 0} Materi Belajar</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Competency outcomes badges */}
+                                        {lm.competency_outcomes && lm.competency_outcomes.length > 0 && (
+                                            <div className="text-xs space-y-1">
+                                                <span className="text-[10px] font-bold text-[#6B7C93] uppercase tracking-wider block">
+                                                    Target Capaian Kompetensi:
+                                                </span>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {lm.competency_outcomes.map((cap, cIdx) => (
+                                                        <span key={cIdx} className="px-2 py-0.5 rounded bg-blue-50 text-[#0B63CE] text-[11px] font-medium border border-blue-100">
+                                                            ✓ {cap}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Connected Digital Materials List */}
+                                        <div className="space-y-2 pt-2">
+                                            <span className="text-xs font-bold text-[#0E2747] flex items-center gap-1.5">
+                                                <Layers className="w-3.5 h-3.5 text-[#0B63CE]" />
+                                                Materi & Koleksi Digital Terhubung:
+                                            </span>
+
+                                            {lm.materials && lm.materials.length > 0 ? (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {lm.materials.map((mat) => (
+                                                        <div
+                                                            key={mat.id}
+                                                            className="p-3.5 rounded-xl bg-[#F8FBFF] border border-[#DCE7F3] flex flex-col justify-between space-y-2.5 hover:bg-white hover:border-[#0B63CE]/40 transition-all"
+                                                        >
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center justify-between text-[10px]">
+                                                                    <span className="font-mono font-bold text-[#6B7C93]">
+                                                                        Urutan #{mat.sort_order || 1}
+                                                                    </span>
+                                                                    {mat.estimated_duration_minutes && (
+                                                                        <span className="text-[#6B7C93] font-mono">
+                                                                            ± {mat.estimated_duration_minutes} Menit
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <h5 className="font-bold text-xs text-[#0E2747] line-clamp-2">
+                                                                    {mat.title}
+                                                                </h5>
+                                                                {mat.instructor_notes && (
+                                                                    <p className="text-[11px] text-[#6B7C93] italic line-clamp-2">
+                                                                        "{mat.instructor_notes}"
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
+                                                            <a
+                                                                href={mat.reader_url || `/koleksi/${mat.slug}/baca`}
+                                                                className={`inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold text-white transition-colors ${
+                                                                    mat.type === 'video'
+                                                                        ? 'bg-purple-600 hover:bg-purple-700'
+                                                                        : 'bg-[#0B63CE] hover:bg-[#0A3F82]'
+                                                                }`}
+                                                            >
+                                                                {mat.type === 'video' ? (
+                                                                    <PlayCircle className="w-3.5 h-3.5" />
+                                                                ) : (
+                                                                    <BookOpen className="w-3.5 h-3.5" />
+                                                                )}
+                                                                <span>{mat.cta_text || (mat.type === 'video' ? 'Tonton Video' : 'Baca E-Book')}</span>
+                                                            </a>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-[#6B7C93] italic">
+                                                    Materi digital dalam modul ini sedang dipersiapkan oleh instruktur penataran.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {modules.map((m) => (
+                                    <div
+                                        key={m.id}
+                                        className="p-5 rounded-2xl bg-white border border-[#DCE7F3] shadow-xs flex flex-col justify-between space-y-4"
+                                    >
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="font-mono font-bold text-[#0B63CE] bg-[#EAF5FF] px-2 py-0.5 rounded">
+                                                    {m.code}
+                                                </span>
+                                                <span className="font-mono text-[#6B7C93]">{m.duration_jp} JP</span>
+                                            </div>
+                                            <h4 className="font-bold text-sm text-[#0E2747] leading-snug">
+                                                {m.title}
+                                            </h4>
+                                            <p className="text-xs text-[#6B7C93]">
+                                                Instruktur: <strong className="text-[#112743]">{m.speaker}</strong>
+                                            </p>
+                                        </div>
+
+                                        <div className="pt-3 border-t border-[#DCE7F3] flex items-center justify-between">
+                                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                {m.resource_locked ? 'Perlu absensi sesi' : 'Modul event'}
+                                            </span>
+
+                                            <ModuleResourceLink module={m} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* 6. TAB CBT: UJIAN SAYA */}
+                {activeTab === 'ujian' && (
+                    <div className="space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h3 className="font-display font-bold text-base text-[#0E2747] flex items-center gap-2">
+                                    <Award className="w-5 h-5 text-purple-600" />
+                                    Ujian Saya
+                                </h3>
+                                <p className="text-xs text-[#6B7C93]">
+                                    Daftar paket ujian CBT penataran resmi untuk jalur {participant.track_name} ({participant.track_code}).
+                                </p>
+                            </div>
+
+                            {/* Filter Chips */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                                {[
+                                    { id: 'all', label: 'Semua' },
+                                    { id: 'tersedia', label: 'Sedang Tersedia' },
+                                    { id: 'akan_datang', label: 'Akan Datang' },
+                                    { id: 'selesai', label: 'Selesai' },
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setCbtFilter(tab.id)}
+                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                                            cbtFilter === tab.id
+                                                ? 'bg-[#0E2747] text-white shadow-xs'
+                                                : 'bg-white text-[#6B7C93] border border-[#DCE7F3] hover:bg-[#EAF5FF]'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* List of Exams */}
+                        {(() => {
+                            const examsToDisplay = (myCbtExams && myCbtExams.length > 0 ? myCbtExams : cbtPackages)
+                                .filter((pkg) => {
+                                    if (cbtFilter === 'tersedia') return pkg.exam_state === 'tersedia';
+                                    if (cbtFilter === 'akan_datang') return pkg.exam_state === 'akan_datang';
+                                    if (cbtFilter === 'selesai') return pkg.has_attempt || pkg.exam_state === 'selesai';
+                                    return true;
+                                });
+
+                            if (examsToDisplay.length === 0) {
+                                return (
+                                    <div className="p-10 text-center bg-white rounded-2xl border border-[#DCE7F3] space-y-2">
+                                        <Award className="w-8 h-8 text-[#6B7C93] mx-auto opacity-50" />
+                                        <h5 className="font-bold text-sm text-[#0E2747]">Tidak Ada Ujian pada Kategori Ini</h5>
+                                        <p className="text-xs text-[#6B7C93]">
+                                            Belum ada paket ujian yang dijadwalkan atau memenuhi filter yang dipilih.
+                                        </p>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div className="space-y-4">
+                                    {examsToDisplay.map((pkg) => {
+                                        const isAccessible = pkg.is_accessible !== undefined ? pkg.is_accessible : (pkg.attempts_count < pkg.attempts_allowed);
+                                        const deniedReason = pkg.access_denied_reason;
+
+                                        return (
+                                            <div
+                                                key={pkg.id}
+                                                className="p-5 rounded-2xl bg-white border border-[#DCE7F3] shadow-xs space-y-4 hover:border-purple-300 transition-all"
+                                            >
+                                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="font-mono text-xs font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                                                {pkg.code}
+                                                            </span>
+                                                            <span className="text-xs font-medium text-[#6B7C93] bg-slate-100 px-2 py-0.5 rounded">
+                                                                {pkg.exam_type_label || pkg.exam_type}
+                                                            </span>
+                                                            {/* State Badge */}
+                                                            {pkg.exam_state === 'tersedia' && (
+                                                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse" />
+                                                                    Sedang Tersedia
+                                                                </span>
+                                                            )}
+                                                            {pkg.exam_state === 'akan_datang' && (
+                                                                <span className="text-[10px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                                                    Akan Datang
+                                                                </span>
+                                                            )}
+                                                            {pkg.exam_state === 'ditutup' && (
+                                                                <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                                                                    Ujian Ditutup
+                                                                </span>
+                                                            )}
+                                                            {pkg.has_attempt && (
+                                                                <span className="text-[10px] font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                                                    Sudah Dikerjakan
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <h4 className="font-display font-bold text-base text-[#0E2747]">
+                                                            {pkg.title}
+                                                        </h4>
+                                                        {pkg.description && (
+                                                            <p className="text-xs text-[#6B7C93] line-clamp-2">
+                                                                {pkg.description}
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="text-left sm:text-right text-xs text-[#6B7C93] shrink-0 font-mono space-y-0.5">
+                                                        <div>Durasi: <strong className="text-[#0E2747]">{pkg.duration_minutes} Menit</strong></div>
+                                                        <div className="text-[11px]">Standar Kelulusan (KKM): <strong className="text-purple-700">{pkg.passing_score}</strong></div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Access Denied Warning Banner if locked */}
+                                                {!isAccessible && deniedReason && (
+                                                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5 text-xs text-amber-900">
+                                                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                                        <div>
+                                                            <span className="font-bold block">Ujian Belum Dapat Diakses:</span>
+                                                            <span>{deniedReason}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Bottom bar with attempts & CTA */}
+                                                <div className="pt-3 border-t border-[#DCE7F3] flex flex-wrap items-center justify-between gap-3 text-xs">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[#6B7C93]">
+                                                            Percobaan: <strong className="text-[#0E2747]">{pkg.attempts_count || 0}</strong> dari {pkg.attempts_allowed || 1} kali
+                                                        </span>
+
+                                                        {pkg.has_attempt && pkg.last_score !== null && (
+                                                            <div className="flex items-center gap-2 pl-3 border-l border-[#DCE7F3]">
+                                                                <span className="font-bold text-[#0E2747]">
+                                                                    Nilai: <span className="text-purple-700 font-mono text-sm">{pkg.last_score}</span>
+                                                                </span>
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                                    pkg.is_passed
+                                                                        ? 'bg-emerald-100 text-emerald-800'
+                                                                        : 'bg-rose-100 text-rose-800'
+                                                                }`}>
+                                                                    {pkg.is_passed ? 'Lulus' : 'Belum Memenuhi'}
+                                                                </span>
+                                                            </div>
+                                                        )}
+
+                                                        {pkg.attempt_status === 'waiting_review' && (
+                                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                                                Menunggu Penilaian Esai
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {isAccessible ? (
+                                                        <Link
+                                                            href={pkg.exam_url || `/event/${event.slug}/cbt/${pkg.code}`}
+                                                            className="inline-flex min-h-11 items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0B63CE] text-white font-bold text-xs hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"
+                                                        >
+                                                            <PlayCircle className="w-4 h-4" />
+                                                            <span>{pkg.has_attempt ? 'Ujian Ulang' : 'Mulai Ujian'}</span>
+                                                        </Link>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            disabled
+                                                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 text-slate-400 font-semibold text-xs cursor-not-allowed border border-slate-200"
+                                                        >
+                                                            <Lock className="w-3.5 h-3.5" />
+                                                            <span>Ujian Terkunci</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {pkg.revision_attempt_id && pkg.revision_method === 'paper' && <RevisionPaperForm package={pkg} />}
+                                                {pkg.revision_attempt_id && pkg.revision_method === 'retry' && <p className="border-t border-[#DCE7F3] pt-3 text-sm text-[#6B7C93]">Nilai di bawah KKM. Anda dapat mengulang ujian selama kesempatan masih tersedia.</p>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                )}
+
+                {activeTab === 'sertifikat' && (
+                    <section aria-labelledby="certificate-title" className="border border-[#DCE7F3] bg-white p-6 sm:p-8">
+                        <h2 id="certificate-title" className="font-display text-2xl font-semibold text-[#0A3F82]">Sertifikat Event</h2>
+                        {certificate?.download_url ? (
+                            <div className="mt-5 space-y-3">
+                                {certificate.number && <p className="text-sm text-[#112743]">Nomor sertifikat: <strong>{certificate.number}</strong></p>}
+                                {certificate.issued_at && <p className="text-sm text-[#6B7C93]">Diterbitkan: {certificate.issued_at}</p>}
+                                <a href={certificate.download_url} className="inline-flex min-h-11 items-center justify-center bg-[#0B63CE] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh sertifikat PDF</a>
+                            </div>
+                        ) : <p className="mt-4 text-sm leading-6 text-[#6B7C93]">Sertifikat belum tersedia. Penyelenggara akan mengunggah PDF setelah proses penilaian selesai.</p>}
+                    </section>
+                )}
+
+                {/* 7. TAB ABSENSI: ATTENDANCE HISTORY */}
+                {activeTab === 'absensi' && (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-display font-bold text-sm text-[#0E2747]">
+                                Riwayat Presensi Sesi Penataran
+                            </h3>
+                            <span className="text-xs font-mono text-[#0B63CE] font-bold">
+                                {attendanceRecords.length} Sesi Tercatat
+                            </span>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border border-[#DCE7F3] shadow-xs overflow-hidden">
+                            {attendanceRecords.length === 0 ? (
+                                <div className="p-8 text-center text-xs text-[#6B7C93]">
+                                    Belum ada catatan kehadiran sesi. Silakan scan QR code saat sesi rundown dibuka.
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-[#DCE7F3]/60">
+                                    {attendanceRecords.map((att) => (
+                                        <div key={att.id} className="p-4 flex items-center justify-between gap-3 text-xs">
+                                            <div className="space-y-0.5">
+                                                <div className="font-bold text-[#0E2747]">
+                                                    {att.session_name}
+                                                </div>
+                                                <div className="text-[11px] text-[#6B7C93]">
+                                                    {att.time} • Metode: {att.method === 'qr_scan' ? 'Scan QR' : 'Kode Manual'}
+                                                </div>
+                                            </div>
+
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${att.status_badge}`}>
+                                                {att.status_label}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </main>
+
+            {/* Bottom Footer */}
+            <footer className="bg-white border-t border-[#DCE7F3] py-6 text-center text-xs text-[#6B7C93] font-mono">
+                <p>Pustaka Penataran • Persaudaraan Bela Diri Kempo Indonesia (PB PERKEMI) © {new Date().getFullYear()}</p>
+            </footer>
+        </div>
+    );
+}
+
+function RevisionPaperForm({ package: examPackage }) {
+    const form = useForm({ paper: null });
+    const canUpload = examPackage.revision_open && !['pending', 'accepted'].includes(examPackage.revision_status);
+
+    const submit = (event) => {
+        event.preventDefault();
+        form.post(examPackage.revision_upload_url, { forceFormData: true, onSuccess: () => form.reset() });
+    };
+
+    return (
+        <form onSubmit={submit} className="border-t border-[#DCE7F3] pt-4">
+            <h5 className="text-sm font-bold text-[#0E2747]">Revisi makalah PDF</h5>
+            {examPackage.revision_deadline && <p className="mt-1 text-xs text-[#6B7C93]">Batas unggah: {examPackage.revision_deadline}</p>}
+            {examPackage.revision_status && <p className="mt-1 text-xs font-semibold text-[#0A3F82]">Status: {examPackage.revision_status === 'accepted' ? 'Diterima' : examPackage.revision_status === 'rejected' ? 'Perlu perbaikan' : 'Menunggu pemeriksaan'}</p>}
+            {examPackage.revision_reader_url && <Link href={examPackage.revision_reader_url} className="mt-3 inline-flex min-h-11 items-center border border-[#0B63CE] px-4 text-sm font-semibold text-[#0A3F82] hover:bg-[#EAF5FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE]">Baca makalah sebagai flipbook</Link>}
+            {canUpload && (
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                    <label className="block text-sm font-medium text-[#112743]">Pilih makalah PDF, maksimal 10 MB
+                        <input type="file" accept="application/pdf" required onChange={(event) => form.setData('paper', event.target.files[0] || null)} className="mt-1 block w-full max-w-xs text-sm file:mr-3 file:min-h-11 file:border file:border-[#DCE7F3] file:bg-white file:px-3 file:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-[#0B63CE]" />
+                    </label>
+                    <button type="submit" disabled={form.processing || !form.data.paper} className="min-h-11 bg-[#0B63CE] px-4 text-sm font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] disabled:cursor-not-allowed disabled:opacity-50">{form.processing ? 'Mengunggah…' : 'Kirim revisi'}</button>
+                </div>
+            )}
+            {form.errors.paper && <p role="alert" className="mt-2 text-sm text-[#B42352]">{form.errors.paper}</p>}
+            {!examPackage.revision_open && <p className="mt-2 text-sm text-[#6B7C93]">Batas unggah revisi telah berakhir.</p>}
+        </form>
+    );
+}
+
+function ModuleResourceLink({ module }) {
+    if (!module.resource_url) {
+        return <span className="text-xs text-[#6B7C93]">{module.resource_locked ? 'Scan QR sesi untuk membuka materi' : 'Materi belum tersedia'}</span>;
+    }
+
+    const label = module.source_type === 'video' ? 'Tonton video' : module.source_type === 'uploaded_pdf' ? 'Buka PDF' : 'Buka materi';
+    const className = 'inline-flex min-h-11 items-center justify-center bg-[#0B63CE] px-4 text-xs font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]';
+
+    return module.source_type === 'collection'
+        ? <Link href={module.resource_url} className={className}>{label}</Link>
+        : <a href={module.resource_url} target="_blank" rel="noopener noreferrer" className={className}>{label}</a>;
+}

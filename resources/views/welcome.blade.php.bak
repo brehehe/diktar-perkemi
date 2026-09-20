@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Diktar — Portal Buku Digital terlengkap di Indonesia. Jelajahi ribuan judul fiksi, nonfiksi, sains, sejarah, dan lebih banyak lagi. Baca kapan saja, di mana saja.">
+    <meta property="og:title" content="Diktar — Portal Buku Digital">
+    <meta property="og:description" content="Jelajahi ribuan buku digital berkualitas. Gratis, mudah diakses, dan selalu diperbarui.">
+    <meta name="theme-color" content="#2D4A3E">
+
+    <title>Diktar — Portal Buku Digital</title>
+
+    @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @else
+        <style>
+            /* Fallback minimal styles if Vite not running */
+            body { margin: 0; font-family: sans-serif; background: #F5F2EC; }
+        </style>
+    @endif
+</head>
+<body>
+
+{{-- ═══════════════════════════════════════════════════════════════
+     NAVIGATION
+     ═══════════════════════════════════════════════════════════════ --}}
+<header class="dk-nav" id="site-header" role="banner">
+    <div class="dk-container" style="height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;">
+
+        {{-- Logo --}}
+        <a href="/" id="site-logo" style="display: flex; align-items: center; gap: 0.625rem; text-decoration: none; flex-shrink: 0;" aria-label="Diktar - Beranda">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect width="28" height="28" fill="#2D4A3E"/>
+                <path d="M6 7H16C19.3137 7 22 9.68629 22 13C22 16.3137 19.3137 19 16 19H6V7Z" fill="none" stroke="#F5F2EC" stroke-width="1.5"/>
+                <path d="M6 7V21" stroke="#B5894A" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M10 7V19" stroke="#F5F2EC" stroke-width="0.75" stroke-opacity="0.4"/>
+            </svg>
+            <span style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.375rem; font-weight: 600; color: #1A1208; letter-spacing: -0.01em; line-height: 1;">Diktar</span>
+        </a>
+
+        {{-- Desktop Nav --}}
+        <nav style="display: flex; align-items: center; gap: 0; flex: 1; justify-content: center;" aria-label="Navigasi utama">
+            <div style="display: none; align-items: center; gap: 0.25rem;" id="desktop-nav">
+                <a href="#categories" id="nav-koleksi" class="btn-ghost" style="font-size: 0.8125rem;">Koleksi</a>
+                <a href="#books" id="nav-buku" class="btn-ghost" style="font-size: 0.8125rem;">Buku Terbaru</a>
+                <a href="#benefits" id="nav-fitur" class="btn-ghost" style="font-size: 0.8125rem;">Fitur</a>
+                <a href="#about" id="nav-tentang" class="btn-ghost" style="font-size: 0.8125rem;">Tentang</a>
+            </div>
+        </nav>
+
+        {{-- Auth + CTA --}}
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;">
+            @if (Route::has('login'))
+                @auth
+                    <a href="{{ url('/dashboard') }}" id="nav-dashboard" class="btn-ghost" style="font-size: 0.8125rem;">Dashboard</a>
+                @else
+                    <a href="{{ route('login') }}" id="nav-login" class="btn-ghost" style="font-size: 0.8125rem; display: none;">Masuk</a>
+                    @if (Route::has('register'))
+                        <a href="{{ route('register') }}" id="nav-cta" class="btn-primary" style="font-size: 0.8125rem; padding: 0.625rem 1.25rem;">
+                            Mulai Baca
+                        </a>
+                    @endif
+                @endauth
+            @endif
+
+            {{-- Mobile menu button --}}
+            <button id="mobile-menu-btn" aria-label="Buka menu" aria-expanded="false" style="display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; background: transparent; border: 1px solid var(--color-dk-border); cursor: pointer; color: var(--color-dk-ink);">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M2 4H14M2 8H14M2 12H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+</header>
+
+{{-- Mobile Menu --}}
+<div id="mobile-menu" style="display: none; position: fixed; top: var(--dk-nav-height); left: 0; right: 0; background: rgba(245,242,236,0.98); backdrop-filter: blur(16px); border-bottom: 1px solid var(--color-dk-border); z-index: 99; padding: 1rem 1.5rem 1.5rem;" role="dialog" aria-label="Menu mobile">
+    <nav style="display: flex; flex-direction: column; gap: 0.25rem;">
+        <a href="#categories" class="btn-ghost" style="justify-content: flex-start; font-size: 0.9375rem; padding: 0.75rem 0.5rem;" onclick="closeMobileMenu()">Koleksi</a>
+        <a href="#books" class="btn-ghost" style="justify-content: flex-start; font-size: 0.9375rem; padding: 0.75rem 0.5rem;" onclick="closeMobileMenu()">Buku Terbaru</a>
+        <a href="#benefits" class="btn-ghost" style="justify-content: flex-start; font-size: 0.9375rem; padding: 0.75rem 0.5rem;" onclick="closeMobileMenu()">Fitur</a>
+        <a href="#about" class="btn-ghost" style="justify-content: flex-start; font-size: 0.9375rem; padding: 0.75rem 0.5rem;" onclick="closeMobileMenu()">Tentang</a>
+        <hr class="dk-rule" style="margin: 0.75rem 0;">
+        @if (Route::has('login'))
+            @guest
+                <a href="{{ route('login') }}" class="btn-outline" style="justify-content: center; margin-bottom: 0.5rem;">Masuk</a>
+                @if (Route::has('register'))
+                    <a href="{{ route('register') }}" class="btn-primary" style="justify-content: center;">Mulai Baca Gratis</a>
+                @endif
+            @endguest
+        @endif
+    </nav>
+</div>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     HERO SECTION
+     ═══════════════════════════════════════════════════════════════ --}}
+<section id="hero" aria-labelledby="hero-headline" style="padding-top: calc(var(--dk-nav-height) + 5rem); padding-bottom: 5rem; background-color: var(--color-dk-bg); position: relative; overflow: hidden;">
+
+    {{-- Decorative background pattern --}}
+    <div aria-hidden="true" style="position: absolute; inset: 0; pointer-events: none; overflow: hidden;">
+        <svg width="100%" height="100%" style="position: absolute; right: -5%; top: -5%; width: 55%; max-width: 700px; opacity: 0.035;" viewBox="0 0 600 700" fill="none">
+            <path d="M100 50 L500 50 L500 650 L100 650 Z" stroke="#1A1208" stroke-width="1"/>
+            <path d="M120 80 L480 80 L480 620 L120 620 Z" stroke="#1A1208" stroke-width="0.5"/>
+            <path d="M100 200 L500 200" stroke="#1A1208" stroke-width="0.5"/>
+            <path d="M100 300 L500 300" stroke="#1A1208" stroke-width="0.5"/>
+            <path d="M100 400 L500 400" stroke="#1A1208" stroke-width="0.5"/>
+            <path d="M200 50 L200 650" stroke="#1A1208" stroke-width="0.5"/>
+            <path d="M300 50 L300 650" stroke="#1A1208" stroke-width="0.5"/>
+            <path d="M400 50 L400 650" stroke="#1A1208" stroke-width="0.5"/>
+        </svg>
+        <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: var(--color-dk-border);"></div>
+    </div>
+
+    <div class="dk-container" style="position: relative;">
+        <div style="max-width: 52rem;">
+
+            {{-- Eyebrow --}}
+            <p class="dk-eyebrow animate-fade-in-up" style="margin: 0 0 1.5rem;" aria-label="Kategori: Portal Buku Digital Indonesia">
+                Portal Buku Digital Indonesia
+            </p>
+
+            {{-- Main headline --}}
+            <h1 id="hero-headline" class="text-display animate-fade-in-up animation-delay-100" style="font-size: clamp(2.75rem, 7vw, 6rem); margin: 0 0 1.5rem; color: var(--color-dk-ink);">
+                Ribuan Buku,<br>
+                <em style="color: var(--color-dk-accent); font-style: italic;">Satu Platform.</em>
+            </h1>
+
+            {{-- Subheading --}}
+            <p class="animate-fade-in-up animation-delay-200" style="font-family: 'Libre Baskerville', Georgia, serif; font-size: clamp(1rem, 2vw, 1.1875rem); color: var(--color-dk-muted); line-height: 1.75; margin: 0 0 2.5rem; max-width: 38rem;">
+                Jelajahi koleksi buku digital dari penulis terbaik Indonesia dan dunia.
+                Baca fiksi, nonfiksi, sains, sejarah, dan lebih banyak lagi — gratis dan mudah diakses.
+            </p>
+
+            {{-- Search Bar --}}
+            <div class="animate-fade-in-up animation-delay-300" style="margin-bottom: 2rem; max-width: 42rem;">
+                <div class="dk-search" role="search" aria-label="Cari buku atau materi">
+                    <label for="hero-search" class="sr-only" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0);">Cari buku atau materi</label>
+                    <input
+                        type="search"
+                        id="hero-search"
+                        name="q"
+                        placeholder="Cari judul, penulis, atau topik..."
+                        autocomplete="off"
+                    >
+                    <button type="submit" id="hero-search-btn" aria-label="Cari">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        Cari
+                    </button>
+                </div>
+                <p style="font-size: 0.75rem; color: var(--color-dk-subtle); margin: 0.625rem 0 0; padding-left: 0.25rem;">
+                    Populer: <a href="#" id="search-tag-fiksi" style="color: var(--color-dk-muted); text-decoration: underline; text-decoration-color: var(--color-dk-border-dark); text-underline-offset: 3px; transition: color 0.2s ease;" onmouseenter="this.style.color='var(--color-dk-ink)'" onmouseleave="this.style.color='var(--color-dk-muted)'">Fiksi Indonesia</a>,
+                    <a href="#" id="search-tag-sains" style="color: var(--color-dk-muted); text-decoration: underline; text-decoration-color: var(--color-dk-border-dark); text-underline-offset: 3px; transition: color 0.2s ease;" onmouseenter="this.style.color='var(--color-dk-ink)'" onmouseleave="this.style.color='var(--color-dk-muted)'">Sains Populer</a>,
+                    <a href="#" id="search-tag-sejarah" style="color: var(--color-dk-muted); text-decoration: underline; text-decoration-color: var(--color-dk-border-dark); text-underline-offset: 3px; transition: color 0.2s ease;" onmouseenter="this.style.color='var(--color-dk-ink)'" onmouseleave="this.style.color='var(--color-dk-muted)'">Sejarah Nusantara</a>
+                </p>
+            </div>
+
+            {{-- CTAs --}}
+            <div class="animate-fade-in-up animation-delay-400" style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.875rem;">
+                @if (Route::has('register'))
+                    <a href="{{ route('register') }}" id="hero-cta-primary" class="btn-primary">
+                        Mulai Baca Gratis
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                            <path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                @endif
+                <a href="#books" id="hero-cta-secondary" class="btn-outline">
+                    Jelajahi Koleksi
+                </a>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     TRUST BAR / STATS
+     ═══════════════════════════════════════════════════════════════ --}}
+<section id="trust" aria-label="Statistik platform" style="background-color: var(--color-dk-surface); border-top: 1px solid var(--color-dk-border); border-bottom: 1px solid var(--color-dk-border);">
+    <div class="dk-container" style="padding-top: 2.5rem; padding-bottom: 2.5rem;">
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem 1rem; align-items: center;">
+
+            <div style="grid-column: 1 / -1; display: flex; align-items: center; gap: 0.625rem; margin-bottom: 0.5rem;">
+                <span style="height: 1px; flex: 1; max-width: 3rem; background: var(--color-dk-border-dark);"></span>
+                <p class="dk-eyebrow" style="margin: 0;">Dipercaya pembaca Indonesia</p>
+                <span style="height: 1px; flex: 1; max-width: 3rem; background: var(--color-dk-border-dark);"></span>
+            </div>
+
+            <div style="text-align: center; padding: 1rem; border-right: 1px solid var(--color-dk-border);">
+                <div class="trust-stat-number" id="stat-books">12.400+</div>
+                <div class="trust-stat-label">Judul Buku</div>
+            </div>
+            <div style="text-align: center; padding: 1rem;">
+                <div class="trust-stat-number" id="stat-readers">85.000+</div>
+                <div class="trust-stat-label">Pembaca Aktif</div>
+            </div>
+            <div style="text-align: center; padding: 1rem; border-right: 1px solid var(--color-dk-border);">
+                <div class="trust-stat-number" id="stat-categories">48</div>
+                <div class="trust-stat-label">Kategori</div>
+            </div>
+            <div style="text-align: center; padding: 1rem;">
+                <div class="trust-stat-number" id="stat-free">Gratis</div>
+                <div class="trust-stat-label">Akses Dasar</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     CATEGORIES
+     ═══════════════════════════════════════════════════════════════ --}}
+<section id="categories" class="dk-section" aria-labelledby="categories-heading">
+    <div class="dk-container">
+
+        {{-- Section header --}}
+        <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; margin-bottom: 3rem; flex-wrap: wrap;">
+            <div>
+                <p class="dk-eyebrow" style="margin: 0 0 0.75rem;">Jelajahi Berdasarkan</p>
+                <h2 id="categories-heading" class="text-headline" style="font-size: clamp(1.75rem, 3.5vw, 2.5rem); margin: 0; color: var(--color-dk-ink);">Kategori Unggulan</h2>
+            </div>
+            <a href="#" id="view-all-categories" class="btn-ghost" style="flex-shrink: 0;">
+                Lihat semua kategori
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </a>
+        </div>
+
+        {{-- Categories grid --}}
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;" role="list" aria-label="Daftar kategori buku">
+
+            {{-- Fiksi --}}
+            <a href="#" id="cat-fiksi" class="category-card" role="listitem">
+                <div class="category-card-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                </div>
+                <div class="category-card-name">Fiksi</div>
+                <div class="category-card-count">2.300 judul</div>
+            </a>
+
+            {{-- Nonfiksi --}}
+            <a href="#" id="cat-nonfiksi" class="category-card" role="listitem">
+                <div class="category-card-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+                    </svg>
+                </div>
+                <div class="category-card-name">Nonfiksi</div>
+                <div class="category-card-count">1.870 judul</div>
+            </a>
+
+            {{-- Sains --}}
+            <a href="#" id="cat-sains" class="category-card" role="listitem">
+                <div class="category-card-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+                    </svg>
+                </div>
+                <div class="category-card-name">Sains &amp; Teknologi</div>
+                <div class="category-card-count">1.450 judul</div>
+            </a>
+
+            {{-- Sejarah --}}
+            <a href="#" id="cat-sejarah" class="category-card" role="listitem">
+                <div class="category-card-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                </div>
+                <div class="category-card-name">Sejarah</div>
+                <div class="category-card-count">980 judul</div>
+            </a>
+
+            {{-- Filsafat --}}
+            <a href="#" id="cat-filsafat" class="category-card" role="listitem">
+                <div class="category-card-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <div class="category-card-name">Filsafat</div>
+                <div class="category-card-count">640 judul</div>
+            </a>
+
+            {{-- Bisnis --}}
+            <a href="#" id="cat-bisnis" class="category-card" role="listitem">
+                <div class="category-card-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2"/>
+                        <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+                        <line x1="12" y1="12" x2="12" y2="16"/>
+                        <line x1="10" y1="14" x2="14" y2="14"/>
+                    </svg>
+                </div>
+                <div class="category-card-name">Bisnis &amp; Karier</div>
+                <div class="category-card-count">820 judul</div>
+            </a>
+
+            {{-- Sastra --}}
+            <a href="#" id="cat-sastra" class="category-card" role="listitem">
+                <div class="category-card-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </div>
+                <div class="category-card-name">Sastra Klasik</div>
+                <div class="category-card-count">510 judul</div>
+            </a>
+
+            {{-- Pengembangan Diri --}}
+            <a href="#" id="cat-selfdev" class="category-card" role="listitem">
+                <div class="category-card-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+                    </svg>
+                </div>
+                <div class="category-card-name">Pengembangan Diri</div>
+                <div class="category-card-count">1.100 judul</div>
+            </a>
+
+        </div>
+    </div>
+</section>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     BOOKS — TERBARU & TERPOPULER
+     ═══════════════════════════════════════════════════════════════ --}}
+<section id="books" aria-labelledby="books-heading" style="background-color: var(--color-dk-surface-alt); border-top: 1px solid var(--color-dk-border);">
+    <div class="dk-container" style="padding-top: 5rem; padding-bottom: 5rem;">
+
+        {{-- Section header --}}
+        <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; margin-bottom: 2rem; flex-wrap: wrap;">
+            <div>
+                <p class="dk-eyebrow" style="margin: 0 0 0.75rem;">Temukan</p>
+                <h2 id="books-heading" class="text-headline" style="font-size: clamp(1.75rem, 3.5vw, 2.5rem); margin: 0; color: var(--color-dk-ink);">Pilihan Buku</h2>
+            </div>
+        </div>
+
+        {{-- Tab switcher --}}
+        <div class="dk-tabs" role="tablist" aria-label="Filter buku" style="margin-bottom: 2rem;">
+            <button id="tab-terbaru" class="dk-tab active" role="tab" aria-selected="true" aria-controls="panel-terbaru" onclick="switchTab('terbaru')">
+                Terbaru
+            </button>
+            <button id="tab-populer" class="dk-tab" role="tab" aria-selected="false" aria-controls="panel-populer" onclick="switchTab('populer')">
+                Terpopuler
+            </button>
+        </div>
+
+        {{-- Panel: Terbaru --}}
+        <div id="panel-terbaru" class="tab-panel active" role="tabpanel" aria-labelledby="tab-terbaru" style="grid-template-columns: repeat(2, 1fr); gap: 1.25rem;">
+
+            {{-- Book 1: Real image --}}
+            <a href="#" id="book-1" class="book-card" aria-label="Rimba Kata oleh Nurul Huda - Fiksi">
+                <div class="book-card-cover">
+                    <img src="{{ asset('images/cover-1.jpg') }}" alt="Sampul buku Rimba Kata" loading="lazy">
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Fiksi</div>
+                    <div class="book-card-title">Rimba Kata</div>
+                    <div class="book-card-author">Nurul Huda</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.8 dari 5">★★★★★</span>
+                        <span>4.8</span>
+                    </div>
+                </div>
+            </a>
+
+            {{-- Book 2: Real image --}}
+            <a href="#" id="book-2" class="book-card" aria-label="Semesta Dalam Angka oleh Dr. Arief Ryanman - Sains">
+                <div class="book-card-cover">
+                    <img src="{{ asset('images/cover-2.jpg') }}" alt="Sampul buku Semesta Dalam Angka" loading="lazy">
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Sains</div>
+                    <div class="book-card-title">Semesta Dalam Angka</div>
+                    <div class="book-card-author">Dr. Arief Ryanman</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.6 dari 5">★★★★★</span>
+                        <span>4.6</span>
+                    </div>
+                </div>
+            </a>
+
+            {{-- Book 3: Real image --}}
+            <a href="#" id="book-3" class="book-card" aria-label="Jejak Nusantara - Sejarah">
+                <div class="book-card-cover">
+                    <img src="{{ asset('images/cover-3.jpg') }}" alt="Sampul buku Jejak Nusantara" loading="lazy">
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Sejarah</div>
+                    <div class="book-card-title">Jejak Nusantara</div>
+                    <div class="book-card-author">Prof. Dr. Anandhika Prasetyo</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.9 dari 5">★★★★★</span>
+                        <span>4.9</span>
+                    </div>
+                </div>
+            </a>
+
+            {{-- Book 4: CSS placeholder --}}
+            <a href="#" id="book-4" class="book-card" aria-label="Filsafat Keseharian - Filsafat">
+                <div class="book-card-cover">
+                    <div class="cover-placeholder" style="background-color: #3D2C1E; color: #F5E6CC;">
+                        <div style="width: 100%; height: 1px; background: rgba(245,230,204,0.3); margin-bottom: 1.5rem;"></div>
+                        <div class="cover-placeholder-title">Filsafat Keseharian</div>
+                        <div style="width: 2rem; height: 1px; background: #B5894A; margin: 0.75rem auto;"></div>
+                        <div class="cover-placeholder-author">Amir Hamzah</div>
+                        <div style="width: 100%; height: 1px; background: rgba(245,230,204,0.3); margin-top: 1.5rem;"></div>
+                    </div>
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Filsafat</div>
+                    <div class="book-card-title">Filsafat Keseharian</div>
+                    <div class="book-card-author">Amir Hamzah</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.5 dari 5">★★★★½</span>
+                        <span>4.5</span>
+                    </div>
+                </div>
+            </a>
+
+            {{-- Book 5: CSS placeholder --}}
+            <a href="#" id="book-5" class="book-card" aria-label="Pulang ke Mana - Fiksi">
+                <div class="book-card-cover">
+                    <div class="cover-placeholder" style="background-color: #7B4A2D; color: #F5E6D0;">
+                        <div style="width: 100%; height: 1px; background: rgba(245,230,208,0.3); margin-bottom: 1.5rem;"></div>
+                        <div class="cover-placeholder-title">Pulang ke Mana</div>
+                        <div style="width: 2rem; height: 1px; background: #D4A96A; margin: 0.75rem auto;"></div>
+                        <div class="cover-placeholder-author">Siti Rahayu</div>
+                        <div style="width: 100%; height: 1px; background: rgba(245,230,208,0.3); margin-top: 1.5rem;"></div>
+                    </div>
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Fiksi</div>
+                    <div class="book-card-title">Pulang ke Mana</div>
+                    <div class="book-card-author">Siti Rahayu</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.7 dari 5">★★★★★</span>
+                        <span>4.7</span>
+                    </div>
+                </div>
+            </a>
+
+            {{-- Book 6: CSS placeholder --}}
+            <a href="#" id="book-6" class="book-card" aria-label="Kode Masa Depan - Teknologi">
+                <div class="book-card-cover">
+                    <div class="cover-placeholder" style="background-color: #1C2B3A; color: #A8CFEA;">
+                        <div style="width: 100%; height: 1px; background: rgba(168,207,234,0.2); margin-bottom: 1.5rem;"></div>
+                        <div class="cover-placeholder-title">Kode Masa Depan</div>
+                        <div style="width: 2rem; height: 1px; background: #4A90C4; margin: 0.75rem auto;"></div>
+                        <div class="cover-placeholder-author">Ryan Santoso</div>
+                        <div style="width: 100%; height: 1px; background: rgba(168,207,234,0.2); margin-top: 1.5rem;"></div>
+                    </div>
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Teknologi</div>
+                    <div class="book-card-title">Kode Masa Depan</div>
+                    <div class="book-card-author">Ryan Santoso</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.4 dari 5">★★★★</span>
+                        <span>4.4</span>
+                    </div>
+                </div>
+            </a>
+
+        </div>
+
+        {{-- Panel: Populer (hidden by default) --}}
+        <div id="panel-populer" class="tab-panel" role="tabpanel" aria-labelledby="tab-populer" style="grid-template-columns: repeat(2, 1fr); gap: 1.25rem;">
+
+            <a href="#" id="book-pop-1" class="book-card" aria-label="Jejak Nusantara - Sejarah - paling populer">
+                <div class="book-card-cover">
+                    <img src="{{ asset('images/cover-3.jpg') }}" alt="Sampul buku Jejak Nusantara" loading="lazy">
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Sejarah</div>
+                    <div class="book-card-title">Jejak Nusantara</div>
+                    <div class="book-card-author">Prof. Dr. Anandhika Prasetyo</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.9 dari 5">★★★★★</span>
+                        <span>4.9 · 12.4k dibaca</span>
+                    </div>
+                </div>
+            </a>
+
+            <a href="#" id="book-pop-2" class="book-card" aria-label="Rimba Kata - Fiksi">
+                <div class="book-card-cover">
+                    <img src="{{ asset('images/cover-1.jpg') }}" alt="Sampul buku Rimba Kata" loading="lazy">
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Fiksi</div>
+                    <div class="book-card-title">Rimba Kata</div>
+                    <div class="book-card-author">Nurul Huda</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.8 dari 5">★★★★★</span>
+                        <span>4.8 · 9.8k dibaca</span>
+                    </div>
+                </div>
+            </a>
+
+            <a href="#" id="book-pop-3" class="book-card" aria-label="Pulang ke Mana - Fiksi">
+                <div class="book-card-cover">
+                    <div class="cover-placeholder" style="background-color: #7B4A2D; color: #F5E6D0;">
+                        <div style="width: 100%; height: 1px; background: rgba(245,230,208,0.3); margin-bottom: 1.5rem;"></div>
+                        <div class="cover-placeholder-title">Pulang ke Mana</div>
+                        <div style="width: 2rem; height: 1px; background: #D4A96A; margin: 0.75rem auto;"></div>
+                        <div class="cover-placeholder-author">Siti Rahayu</div>
+                        <div style="width: 100%; height: 1px; background: rgba(245,230,208,0.3); margin-top: 1.5rem;"></div>
+                    </div>
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Fiksi</div>
+                    <div class="book-card-title">Pulang ke Mana</div>
+                    <div class="book-card-author">Siti Rahayu</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.7 dari 5">★★★★★</span>
+                        <span>4.7 · 8.2k dibaca</span>
+                    </div>
+                </div>
+            </a>
+
+            <a href="#" id="book-pop-4" class="book-card" aria-label="Semesta Dalam Angka - Sains">
+                <div class="book-card-cover">
+                    <img src="{{ asset('images/cover-2.jpg') }}" alt="Sampul buku Semesta Dalam Angka" loading="lazy">
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Sains</div>
+                    <div class="book-card-title">Semesta Dalam Angka</div>
+                    <div class="book-card-author">Dr. Arief Ryanman</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.6 dari 5">★★★★★</span>
+                        <span>4.6 · 7.5k dibaca</span>
+                    </div>
+                </div>
+            </a>
+
+            <a href="#" id="book-pop-5" class="book-card" aria-label="Filsafat Keseharian - Filsafat">
+                <div class="book-card-cover">
+                    <div class="cover-placeholder" style="background-color: #3D2C1E; color: #F5E6CC;">
+                        <div style="width: 100%; height: 1px; background: rgba(245,230,204,0.3); margin-bottom: 1.5rem;"></div>
+                        <div class="cover-placeholder-title">Filsafat Keseharian</div>
+                        <div style="width: 2rem; height: 1px; background: #B5894A; margin: 0.75rem auto;"></div>
+                        <div class="cover-placeholder-author">Amir Hamzah</div>
+                        <div style="width: 100%; height: 1px; background: rgba(245,230,204,0.3); margin-top: 1.5rem;"></div>
+                    </div>
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Filsafat</div>
+                    <div class="book-card-title">Filsafat Keseharian</div>
+                    <div class="book-card-author">Amir Hamzah</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.5 dari 5">★★★★½</span>
+                        <span>4.5 · 6.1k dibaca</span>
+                    </div>
+                </div>
+            </a>
+
+            <a href="#" id="book-pop-6" class="book-card" aria-label="Kode Masa Depan - Teknologi">
+                <div class="book-card-cover">
+                    <div class="cover-placeholder" style="background-color: #1C2B3A; color: #A8CFEA;">
+                        <div style="width: 100%; height: 1px; background: rgba(168,207,234,0.2); margin-bottom: 1.5rem;"></div>
+                        <div class="cover-placeholder-title">Kode Masa Depan</div>
+                        <div style="width: 2rem; height: 1px; background: #4A90C4; margin: 0.75rem auto;"></div>
+                        <div class="cover-placeholder-author">Ryan Santoso</div>
+                        <div style="width: 100%; height: 1px; background: rgba(168,207,234,0.2); margin-top: 1.5rem;"></div>
+                    </div>
+                </div>
+                <div class="book-card-body">
+                    <div class="book-card-category">Teknologi</div>
+                    <div class="book-card-title">Kode Masa Depan</div>
+                    <div class="book-card-author">Ryan Santoso</div>
+                    <div class="book-card-rating">
+                        <span class="stars" aria-label="Rating 4.4 dari 5">★★★★</span>
+                        <span>4.4 · 5.3k dibaca</span>
+                    </div>
+                </div>
+            </a>
+
+        </div>
+
+        {{-- View All --}}
+        <div style="text-align: center; margin-top: 2.5rem;">
+            <a href="#" id="view-all-books" class="btn-outline">
+                Lihat semua buku
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </a>
+        </div>
+
+    </div>
+</section>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     BENEFITS / FEATURES
+     ═══════════════════════════════════════════════════════════════ --}}
+<section id="benefits" class="dk-section" aria-labelledby="benefits-heading">
+    <div class="dk-container">
+
+        {{-- Section header --}}
+        <div style="max-width: 36rem; margin-bottom: 3.5rem;">
+            <p class="dk-eyebrow" style="margin: 0 0 0.75rem;">Mengapa Diktar</p>
+            <h2 id="benefits-heading" class="text-headline" style="font-size: clamp(1.75rem, 3.5vw, 2.5rem); margin: 0 0 1rem; color: var(--color-dk-ink);">
+                Platform yang Dirancang untuk Pembaca
+            </h2>
+            <p style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 0.9375rem; color: var(--color-dk-muted); line-height: 1.8; margin: 0;">
+                Diktar bukan sekadar repositori buku. Kami membangun pengalaman membaca yang nyaman, cepat, dan menyenangkan.
+            </p>
+        </div>
+
+        {{-- Benefits grid --}}
+        <div style="display: grid; grid-template-columns: 1fr; gap: 1px; background-color: var(--color-dk-border);">
+
+            <div class="benefit-card" style="background-color: var(--color-dk-surface);">
+                <div class="benefit-icon" aria-hidden="true">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                        <line x1="12" y1="18" x2="12.01" y2="18"/>
+                    </svg>
+                </div>
+                <h3 class="benefit-title">Baca di Mana Saja</h3>
+                <p class="benefit-desc">Akses koleksi lengkap melalui browser di ponsel, tablet, atau komputer. Tidak perlu mengunduh aplikasi tambahan. Pengalaman membaca yang konsisten di semua perangkat.</p>
+            </div>
+
+            <div class="benefit-card" style="background-color: var(--color-dk-surface);">
+                <div class="benefit-icon" aria-hidden="true">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+                        <line x1="9" y1="7" x2="15" y2="7"/>
+                        <line x1="9" y1="11" x2="15" y2="11"/>
+                    </svg>
+                </div>
+                <h3 class="benefit-title">Koleksi Terlengkap</h3>
+                <p class="benefit-desc">Lebih dari 12.000 judul dari penulis Indonesia dan internasional. Diperbarui setiap minggu dengan judul-judul terbaru. Temukan buku langka yang sulit ditemukan di tempat lain.</p>
+            </div>
+
+            <div class="benefit-card" style="background-color: var(--color-dk-surface);">
+                <div class="benefit-icon" aria-hidden="true">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </div>
+                <h3 class="benefit-title">Gratis &amp; Aman</h3>
+                <p class="benefit-desc">Akses ribuan buku tanpa biaya. Data pribadi Anda kami lindungi dengan enkripsi standar industri. Tidak ada iklan mengganggu — hanya konten berkualitas.</p>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     CTA BANNER
+     ═══════════════════════════════════════════════════════════════ --}}
+<section id="cta-banner" aria-labelledby="cta-heading" style="background-color: var(--color-dk-accent); position: relative; overflow: hidden;">
+
+    {{-- Decorative element --}}
+    <div aria-hidden="true" style="position: absolute; right: -5rem; top: -5rem; width: 30rem; height: 30rem; border: 1px solid rgba(245,242,236,0.08); border-radius: 50%; pointer-events: none;"></div>
+    <div aria-hidden="true" style="position: absolute; right: -3rem; top: -3rem; width: 20rem; height: 20rem; border: 1px solid rgba(245,242,236,0.06); border-radius: 50%; pointer-events: none;"></div>
+
+    <div class="dk-container" style="padding-top: 5rem; padding-bottom: 5rem; position: relative; text-align: center;">
+
+        <p class="dk-eyebrow" style="color: rgba(245,242,236,0.6); margin: 0 0 1.25rem;">Mulai Sekarang</p>
+
+        <h2 id="cta-heading" class="text-display" style="font-size: clamp(2rem, 5vw, 4rem); color: #F5F2EC; margin: 0 0 1.25rem; max-width: 32rem; margin-left: auto; margin-right: auto;">
+            Mulai Jelajahi Ribuan Buku Hari Ini
+        </h2>
+
+        <p style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 1rem; color: rgba(245,242,236,0.72); line-height: 1.75; margin: 0 auto 2.5rem; max-width: 28rem;">
+            Daftar gratis dan dapatkan akses ke koleksi lengkap kami. Tidak perlu kartu kredit.
+        </p>
+
+        <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 1rem;">
+            @if (Route::has('register'))
+                <a href="{{ route('register') }}" id="cta-banner-primary" style="display: inline-flex; align-items: center; gap: 0.5rem; background-color: #F5F2EC; color: var(--color-dk-accent); font-family: var(--font-sans); font-size: 0.875rem; font-weight: 600; letter-spacing: 0.02em; padding: 0.875rem 2rem; text-decoration: none; transition: background-color 0.2s ease, transform 0.15s ease; cursor: pointer;" onmouseenter="this.style.backgroundColor='#fff'" onmouseleave="this.style.backgroundColor='#F5F2EC'">
+                    Daftar Gratis
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </a>
+            @endif
+            <a href="#books" id="cta-banner-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem; background-color: transparent; color: rgba(245,242,236,0.85); font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; letter-spacing: 0.02em; padding: 0.875rem 1.5rem; border: 1px solid rgba(245,242,236,0.3); text-decoration: none; transition: border-color 0.2s ease, color 0.2s ease; cursor: pointer;" onmouseenter="this.style.borderColor='rgba(245,242,236,0.7)'; this.style.color='#F5F2EC'" onmouseleave="this.style.borderColor='rgba(245,242,236,0.3)'; this.style.color='rgba(245,242,236,0.85)'">
+                Lihat Koleksi Dulu
+            </a>
+        </div>
+
+    </div>
+</section>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     ABOUT / QUOTES
+     ═══════════════════════════════════════════════════════════════ --}}
+<section id="about" style="background-color: var(--color-dk-bg); border-top: 1px solid var(--color-dk-border);">
+    <div class="dk-container" style="padding-top: 4rem; padding-bottom: 4rem; display: grid; gap: 3rem;">
+
+        <figure style="margin: 0; max-width: 48rem;">
+            <blockquote style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: clamp(1.25rem, 2.5vw, 1.75rem); font-style: italic; font-weight: 400; line-height: 1.5; color: var(--color-dk-ink); margin: 0 0 1.25rem; padding-left: 1.5rem; border-left: 3px solid var(--color-dk-gold);">
+                "Sebuah buku adalah impian yang kamu genggam di tanganmu."
+            </blockquote>
+            <figcaption style="font-family: 'Inter', sans-serif; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-dk-muted); padding-left: 1.5rem;">
+                — Neil Gaiman
+            </figcaption>
+        </figure>
+
+        <hr class="dk-rule">
+
+        <div style="display: grid; gap: 1rem; max-width: 48rem;">
+            <p class="dk-eyebrow" style="margin: 0;">Tentang Diktar</p>
+            <p style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 0.9375rem; color: var(--color-dk-muted); line-height: 1.85; margin: 0;">
+                Diktar lahir dari keyakinan bahwa akses terhadap ilmu pengetahuan adalah hak setiap orang. Kami menghadirkan portal buku digital yang menghubungkan pembaca Indonesia dengan ribuan karya terbaik, tanpa hambatan biaya dan jarak.
+            </p>
+        </div>
+
+    </div>
+</section>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════════════ --}}
+<footer class="dk-footer" id="site-footer" role="contentinfo">
+    <div class="dk-container" style="padding-top: 3.5rem; padding-bottom: 2rem;">
+
+        {{-- Top: Logo + tagline + nav --}}
+        <div style="display: grid; gap: 2.5rem; margin-bottom: 3rem;">
+
+            <div>
+                <a href="/" style="display: inline-flex; align-items: center; gap: 0.625rem; text-decoration: none; margin-bottom: 0.875rem;" aria-label="Diktar - Beranda">
+                    <svg width="24" height="24" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <rect width="28" height="28" fill="#2D4A3E"/>
+                        <path d="M6 7H16C19.3137 7 22 9.68629 22 13C22 16.3137 19.3137 19 16 19H6V7Z" fill="none" stroke="#F5F2EC" stroke-width="1.5"/>
+                        <path d="M6 7V21" stroke="#B5894A" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    <span style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.25rem; font-weight: 600; color: rgba(245,242,236,0.92); letter-spacing: -0.01em; line-height: 1;">Diktar</span>
+                </a>
+                <p style="font-family: 'Inter', sans-serif; font-size: 0.8125rem; color: rgba(245,242,236,0.45); margin: 0; max-width: 22rem; line-height: 1.7;">
+                    Portal buku digital terlengkap di Indonesia. Membaca adalah investasi terbaik untuk diri sendiri.
+                </p>
+            </div>
+
+            <nav aria-label="Footer navigasi" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem;">
+                <div>
+                    <p style="font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(245,242,236,0.35); margin: 0 0 0.875rem;">Koleksi</p>
+                    <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <li><a href="#" id="footer-fiksi">Fiksi</a></li>
+                        <li><a href="#" id="footer-nonfiksi">Nonfiksi</a></li>
+                        <li><a href="#" id="footer-sains">Sains & Teknologi</a></li>
+                        <li><a href="#" id="footer-sejarah">Sejarah</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <p style="font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(245,242,236,0.35); margin: 0 0 0.875rem;">Platform</p>
+                    <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <li><a href="#about" id="footer-tentang">Tentang Kami</a></li>
+                        <li><a href="#benefits" id="footer-fitur">Fitur</a></li>
+                        @if (Route::has('login'))
+                            <li><a href="{{ route('login') }}" id="footer-masuk">Masuk</a></li>
+                        @endif
+                        @if (Route::has('register'))
+                            <li><a href="{{ route('register') }}" id="footer-daftar">Daftar Gratis</a></li>
+                        @endif
+                    </ul>
+                </div>
+            </nav>
+
+        </div>
+
+        {{-- Bottom: copyright --}}
+        <div style="border-top: 1px solid rgba(245,242,236,0.08); padding-top: 1.5rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;">
+            <p style="margin: 0; font-size: 0.75rem; color: rgba(245,242,236,0.3);">
+                &copy; {{ date('Y') }} Diktar. Semua hak dilindungi undang-undang.
+            </p>
+            <div style="display: flex; gap: 1.25rem;">
+                <a href="#" id="footer-privasi" style="font-size: 0.75rem;">Kebijakan Privasi</a>
+                <a href="#" id="footer-syarat" style="font-size: 0.75rem;">Syarat Penggunaan</a>
+            </div>
+        </div>
+
+    </div>
+</footer>
+
+
+{{-- ═══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════════════ --}}
+<script>
+    // ── Navbar scroll shadow ──────────────────────────────────────
+    (function () {
+        var header = document.getElementById('site-header');
+        if (!header) return;
+        window.addEventListener('scroll', function () {
+            if (window.scrollY > 20) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        }, { passive: true });
+    })();
+
+    // ── Mobile menu ───────────────────────────────────────────────
+    var mobileMenu = document.getElementById('mobile-menu');
+    var mobileMenuBtn = document.getElementById('mobile-menu-btn');
+
+    function closeMobileMenu() {
+        if (mobileMenu) {
+            mobileMenu.style.display = 'none';
+            if (mobileMenuBtn) mobileMenuBtn.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener('click', function () {
+            var isOpen = mobileMenu.style.display === 'block';
+            mobileMenu.style.display = isOpen ? 'none' : 'block';
+            mobileMenuBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+        });
+    }
+
+    // Close menu when clicking outside
+    document.addEventListener('click', function (e) {
+        if (mobileMenu && mobileMenu.style.display === 'block') {
+            if (!mobileMenu.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
+                closeMobileMenu();
+            }
+        }
+    });
+
+    // ── Smooth scroll for anchor links ───────────────────────────
+    document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+        anchor.addEventListener('click', function (e) {
+            var target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                e.preventDefault();
+                var navHeight = 72;
+                var top = target.getBoundingClientRect().top + window.scrollY - navHeight;
+                window.scrollTo({ top: top, behavior: 'smooth' });
+            }
+        });
+    });
+
+    // ── Tab switcher ──────────────────────────────────────────────
+    function switchTab(tabName) {
+        var tabs = document.querySelectorAll('.dk-tab');
+        var panels = document.querySelectorAll('.tab-panel');
+
+        tabs.forEach(function (tab) {
+            var isActive = tab.id === 'tab-' + tabName;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        panels.forEach(function (panel) {
+            var isActive = panel.id === 'panel-' + tabName;
+            panel.classList.toggle('active', isActive);
+        });
+    }
+
+    // ── Responsive: show desktop nav on wider screens ─────────────
+    function updateNavVisibility() {
+        var desktopNav = document.getElementById('desktop-nav');
+        var loginLink = document.getElementById('nav-login');
+        if (!desktopNav) return;
+
+        if (window.innerWidth >= 768) {
+            desktopNav.style.display = 'flex';
+            if (loginLink) loginLink.style.display = 'inline-flex';
+        } else {
+            desktopNav.style.display = 'none';
+            if (loginLink) loginLink.style.display = 'none';
+        }
+    }
+
+    updateNavVisibility();
+    window.addEventListener('resize', updateNavVisibility, { passive: true });
+
+    // ── Responsive: categories grid ──────────────────────────────
+    function updateCategoryGrid() {
+        var grid = document.querySelector('#categories [role="list"]');
+        if (!grid) return;
+        if (window.innerWidth >= 1024) {
+            grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+        } else if (window.innerWidth >= 640) {
+            grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+        } else {
+            grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+        }
+    }
+
+    // ── Responsive: benefits grid ─────────────────────────────────
+    function updateBenefitsGrid() {
+        var grid = document.querySelector('#benefits [style*="grid-template-columns: 1fr"]');
+        if (!grid) return;
+        if (window.innerWidth >= 1024) {
+            grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+        } else if (window.innerWidth >= 640) {
+            grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+        } else {
+            grid.style.gridTemplateColumns = '1fr';
+        }
+    }
+
+    // ── Responsive: books grid ────────────────────────────────────
+    function updateBooksGrid() {
+        var panels = document.querySelectorAll('.tab-panel');
+        panels.forEach(function (panel) {
+            if (window.innerWidth >= 1024) {
+                panel.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            } else if (window.innerWidth >= 640) {
+                panel.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            } else {
+                panel.style.gridTemplateColumns = 'repeat(2, 1fr)';
+            }
+        });
+    }
+
+    // ── Trust bar: 4-col on md+ ───────────────────────────────────
+    function updateTrustGrid() {
+        var trustGrid = document.querySelector('#trust .dk-container > div');
+        if (!trustGrid) return;
+        if (window.innerWidth >= 640) {
+            trustGrid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+            var dividers = trustGrid.querySelectorAll('[style*="grid-column: 1 / -1"]');
+            dividers.forEach(function(d) { d.style.gridColumn = '1 / -1'; });
+        } else {
+            trustGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+        }
+    }
+
+    // ── Footer grid ───────────────────────────────────────────────
+    function updateFooterGrid() {
+        var footerTop = document.querySelector('#site-footer .dk-container > div:first-child');
+        if (!footerTop) return;
+        if (window.innerWidth >= 768) {
+            footerTop.style.gridTemplateColumns = '1fr 1fr';
+            footerTop.style.gap = '4rem';
+        } else {
+            footerTop.style.gridTemplateColumns = '1fr';
+            footerTop.style.gap = '2.5rem';
+        }
+    }
+
+    function applyAllResponsive() {
+        updateCategoryGrid();
+        updateBenefitsGrid();
+        updateBooksGrid();
+        updateTrustGrid();
+        updateFooterGrid();
+    }
+
+    applyAllResponsive();
+    window.addEventListener('resize', applyAllResponsive, { passive: true });
+
+    // ── Intersection Observer for fade-in animations ──────────────
+    if ('IntersectionObserver' in window) {
+        var observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -40px 0px'
+        };
+
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        // Observe section children
+        document.querySelectorAll('.book-card, .category-card, .benefit-card').forEach(function (el) {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(16px)';
+            el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            observer.observe(el);
+        });
+    }
+</script>
+
+</body>
+</html>

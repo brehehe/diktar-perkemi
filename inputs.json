@@ -1,0 +1,109 @@
+{
+  "project": "Pustaka Penataran",
+  "organization": "PERKEMI",
+  "tagline": "Portal Buku Digital PERKEMI",
+  "headline": "Satu Akses, Banyak Pengetahuan",
+  "subheadline": "Akses buku digital, modul penataran, dan bahan ajar pemateri dalam satu portal terintegrasi. Dirancang untuk mendukung proses belajar, pengembangan kompetensi, dan penyelenggaraan penataran PERKEMI.",
+  "hero_label": "📘 Digital Learning Center",
+  "stats": [
+    { "value": "120+", "label": "Modul Tersedia" },
+    { "value": "340+", "label": "Materi Pembelajaran" },
+    { "value": "6", "label": "Kelompok Peran" },
+    { "value": "Terpusat", "label": "Akses Koleksi" }
+  ],
+  "search_filters": [
+    "Semua Materi",
+    "Modul Penataran",
+    "Bahan Ajar",
+    "Referensi Wasit",
+    "Materi Pelatih",
+    "Pedoman Penguji"
+  ],
+  "featured_books": [
+    {
+      "id": "panduan-umum-penataran",
+      "title": "Panduan Lengkap Penataran PERKEMI",
+      "category": "Penataran",
+      "category_color": "blue",
+      "format": "PDF",
+      "year": "2025",
+      "pages": 248,
+      "author": "Tim Pelatihan PERKEMI",
+      "description": "Referensi komprehensif bagi peserta, pelatih, dan penyelenggara kegiatan penataran PERKEMI. Memuat prosedur, kriteria penilaian, dan panduan pelaksanaan.",
+      "cover": "/images/cover-2.jpg"
+    },
+    {
+      "id": "modul-kepelatihan-kempo",
+      "title": "Modul Materi Kepelatihan Kempo",
+      "category": "Kepelatihan",
+      "category_color": "green",
+      "format": "PDF",
+      "year": "2024",
+      "author": "Komisi Kepelatihan",
+      "description": "Panduan lengkap teknik dan metodologi kepelatihan kempo untuk pelatih bersertifikat.",
+      "cover": "/images/cover-1.jpg"
+    },
+    {
+      "id": "referensi-perwasitan-kempo",
+      "title": "Buku Referensi Perwasitan Kempo",
+      "category": "Perwasitan",
+      "category_color": "orange",
+      "format": "PDF",
+      "year": "2025",
+      "author": "Komisi Perwasitan",
+      "description": "Aturan, prosedur, dan panduan keputusan bagi wasit dalam pertandingan resmi PERKEMI.",
+      "cover": "/images/cover-3.jpg"
+    },
+    {
+      "id": "pedoman-penguji-kyu-dan",
+      "title": "Pedoman Penguji Kyu & Dan",
+      "category": "Pengujian",
+      "category_color": "purple",
+      "format": "PDF",
+      "year": "2024",
+      "author": "Dewan Guru PERKEMI",
+      "description": "Panduan komprehensif standar pengujian kyu dan dan bagi penguji resmi PERKEMI.",
+      "cover": null
+    }
+  ],
+  "categories": [
+    { "name": "Penataran", "count": "42 materi", "color": "#0B63CE" },
+    { "name": "Kepelatihan", "count": "38 materi", "color": "#20A47A" },
+    { "name": "Perwasitan", "count": "24 materi", "color": "#EE9B25" },
+    { "name": "Pengujian", "count": "19 materi", "color": "#DD4D7C" },
+    { "name": "Materi Pemateri", "count": "31 materi", "color": "#7957D5" },
+    { "name": "Administrasi Penyelenggaraan", "count": "16 materi", "color": "#0E2747" }
+  ],
+  "learning_path": [
+    { "step": 1, "title": "Pilih Peran", "desc": "Tentukan peran Anda: peserta, pelatih, wasit, penguji, atau pemateri." },
+    { "step": 2, "title": "Temukan Materi", "desc": "Gunakan filter atau pencarian untuk menemukan modul yang sesuai." },
+    { "step": 3, "title": "Baca atau Unduh Bahan", "desc": "Akses modul secara online atau unduh format dokumen resmi." },
+    { "step": 4, "title": "Terapkan dalam Kegiatan", "desc": "Gunakan pedoman resmi dalam penataran dan kegiatan PERKEMI." }
+  ],
+  "roles": [
+    { "name": "Peserta", "desc": "Modul persiapan penataran, materi teori kempo, dan panduan ujian kompetensi." },
+    { "name": "Pelatih", "desc": "Kurikulum pelatihan, metodologi teknik, dan standar pembinaan kenshi." },
+    { "name": "Penguji", "desc": "Pedoman pengujian kyu/dan, rubrik penilaian resmi, dan lembar evaluasi." },
+    { "name": "Wasit", "desc": "Buku peraturan pertandingan, pedoman isyarat wasit, dan standar etika juru adil." },
+    { "name": "Pemateri", "desc": "Slide presentasi penataran, silabus materi penataran, dan bahan ajar standar." },
+    { "name": "Penyelenggara", "desc": "Panduan administrasi penataran, template sertifikat, dan checklist operasional." }
+  ],
+  "faq": [
+    {
+      "q": "Siapa yang dapat mengakses Pustaka Penataran?",
+      "a": "Pustaka Penataran dapat diakses oleh seluruh anggota PERKEMI yang terdaftar—termasuk peserta penataran, pelatih dojo/daerah, wasit berlisensi, penguji resmi, pemateri nasional, dan panitia penyelenggara penataran."
+    },
+    {
+      "q": "Bagaimana cara mencari modul?",
+      "a": "Anda dapat menggunakan kolom pencarian di bagian atas dengan mengetik judul modul, nama pemateri, atau kata kunci tertentu. Anda juga dapat memfilter berdasarkan kategori peran atau jenis materi melalui tombol filter cepat."
+    },
+    {
+      "q": "Apakah materi dapat dibaca dari ponsel?",
+      "a": "Ya, seluruh materi dan antarmuka Pustaka Penataran dioptimalkan untuk perangkat seluler, tablet, dan desktop. Dokumen dapat dibaca langsung melalui peramban atau diunduh untuk dibaca secara offline."
+    },
+    {
+      "q": "Bagaimana jika saya membutuhkan bantuan akses?",
+      "a": "Jika Anda mengalami kendala masuk ke portal atau memerlukan izin akses dokumen khusus, silakan hubungi tim sekretariat PERKEMI melalui kanal bantuan resmi atau email penataran@perkemi.or.id."
+    }
+  ]
+}

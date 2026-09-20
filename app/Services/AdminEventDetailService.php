@@ -1,0 +1,506 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\CbtExamAttempt;
+use App\Models\CbtExamPackage;
+use App\Models\CbtProctoringEvent;
+use App\Models\Event;
+use App\Models\EventAttendance;
+use App\Models\EventLegend;
+use App\Models\EventModule;
+use App\Models\EventParticipant;
+use App\Models\EventRoom;
+use App\Models\EventSession;
+use App\Models\EventSessionType;
+use App\Models\LearningModule;
+use App\Models\Material;
+use App\Models\Participant;
+use App\Models\ParticipantTrack;
+use App\Models\QuestionModule;
+use App\Models\Speaker;
+use Illuminate\Support\Carbon;
+
+class AdminEventDetailService
+{
+    /**
+     * @return array<string, mixed>
+     */
+    public function data(Event $event): array
+    {
+        $event->load([
+            'responsibleUser',
+            'rooms' => fn ($query) => $query->withCount('sessions'),
+            'modules.speaker',
+            'modules.material',
+            'sessions' => function ($q) {
+                $q->with(['speaker', 'sessionType', 'material', 'learningModule', 'module', 'cbtPackage'])
+                    ->withCount('attendances')
+                    ->orderBy('day_number')
+                    ->orderBy('start_time');
+            },
+            'eventParticipants' => function ($q) {
+                $q->with(['participant.user', 'track'])->orderBy('id');
+            },
+        ]);
+
+        $proctoringEvents = CbtProctoringEvent::query()
+            ->with(['participant:id,name', 'attempt.package:id,title,code'])
+            ->where('event_id', $event->id)
+            ->latest('occurred_at')
+            ->limit(200)
+            ->get()
+            ->map(fn (CbtProctoringEvent $proctoringEvent) => [
+                'id' => $proctoringEvent->id,
+                'participant_name' => $proctoringEvent->participant?->name ?? 'Peserta',
+                'attempt_number' => $proctoringEvent->attempt?->attempt_number,
+                'package_title' => $proctoringEvent->attempt?->package?->title,
+                'package_code' => $proctoringEvent->attempt?->package?->code,
+                'type' => $proctoringEvent->type,
+                'type_label' => $proctoringEvent->type_label,
+                'severity' => $proctoringEvent->severity,
+                'occurred_at' => $proctoringEvent->occurred_at?->locale('id')->translatedFormat('d M Y, H:i:s'),
+            ]);
+
+        // Group sessions by day
+        $arrivalSession = $event->sessions->firstWhere('session_type_code', 'KEHADIRAN_AWAL');
+        $sessionsByDay = $event->sessions
+            ->where('session_type_code', '!=', 'KEHADIRAN_AWAL')
+            ->filter(fn (EventSession $session) => $session->day_number >= 1 && $session->day_number <= $event->total_days)
+            ->groupBy('day_number')->map(fn ($sessions, $day) => [
+                'day_number' => $day,
+                'sessions' => $sessions->map(fn (EventSession $s) => [
+                    'id' => $s->id,
+                    'session_number' => $s->session_number,
+                    'day_number' => $s->day_number,
+                    'session_date' => $s->session_date?->format('Y-m-d'),
+                    'time_slot' => $s->time_slot,
+                    'start_time' => $s->start_time,
+                    'end_time' => $s->end_time,
+                    'duration_jp' => $s->duration_jp,
+                    'topic' => $s->topic,
+                    'subtopic' => $s->subtopic,
+                    'method' => $s->method,
+                    'room' => $s->room,
+                    'event_room_id' => $s->event_room_id,
+                    'target_tracks' => $s->target_tracks ?? [],
+                    'module_code' => $s->module_code,
+                    'status' => $s->status,
+                    'status_label' => $s->status_label,
+                    'attendance_setting' => $s->attendance_setting ?? 'check_in',
+                    'session_type_code' => $s->session_type_code,
+                    'is_attendance_open' => $s->isAttendanceActive(),
+                    'attendance_open_at' => $s->attendance_open_at?->format('H:i, d M Y'),
+                    'attendance_close_at' => $s->attendance_close_at?->format('H:i, d M Y'),
+                    'qr_token' => $s->qr_token,
+                    'qr_short_code' => $s->qr_short_code,
+                    'material_id' => $s->material_id,
+                    'material_title' => $s->material?->title,
+                    'material_slug' => $s->material?->slug,
+                    'learning_module_id' => $s->learning_module_id,
+                    'event_module_id' => $s->event_module_id,
+                    'event_module_title' => $s->module?->title,
+                    'learning_module_title' => $s->learningModule?->title,
+                    'learning_module_code' => $s->learningModule?->code,
+                    'cbt_exam_package_id' => $s->cbt_exam_package_id,
+                    'cbt_package_title' => $s->cbtPackage?->title,
+                    'cbt_package_code' => $s->cbtPackage?->code,
+                    'requires_attendance_before_cbt' => (bool) $s->requires_attendance_before_cbt,
+                    'attendances_count' => $s->attendances_count,
+                    'session_type' => $s->session_type_code === 'KEHADIRAN_HARIAN' ? [
+                        'id' => null,
+                        'code' => 'KEHADIRAN_HARIAN',
+                        'name' => 'Kehadiran Harian',
+                        'badge_color' => 'bg-blue-100 text-blue-800',
+                    ] : ($s->sessionType ? [
+                        'id' => $s->sessionType->id,
+                        'code' => $s->sessionType->code,
+                        'name' => $s->sessionType->name,
+                        'badge_color' => $s->sessionType->badge_color,
+                    ] : null),
+                    'speaker' => $s->speaker ? [
+                        'id' => $s->speaker->id,
+                        'name' => $s->speaker->full_name_with_title,
+                        'type' => $s->speaker->type,
+                        'dan_level' => $s->speaker->dan_level,
+                        'role_info' => $s->speaker->role_info,
+                    ] : null,
+                ]),
+            ]);
+
+        // Speakers mapped
+        $speakers = Speaker::whereNull('event_id')->orWhere('event_id', $event->id)
+            ->orderBy('type')->orderBy('name')->get()->map(fn (Speaker $s) => [
+                'id' => $s->id,
+                'name' => $s->full_name_with_title,
+                'type' => $s->type,
+                'type_label' => $s->type_label,
+                'dan_level' => $s->dan_level,
+                'dan_roman' => $s->dan_roman,
+                'role_info' => $s->role_info,
+                'primary_expertise' => $s->primary_expertise,
+                'bio' => $s->bio,
+                'is_active' => $s->is_active,
+                'event_id' => $s->event_id,
+                'modules_count' => $event->modules->where('speaker_id', $s->id)->count(),
+                'sessions_count' => $event->sessions->where('speaker_id', $s->id)->count(),
+                'total_jp' => $event->sessions->where('speaker_id', $s->id)->sum('duration_jp'),
+            ]);
+
+        // Participants mapped
+        $participants = $event->eventParticipants->map(fn (EventParticipant $ep) => [
+            'id' => $ep->id,
+            'participant_id' => $ep->participant_id,
+            'name' => $ep->participant?->name ?? '-',
+            'email' => $ep->participant?->email ?? '-',
+            'kenshi_id' => $ep->participant?->kenshi_id ?? '-',
+            'phone' => $ep->participant?->phone ?? '-',
+            'origin' => $ep->participant?->origin ?? '-',
+            'dan_level' => $ep->participant?->dan_level,
+            'dan_roman' => $ep->participant?->dan_roman ?? '-',
+            'track_code' => $ep->track?->code ?? '-',
+            'track_name' => $ep->track?->name ?? '-',
+            'track_badge' => $ep->track?->badge_color ?? 'bg-slate-100 text-slate-700',
+            'is_dual_track' => $ep->track?->is_dual_track ?? false,
+            'rotation_group' => $ep->rotation_group,
+            'admin_status' => $ep->admin_status,
+            'attendance_status' => $ep->attendance_status,
+            'attendance_by_day' => $ep->attendance_by_day ?? [],
+            'theory_score' => $ep->theory_score,
+            'practice_score' => $ep->practice_score,
+            'final_grade' => $ep->final_grade,
+            'graduation_status' => $ep->graduation_status,
+            'certificate_number' => $ep->certificate_number,
+            'has_certificate_file' => (bool) $ep->certificate_file_path,
+            'certificate_download_url' => $ep->certificate_file_path
+                ? route('admin.event.certificate.download', [$event, $ep]) : null,
+            'has_seen_welcome' => $ep->has_seen_welcome,
+            'checked_in_at' => $ep->checked_in_at?->format('H:i, d M Y'),
+            'checkin_status' => $ep->checkin_status ?? ($ep->checked_in_at ? 'checked_in' : 'registered'),
+            'checkin_method' => $ep->checkin_method,
+            'notes' => $ep->notes,
+        ]);
+
+        // Load attendances for event
+        $attendances = EventAttendance::where('event_id', $event->id)
+            ->with(['session', 'participant', 'recorder'])
+            ->latest('checked_in_at')
+            ->get()
+            ->map(fn ($att) => [
+                'id' => $att->id,
+                'session_id' => $att->event_session_id,
+                'session_topic' => $att->session?->topic ?? 'Sesi',
+                'session_number' => $att->session?->session_number ?? '-',
+                'day_number' => $att->session?->day_number ?? 1,
+                'participant_id' => $att->participant_id,
+                'participant_name' => $att->participant?->name ?? '-',
+                'attendance_type' => $att->attendance_type,
+                'status' => $att->status,
+                'status_label' => $att->status_label,
+                'status_badge' => $att->status_badge,
+                'checked_in_at' => $att->checked_in_at?->format('H:i, d M Y'),
+                'method' => $att->method,
+                'recorded_by' => $att->recorder?->name ?? 'Sistem',
+                'notes' => $att->notes,
+            ]);
+
+        // Load CBT packages for event
+        $cbtPackages = CbtExamPackage::where('event_id', $event->id)
+            ->with(['questionModule:id,title', 'attempts.participant'])
+            ->withCount([
+                'questions',
+                'bankQuestions as active_bank_questions_count' => fn ($query) => $query->where('status', 'active'),
+            ])
+            ->get()
+            ->map(fn ($pkg) => [
+                'id' => $pkg->id,
+                'title' => $pkg->title,
+                'code' => $pkg->code,
+                'description' => $pkg->description,
+                'exam_type' => $pkg->exam_type,
+                'exam_type_label' => $pkg->exam_type_label,
+                'question_module_title' => $pkg->questionModule?->title,
+                'duration_minutes' => $pkg->duration_minutes,
+                'passing_score' => (float) $pkg->passing_score,
+                'attempts_allowed' => $pkg->attempts_allowed,
+                'revision_method' => $pkg->revision_method,
+                'revision_deadline' => $pkg->revision_deadline?->format('Y-m-d H:i'),
+                'status' => $pkg->status,
+                'status_label' => $pkg->status_label,
+                'status_badge' => $pkg->status_badge,
+                'instructions' => $pkg->instructions,
+                'randomize_questions' => (bool) $pkg->randomize_questions,
+                'randomize_answers' => (bool) $pkg->randomize_answers,
+                'result_display' => $pkg->result_display,
+                'questions_count' => $pkg->questions_count > 0 ? $pkg->questions_count : $pkg->active_bank_questions_count,
+                'attempts_count' => $pkg->attempts->count(),
+                'passed_count' => $pkg->attempts->where('is_passed', true)->count(),
+                'avg_score' => round((float) ($pkg->attempts->where('status', 'submitted')->avg('total_score') ?? 0), 1),
+                'attempts' => $pkg->attempts->map(fn ($at) => [
+                    'id' => $at->id,
+                    'participant_name' => $at->participant?->name ?? '-',
+                    'score' => (float) $at->total_score,
+                    'is_passed' => (bool) $at->is_passed,
+                    'status' => $at->status,
+                    'submitted_at' => $at->submitted_at?->format('H:i, d M Y'),
+                ]),
+            ]);
+
+        // Master Modul Pembelajaran & CBT packages attached to event
+        $learningModules = $event->learningModules()
+            ->with(['materials'])
+            ->get()
+            ->map(fn (LearningModule $lm) => [
+                'id' => $lm->id,
+                'code' => $lm->code,
+                'title' => $lm->title,
+                'category' => $lm->category,
+                'level' => $lm->level,
+                'total_jp' => $lm->total_jp,
+                'status' => $lm->status,
+                'participant_path_id' => $lm->pivot->participant_path_id,
+                'is_required' => (bool) $lm->pivot->is_required,
+                'sort_order' => $lm->pivot->sort_order,
+                'availability_start_at' => $lm->pivot->availability_start_at ? Carbon::parse($lm->pivot->availability_start_at)->format('Y-m-d H:i') : null,
+                'availability_end_at' => $lm->pivot->availability_end_at ? Carbon::parse($lm->pivot->availability_end_at)->format('Y-m-d H:i') : null,
+                'materials_count' => $lm->materials->count(),
+                'materials' => $lm->materials->map(fn ($m) => [
+                    'id' => $m->id,
+                    'title' => $m->title,
+                    'code' => $m->code,
+                    'slug' => $m->slug,
+                    'type' => $m->type,
+                    'sort_order' => $m->pivot->sort_order,
+                    'is_required' => (bool) $m->pivot->is_required,
+                    'instructor_notes' => $m->pivot->instructor_notes,
+                    'estimated_duration_minutes' => $m->pivot->estimated_duration_minutes,
+                ]),
+            ]);
+
+        $linkedCbtPackages = $event->linkedCbtPackages()
+            ->withCount('bankQuestions')
+            ->get()
+            ->map(fn (CbtExamPackage $pkg) => [
+                'id' => $pkg->id,
+                'title' => $pkg->title,
+                'code' => $pkg->code,
+                'exam_type' => $pkg->exam_type,
+                'exam_type_label' => $pkg->exam_type_label,
+                'duration_minutes' => $pkg->duration_minutes,
+                'passing_score' => (float) $pkg->passing_score,
+                'status' => $pkg->status,
+                'participant_path_id' => $pkg->pivot->participant_path_id,
+                'is_required' => (bool) $pkg->pivot->is_required,
+                'sort_order' => $pkg->pivot->sort_order,
+                'requires_attendance_session_id' => $pkg->pivot->requires_attendance_session_id,
+                'availability_start_at' => $pkg->pivot->availability_start_at ? Carbon::parse($pkg->pivot->availability_start_at)->format('Y-m-d H:i') : null,
+                'availability_end_at' => $pkg->pivot->availability_end_at ? Carbon::parse($pkg->pivot->availability_end_at)->format('Y-m-d H:i') : null,
+                'questions_count' => $pkg->bank_questions_count,
+            ]);
+
+        $examRevisions = CbtExamAttempt::where('event_id', $event->id)
+            ->whereNotNull('revision_file_path')
+            ->with(['participant:id,name', 'package:id,title'])
+            ->latest('revision_submitted_at')
+            ->get()
+            ->map(fn (CbtExamAttempt $attempt) => [
+                'id' => $attempt->id,
+                'participant_name' => $attempt->participant?->name ?? 'Peserta dihapus',
+                'package_title' => $attempt->package?->title ?? 'Paket dihapus',
+                'score' => $attempt->total_score,
+                'status' => $attempt->revision_status,
+                'submitted_at' => $attempt->revision_submitted_at?->format('d M Y, H:i'),
+                'download_url' => route('admin.event.revision.download', [$event->id, $attempt->id]),
+            ]);
+
+        $learningModulesQuery = LearningModule::with('materials')
+            ->where('status', 'active')
+            ->availableForEvent($event->id)
+            ->orderBy('code')
+            ->get();
+
+        $availableMasterModules = $learningModulesQuery->map(fn (LearningModule $m) => [
+            'id' => $m->id,
+            'code' => $m->code,
+            'title' => $m->title,
+            'category' => $m->category,
+            'total_jp' => $m->total_jp,
+            'event_id' => $m->event_id,
+            'is_master' => $m->isMaster(),
+            'scope_label' => $m->isMaster() ? 'Master Diktar' : 'Khusus Event Ini',
+            'materials' => $m->materials->map(fn ($mat) => [
+                'id' => $mat->id,
+                'title' => $mat->title,
+                'code' => $mat->code,
+                'type' => $mat->type,
+                'slug' => $mat->slug,
+            ]),
+        ]);
+
+        $legacyEventModules = $event->modules->map(fn (EventModule $em) => [
+            'id' => 'legacy_'.$em->id,
+            'legacy_id' => $em->id,
+            'code' => $em->code,
+            'title' => $em->title,
+            'category' => 'Modul Event',
+            'total_jp' => $em->jp,
+            'event_id' => $em->event_id,
+            'is_master' => false,
+            'is_legacy_event_module' => true,
+            'scope_label' => 'Khusus Event Ini',
+            'materials' => $em->material ? [[
+                'id' => $em->material->id,
+                'title' => $em->material->title,
+                'code' => $em->material->code,
+                'type' => $em->material->type,
+                'slug' => $em->material->slug,
+            ]] : [],
+        ]);
+
+        $availableMasterModules = $availableMasterModules->concat($legacyEventModules)->values();
+
+        $availableMasterCbtPackages = CbtExamPackage::orderBy('code')
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'code' => $p->code,
+                'title' => $p->title,
+                'exam_type' => $p->exam_type,
+                'exam_type_label' => $p->exam_type_label,
+                'duration_minutes' => $p->duration_minutes,
+                'status' => $p->status,
+            ]);
+
+        // Master tracks & session types & legends
+        $tracks = ParticipantTrack::where(function ($query) use ($event) {
+            $query->whereNull('event_id')->orWhere('event_id', $event->id);
+        })->orderBy('id')->get();
+        $sessionTypes = EventSessionType::orderBy('id')->get();
+        $legends = EventLegend::whereNull('event_id')->orWhere('event_id', $event->id)
+            ->orderBy('category')->orderBy('acronym')->get();
+        $publishedMaterials = Material::where('status', 'published')
+            ->select('id', 'title', 'code', 'slug', 'type')
+            ->get();
+
+        // Calculate stats
+        $stats = [
+            'total_participants' => $event->eventParticipants->count(),
+            'verified_participants' => $event->eventParticipants->where('admin_status', 'verified')->count(),
+            'checked_in_participants' => $event->eventParticipants->whereNotNull('checked_in_at')->count(),
+            'dual_participants' => $event->eventParticipants->filter(fn ($p) => $p->track?->is_dual_track)->count(),
+            'rotation_a1' => $event->eventParticipants->where('rotation_group', 'A1')->count(),
+            'rotation_a2' => $event->eventParticipants->where('rotation_group', 'A2')->count(),
+            'total_modules' => $event->modules->count(),
+            'total_sessions' => $event->sessions
+                ->whereNotIn('session_type_code', ['KEHADIRAN_AWAL', 'KEHADIRAN_HARIAN'])
+                ->filter(fn (EventSession $session) => $session->day_number >= 1 && $session->day_number <= $event->total_days)
+                ->count(),
+            'total_speakers' => $speakers->filter(fn (array $speaker) => $speaker['event_id'] === $event->id || $speaker['sessions_count'] > 0 || $speaker['modules_count'] > 0)->count(),
+            'total_effective_jp' => $event->total_effective_jp,
+            'total_schedule_jp' => $event->total_schedule_jp,
+            'published_modules' => $event->modules->where('publication_status', 'published')->count(),
+            'total_attendances' => $attendances->count(),
+            'present_attendances' => $attendances->where('status', 'present')->count(),
+            'cbt_packages_count' => $cbtPackages->count(),
+            'cbt_attempts_count' => $cbtPackages->sum('attempts_count'),
+            'certificate_files_count' => $event->eventParticipants->whereNotNull('certificate_file_path')->count(),
+            'proctoring_events_count' => CbtProctoringEvent::where('event_id', $event->id)->count(),
+        ];
+
+        return [
+            'event' => [
+                'id' => $event->id,
+                'name' => $event->name,
+                'slug' => $event->slug,
+                'description' => $event->description,
+                'start_date' => $event->start_date?->format('Y-m-d'),
+                'end_date' => $event->end_date?->format('Y-m-d'),
+                'date_formatted' => $event->date_formatted,
+                'place' => $event->place,
+                'organizer' => $event->organizer,
+                'responsible_user' => $event->responsibleUser ? [
+                    'id' => $event->responsibleUser->id,
+                    'name' => $event->responsibleUser->name,
+                    'email' => $event->responsibleUser->email,
+                ] : null,
+                'duration_days' => $event->duration_days,
+                'total_effective_jp' => $event->total_effective_jp,
+                'total_schedule_jp' => $event->total_schedule_jp,
+                'jp_duration_minutes' => $event->jp_duration_minutes,
+                'learning_method' => $event->learning_method,
+                'participant_quota' => $event->participant_quota,
+                'status' => $event->status,
+                'status_label' => $event->status_label,
+                'status_color' => $event->status_color,
+                'cover_image' => $event->cover_image ?? $event->banner_path,
+                'banner_image' => $event->banner_image ?? $event->banner_path,
+                'banner_path' => $event->banner_path,
+                'rundown_doc_path' => $event->rundown_doc_path,
+                'facilities_checklist' => $event->facilities_checklist ?? [],
+                'requirements_checklist' => $event->requirements_checklist ?? [],
+                'access_roles' => $event->access_roles ?? ['Pelatih', 'Penguji', 'Wasit'],
+                'total_days' => $event->total_days,
+            ],
+            'modules' => $event->modules->map(fn (EventModule $m) => [
+                'id' => $m->id,
+                'code' => $m->code,
+                'title' => $m->title,
+                'target_tracks' => $m->track_codes ?? [],
+                'duration_jp' => $m->jp,
+                'delivery_method' => $m->fulfillment_method,
+                'description' => $m->description,
+                'learning_indicators' => $m->learning_indicators,
+                'publication_status' => $m->publication_status,
+                'source_type' => $m->source_type,
+                'source_url' => $m->source_url,
+                'has_source_file' => (bool) $m->source_file_path,
+                'speaker' => $m->speaker ? [
+                    'id' => $m->speaker->id,
+                    'name' => $m->speaker->full_name_with_title,
+                    'type' => $m->speaker->type,
+                ] : null,
+                'material' => $m->material ? [
+                    'id' => $m->material->id,
+                    'title' => $m->material->title,
+                    'code' => $m->material->code,
+                    'slug' => $m->material->slug,
+                    'type' => $m->material->type,
+                ] : null,
+            ]),
+            'learningModules' => $learningModules,
+            'linkedCbtPackages' => $linkedCbtPackages,
+            'availableMasterModules' => $availableMasterModules,
+            'availableMasterCbtPackages' => $availableMasterCbtPackages,
+            'availableQuestionModules' => QuestionModule::where('status', 'active')->orderBy('title')->get(['id', 'title', 'code']),
+            'sessionsByDay' => $sessionsByDay,
+            'arrivalSession' => $arrivalSession ? [
+                'id' => $arrivalSession->id,
+                'topic' => $arrivalSession->topic,
+                'is_attendance_open' => $arrivalSession->isAttendanceActive(),
+                'qr_short_code' => $arrivalSession->qr_short_code,
+                'attendances_count' => $arrivalSession->attendances_count,
+            ] : null,
+            'proctoringEvents' => $proctoringEvents,
+            'speakers' => $speakers,
+            'rooms' => $event->rooms->map(fn (EventRoom $room) => [
+                'id' => $room->id,
+                'name' => $room->name,
+                'sessions_count' => $room->sessions_count,
+            ]),
+            'participants' => $participants,
+            'availableParticipants' => Participant::query()
+                ->whereDoesntHave('eventParticipants', fn ($query) => $query->where('event_id', $event->id))
+                ->orderBy('name')
+                ->get(['id', 'name', 'kenshi_id_number']),
+            'attendances' => $attendances,
+            'cbtPackages' => $cbtPackages,
+            'examRevisions' => $examRevisions,
+            'tracks' => $tracks,
+            'sessionTypes' => $sessionTypes,
+            'legends' => $legends,
+            'publishedMaterials' => $publishedMaterials,
+            'stats' => $stats,
+        ];
+
+    }
+}

@@ -34,7 +34,7 @@ use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
 
 // Portal Web Pembaca (Dynamic Inertia)
-Route::get('/', [PortalController::class, 'home'])->middleware('auth')->name('home');
+Route::get('/', [PortalController::class, 'home'])->name('home');
 Route::get('/koleksi', [PortalController::class, 'collections'])->name('portal.collections.index');
 Route::get('/koleksi/{slug}', [PortalController::class, 'showCollection'])->name('portal.collections.show');
 Route::get('/kategori', [PortalController::class, 'categoriesIndex'])->name('portal.categories.index');

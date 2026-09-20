@@ -76,7 +76,7 @@ export default function Show({
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
                     {/* LEFT: Cover & Actions (4 cols) */}
-                    <div className="lg:col-span-4 space-y-5">
+                    <div className="lg:col-span-4 space-y-5 lg:sticky lg:top-24 self-start">
                         {/* Cover Card with tactile book styling */}
                         <div className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs overflow-hidden">
                             <div className="h-1 bg-gradient-to-r from-[#0B63CE] via-[#20A47A] to-[#7957D5]" />
@@ -130,7 +130,34 @@ export default function Show({
 
                                 {/* Access & Action */}
                                 <div className="w-full space-y-3">
-                                    {material.source_type === 'video' ? (
+                                    {!can_read ? (
+                                        !user ? (
+                                            <div className="p-4 bg-[#FFF3E6] border border-[#FFD8A8] rounded-xl text-left space-y-2.5">
+                                                <div className="flex items-center gap-2 text-[#EE9B25] font-bold text-xs">
+                                                    <Lock className="w-4 h-4 text-[#EE9B25]" />
+                                                    <span className="text-[#112743]">Memerlukan Akun Kenshi</span>
+                                                </div>
+                                                <p className="text-xs text-[#6B7C93] leading-relaxed">
+                                                    Materi ini diperuntukkan bagi kenshi dengan hak akses resmi. Silakan masuk ke akun Anda untuk membaca.
+                                                </p>
+                                                <Link href="/login" className="block">
+                                                    <Button variant="primary" size="sm" icon={LogIn} className="w-full justify-center">
+                                                        Masuk Portal
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 bg-[#FDE8EF] border border-[#F8B4C4] rounded-xl text-left space-y-2.5">
+                                                <div className="flex items-center gap-2 text-[#DD4D7C] font-bold text-xs">
+                                                    <ShieldAlert className="w-4 h-4 text-[#DD4D7C]" />
+                                                    <span className="text-[#112743]">Hak Akses Terbatas</span>
+                                                </div>
+                                                <p className="text-xs text-[#6B7C93] leading-relaxed">
+                                                    Akun Anda (<strong className="text-[#112743]">{user.role}</strong>) belum memiliki hak akses membaca materi ini. Silakan hubungi administrator PB PERKEMI.
+                                                </p>
+                                            </div>
+                                        )
+                                    ) : material.source_type === 'video' ? (
                                         <a
                                             href="#video-player-section"
                                             className="block w-full"
@@ -207,7 +234,7 @@ export default function Show({
                                                 </Button>
                                             </a>
                                         )
-                                    ) : can_read ? (
+                                    ) : (
                                         <Link
                                             href={readUrl}
                                             className="block w-full"
@@ -221,31 +248,6 @@ export default function Show({
                                                 Baca E-Book (Flipbook)
                                             </Button>
                                         </Link>
-                                    ) : !user ? (
-                                        <div className="p-4 bg-[#FFF3E6] border border-[#FFD8A8] rounded-xl text-left space-y-2.5">
-                                            <div className="flex items-center gap-2 text-[#EE9B25] font-bold text-xs">
-                                                <Lock className="w-4 h-4 text-[#EE9B25]" />
-                                                <span className="text-[#112743]">Memerlukan Akun Kenshi</span>
-                                            </div>
-                                            <p className="text-xs text-[#6B7C93] leading-relaxed">
-                                                Materi ini diperuntukkan bagi kenshi dengan hak akses resmi. Silakan masuk ke akun Anda untuk membaca.
-                                            </p>
-                                            <Link href="/login" className="block">
-                                                <Button variant="primary" size="sm" icon={LogIn} className="w-full justify-center">
-                                                    Masuk Portal
-                                                </Button>
-                                            </Link>
-                                        </div>
-                                    ) : (
-                                        <div className="p-4 bg-[#FDE8EF] border border-[#F8B4C4] rounded-xl text-left space-y-2.5">
-                                            <div className="flex items-center gap-2 text-[#DD4D7C] font-bold text-xs">
-                                                <ShieldAlert className="w-4 h-4 text-[#DD4D7C]" />
-                                                <span className="text-[#112743]">Hak Akses Terbatas</span>
-                                            </div>
-                                            <p className="text-xs text-[#6B7C93] leading-relaxed">
-                                                Akun Anda (<strong className="text-[#112743]">{user.role}</strong>) belum memiliki hak akses membaca materi ini. Silakan hubungi administrator PB PERKEMI.
-                                            </p>
-                                        </div>
                                     )}
 
                                     {can_download && download_url && material.source_type === 'uploaded_pdf' && (
@@ -320,26 +322,72 @@ export default function Show({
 
                         {/* Video Player (if video) */}
                         {material.source_type === 'video' && (
-                            <div id="video-player-section" className="scroll-mt-6">
-                                <VideoPlayer
-                                    embedUrl={material.embed_url}
-                                    title={material.title}
-                                    provider={material.video_provider}
-                                />
-                            </div>
+                            can_read ? (
+                                <div id="video-player-section" className="scroll-mt-6">
+                                    <VideoPlayer
+                                        embedUrl={material.embed_url}
+                                        title={material.title}
+                                        provider={material.video_provider}
+                                    />
+                                </div>
+                            ) : (
+                                <div id="video-player-section" className="scroll-mt-6 bg-[#FFF9F2] rounded-2xl border border-[#FFD8A8] p-8 sm:p-10 text-center space-y-4 shadow-xs">
+                                    <div className="w-14 h-14 rounded-2xl bg-[#FFF3E6] text-[#EE9B25] border border-[#FFD8A8] flex items-center justify-center mx-auto shadow-xs">
+                                        <Lock className="w-7 h-7" />
+                                    </div>
+                                    <div className="space-y-1.5 max-w-md mx-auto">
+                                        <h3 className="font-serif text-lg sm:text-xl font-bold text-[#0E2747]">
+                                            Video Pembelajaran Terkunci
+                                        </h3>
+                                        <p className="text-xs sm:text-sm text-[#6B7C93] leading-relaxed">
+                                            Materi video pembelajaran ini diperuntukkan bagi kenshi dengan hak akses resmi. Silakan masuk ke akun Anda untuk menonton video.
+                                        </p>
+                                    </div>
+                                    {!user && (
+                                        <Link href="/login" className="inline-block pt-1">
+                                            <Button variant="primary" size="md" icon={LogIn}>
+                                                Masuk Portal
+                                            </Button>
+                                        </Link>
+                                    )}
+                                </div>
+                            )
                         )}
 
                         {/* External Viewer (if external link) */}
                         {material.source_type === 'external_link' && (
-                            <div id="external-viewer-section" className="scroll-mt-6">
-                                <ExternalMaterialViewer
-                                    url={material.embed_url || material.external_url}
-                                    externalUrl={material.external_url}
-                                    sourceName={material.external_source_name}
-                                    openMode={material.external_open_mode}
-                                    title={material.title}
-                                />
-                            </div>
+                            can_read ? (
+                                <div id="external-viewer-section" className="scroll-mt-6">
+                                    <ExternalMaterialViewer
+                                        url={material.embed_url || material.external_url}
+                                        externalUrl={material.external_url}
+                                        sourceName={material.external_source_name}
+                                        openMode={material.external_open_mode}
+                                        title={material.title}
+                                    />
+                                </div>
+                            ) : (
+                                <div id="external-viewer-section" className="scroll-mt-6 bg-[#FFF9F2] rounded-2xl border border-[#FFD8A8] p-8 sm:p-10 text-center space-y-4 shadow-xs">
+                                    <div className="w-14 h-14 rounded-2xl bg-[#FFF3E6] text-[#EE9B25] border border-[#FFD8A8] flex items-center justify-center mx-auto shadow-xs">
+                                        <Lock className="w-7 h-7" />
+                                    </div>
+                                    <div className="space-y-1.5 max-w-md mx-auto">
+                                        <h3 className="font-serif text-lg sm:text-xl font-bold text-[#0E2747]">
+                                            Sumber Materi Eksternal Terkunci
+                                        </h3>
+                                        <p className="text-xs sm:text-sm text-[#6B7C93] leading-relaxed">
+                                            Buku digital dari sumber eksternal ini diperuntukkan bagi kenshi dengan hak akses resmi. Silakan masuk ke akun Anda untuk membaca.
+                                        </p>
+                                    </div>
+                                    {!user && (
+                                        <Link href="/login" className="inline-block pt-1">
+                                            <Button variant="primary" size="md" icon={LogIn}>
+                                                Masuk Portal
+                                            </Button>
+                                        </Link>
+                                    )}
+                                </div>
+                            )
                         )}
 
                         {/* Summary Block */}

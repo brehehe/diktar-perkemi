@@ -30,6 +30,24 @@ class SaveEventSession
                 $data['event_room_id'] = null;
             }
 
+            if (! empty($data['cbt_exam_package_id'])) {
+                $event->linkedCbtPackages()->syncWithoutDetaching([
+                    $data['cbt_exam_package_id'] => [
+                        'is_required' => true,
+                        'sort_order' => $event->linkedCbtPackages()->count() + 1,
+                    ],
+                ]);
+            }
+
+            if (! empty($data['learning_module_id'])) {
+                $event->learningModules()->syncWithoutDetaching([
+                    $data['learning_module_id'] => [
+                        'is_required' => true,
+                        'sort_order' => $event->learningModules()->count() + 1,
+                    ],
+                ]);
+            }
+
             if ($session) {
                 $session->update($data);
 
@@ -75,6 +93,14 @@ class SaveEventSession
             ]);
         }
 
+        if (in_array($sessionTypeCode, ['UJIAN', 'CBT'], true)
+            && empty($validated['cbt_exam_package_id'])
+            && empty($session?->cbt_exam_package_id)) {
+            throw ValidationException::withMessages([
+                'cbt_exam_package_id' => 'Paket ujian CBT wajib dipilih untuk sesi ujian CBT.',
+            ]);
+        }
+
         $dailySessionExists = $event->sessions()
             ->when($session, fn ($query) => $query->where('id', '!=', $session->id))
             ->where('day_number', $validated['day_number'])
@@ -97,11 +123,20 @@ class SaveEventSession
         string $sessionTypeCode,
         ?EventSession $session,
     ): array {
+        $isCbt = in_array($sessionTypeCode, ['UJIAN', 'CBT'], true);
+        $isDaily = $sessionTypeCode === 'KEHADIRAN_HARIAN';
+
+        $speakerId = ! empty($validated['speaker_id']) ? (int) $validated['speaker_id'] : null;
+        $cbtPackageId = ! empty($validated['cbt_exam_package_id']) ? (int) $validated['cbt_exam_package_id'] : null;
+        $learningModuleId = ! empty($validated['learning_module_id']) ? (int) $validated['learning_module_id'] : null;
+        $eventModuleId = ! empty($validated['event_module_id']) ? (int) $validated['event_module_id'] : null;
+        $materialId = ! empty($validated['material_id']) ? (int) $validated['material_id'] : null;
+
         $data = [
             'day_number' => $validated['day_number'],
             'session_number' => $validated['session_number'],
             'session_type_code' => $sessionTypeCode,
-            'speaker_id' => $validated['speaker_id'] ?? null,
+            'speaker_id' => $speakerId,
             'date' => $validated['session_date'] ?? $validated['date'] ?? $session?->date ?? $event->start_date,
             'start_time' => $validated['start_time'],
             'end_time' => $validated['end_time'],
@@ -113,16 +148,16 @@ class SaveEventSession
             'track_codes' => $validated['target_tracks'] ?? $validated['track_codes'] ?? $session?->track_codes ?? [],
             'status' => $validated['status'] ?? $session?->status ?? 'scheduled',
             'attendance_setting' => $validated['attendance_setting'] ?? $session?->attendance_setting ?? 'check_in',
-            'material_id' => $validated['material_id'] ?? $session?->material_id,
-            'learning_module_id' => $validated['learning_module_id'] ?? $session?->learning_module_id,
-            'event_module_id' => $validated['event_module_id'] ?? $session?->event_module_id,
-            'cbt_exam_package_id' => $validated['cbt_exam_package_id'] ?? $session?->cbt_exam_package_id,
+            'material_id' => ($isCbt || $isDaily) ? null : (array_key_exists('material_id', $validated) ? $materialId : $session?->material_id),
+            'learning_module_id' => ($isCbt || $isDaily) ? null : (array_key_exists('learning_module_id', $validated) ? $learningModuleId : $session?->learning_module_id),
+            'event_module_id' => ($isCbt || $isDaily) ? null : (array_key_exists('event_module_id', $validated) ? $eventModuleId : $session?->event_module_id),
+            'cbt_exam_package_id' => $isDaily ? null : ($isCbt ? $cbtPackageId : (array_key_exists('cbt_exam_package_id', $validated) ? $cbtPackageId : $session?->cbt_exam_package_id)),
             'requires_attendance_before_cbt' => array_key_exists('requires_attendance_before_cbt', $validated)
                 ? (bool) $validated['requires_attendance_before_cbt']
                 : ($session?->requires_attendance_before_cbt ?? false),
         ];
 
-        if ($sessionTypeCode === 'KEHADIRAN_HARIAN') {
+        if ($isDaily) {
             $data['duration_jp'] = 0;
             $data['date'] = $event->start_date->copy()->addDays($validated['day_number'] - 1);
             $data['attendance_setting'] = 'check_in';

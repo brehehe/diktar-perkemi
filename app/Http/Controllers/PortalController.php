@@ -274,14 +274,14 @@ class PortalController extends Controller
         $primaryCategory = $material->categories->first();
         $user = $request->user();
 
-        // Check if reader has read access (admin or matches audience restrictions)
-        $canRead = true;
-        if ($material->audiences->isNotEmpty()) {
-            if (! $user) {
-                $canRead = false; // requires login
+        // Check if reader has read access (all portal materials require logged-in kenshi account; specific audiences enforce role)
+        $canRead = false;
+        if ($user) {
+            if ($user->isAdmin() || $material->audiences->isEmpty()) {
+                $canRead = true;
             } else {
                 $role = strtolower((string) $user->role);
-                $canRead = $user->isAdmin() || $material->audiences->contains(
+                $canRead = $material->audiences->contains(
                     fn (Audience $audience) => strtolower($audience->name) === $role
                         || strtolower((string) $audience->code) === $role,
                 );

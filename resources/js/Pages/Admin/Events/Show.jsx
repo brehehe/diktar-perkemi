@@ -267,15 +267,26 @@ export default function Show({
     // --- Submissions ---
     const handleSaveSession = (e) => {
         e.preventDefault();
+        const payload = {
+            ...sessionForm.data,
+            speaker_id: sessionForm.data.speaker_id ? parseInt(sessionForm.data.speaker_id, 10) : null,
+            learning_module_id: sessionForm.data.learning_module_id ? (String(sessionForm.data.learning_module_id).startsWith('legacy_') ? sessionForm.data.learning_module_id : parseInt(sessionForm.data.learning_module_id, 10)) : null,
+            material_id: sessionForm.data.material_id ? parseInt(sessionForm.data.material_id, 10) : null,
+            cbt_exam_package_id: sessionForm.data.cbt_exam_package_id ? parseInt(sessionForm.data.cbt_exam_package_id, 10) : null,
+            event_session_type_id: sessionForm.data.event_session_type_id ? parseInt(sessionForm.data.event_session_type_id, 10) : null,
+        };
+
         if (editingSession) {
-            sessionForm.put(`/admin/event/${event.id}/sesi/${editingSession.id}`, {
+            sessionForm.transform(() => payload).put(`/admin/event/${event.id}/sesi/${editingSession.id}`, {
+                preserveScroll: true,
                 onSuccess: () => {
                     setIsSessionModalOpen(false);
                     setEditingSession(null);
                 },
             });
         } else {
-            sessionForm.post(`/admin/event/${event.id}/sesi`, {
+            sessionForm.transform(() => payload).post(`/admin/event/${event.id}/sesi`, {
+                preserveScroll: true,
                 onSuccess: () => {
                     setIsSessionModalOpen(false);
                     sessionForm.reset();
@@ -422,24 +433,38 @@ export default function Show({
             ? session.learning_module_id
             : (session.event_module_id ? 'legacy_' + session.event_module_id : '');
 
+        const matchedSessionType = sessionTypes.find((st) => st.code === session.session_type_code);
+        const activeSessionTypeId = session.session_type_code === 'KEHADIRAN_HARIAN'
+            ? ''
+            : (session.session_type?.id || matchedSessionType?.id || sessionTypes[0]?.id || '');
+
+        const validAttendance = ['none', 'check_in', 'check_in_out'].includes(session.attendance_setting)
+            ? session.attendance_setting
+            : 'check_in';
+
+        const validStatus = ['scheduled', 'ongoing', 'completed', 'cancelled'].includes(session.status)
+            ? session.status
+            : 'scheduled';
+
+        sessionForm.clearErrors();
         sessionForm.setData({
             day_number: session.day_number,
             session_number: session.session_number,
-            event_session_type_id: session.session_type_code === 'KEHADIRAN_HARIAN' ? '' : (session.session_type?.id || sessionTypes[0]?.id),
-            session_type_code: session.session_type_code === 'KEHADIRAN_HARIAN' ? 'KEHADIRAN_HARIAN' : '',
+            event_session_type_id: activeSessionTypeId,
+            session_type_code: session.session_type_code === 'KEHADIRAN_HARIAN' ? 'KEHADIRAN_HARIAN' : (session.session_type_code || ''),
             speaker_id: session.speaker?.id || '',
             session_date: session.session_date || '',
-            start_time: session.start_time || '',
-            end_time: session.end_time || '',
-            duration_jp: session.duration_jp ?? 2,
+            start_time: session.start_time ? session.start_time.substring(0, 5) : '',
+            end_time: session.end_time ? session.end_time.substring(0, 5) : '',
+            duration_jp: session.duration_jp ?? 1,
             topic: session.topic || '',
             subtopic: session.subtopic || '',
             method: session.method || '',
             room: session.room || '',
             target_tracks: session.target_tracks || [],
             module_code: session.module_code || '',
-            status: session.status || 'scheduled',
-            attendance_setting: session.attendance_setting || 'check_in',
+            status: validStatus,
+            attendance_setting: validAttendance,
             learning_module_id: activeModId,
             event_module_id: session.event_module_id || '',
             material_id: session.material_id || '',
@@ -877,6 +902,7 @@ export default function Show({
                                 icon={<QrCode className="w-4 h-4" />}
                                 onClick={() => {
                                     setEditingSession(null);
+                                    sessionForm.clearErrors();
                                     sessionForm.setData({
                                         day_number: selectedDay,
                                         session_number: `Harian ${selectedDay}`,
@@ -909,6 +935,7 @@ export default function Show({
                                 icon={<Plus className="w-4 h-4" />}
                                 onClick={() => {
                                     setEditingSession(null);
+                                    sessionForm.clearErrors();
                                     sessionForm.setData({
                                         day_number: selectedDay,
                                         session_number: `Sesi ${activeDayData.sessions.filter((session) => session.session_type_code !== 'KEHADIRAN_HARIAN').length + 1}`,
@@ -2358,8 +2385,22 @@ export default function Show({
                 }
             >
                 <form id="session-form" onSubmit={handleSaveSession} className="space-y-4">
+                    {Object.keys(sessionForm.errors).length > 0 && (
+                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                            <div className="space-y-1">
+                                <p className="font-bold text-rose-900">Periksa kembali data sesi yang diinput:</p>
+                                <ul className="list-disc list-inside space-y-0.5 text-rose-700">
+                                    {Object.entries(sessionForm.errors).map(([field, msg]) => (
+                                        <li key={field}>{msg}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <FormField label="Hari ke-" required>
+                        <FormField label="Hari ke-" required error={sessionForm.errors.day_number}>
                             <Select
                                 value={sessionForm.data.day_number}
                                 onChange={(e) => {
@@ -2382,7 +2423,7 @@ export default function Show({
                             </Select>
                         </FormField>
 
-                        <FormField label="Nomor Sesi" required>
+                        <FormField label="Nomor Sesi" required error={sessionForm.errors.session_number}>
                             <Input
                                 value={sessionForm.data.session_number}
                                 onChange={(e) => sessionForm.setData('session_number', e.target.value)}
@@ -2391,21 +2432,20 @@ export default function Show({
                             />
                         </FormField>
 
-                        <FormField label="Durasi (JP)" required>
+                        <FormField label="Durasi (JP)" required error={sessionForm.errors.duration_jp}>
                             <Input
                                 type="number"
-                                min="1"
+                                min={sessionForm.data.session_type_code === 'KEHADIRAN_HARIAN' ? '0' : '1'}
                                 value={sessionForm.data.duration_jp}
                                 onChange={(e) => sessionForm.setData('duration_jp', Number(e.target.value))}
                                 disabled={sessionForm.data.session_type_code === 'KEHADIRAN_HARIAN'}
-                                min={sessionForm.data.session_type_code === 'KEHADIRAN_HARIAN' ? '0' : '1'}
                                 required
                             />
                         </FormField>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <FormField label="Waktu Mulai" required>
+                        <FormField label="Waktu Mulai" required error={sessionForm.errors.start_time}>
                             <Input
                                 type="time"
                                 value={sessionForm.data.start_time}
@@ -2414,7 +2454,7 @@ export default function Show({
                             />
                         </FormField>
 
-                        <FormField label="Waktu Selesai" required>
+                        <FormField label="Waktu Selesai" required error={sessionForm.errors.end_time}>
                             <Input
                                 type="time"
                                 value={sessionForm.data.end_time}
@@ -2425,10 +2465,39 @@ export default function Show({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <FormField label="Jenis Sesi" required>
+                        <FormField label="Jenis Sesi" required error={sessionForm.errors.event_session_type_id || sessionForm.errors.session_type_code}>
                             <Select
                                 value={sessionForm.data.session_type_code === 'KEHADIRAN_HARIAN' ? 'daily' : sessionForm.data.event_session_type_id}
-                                onChange={(e) => sessionForm.setData((current) => ({ ...current, event_session_type_id: e.target.value === 'daily' ? '' : e.target.value, session_type_code: e.target.value === 'daily' ? 'KEHADIRAN_HARIAN' : '', duration_jp: e.target.value === 'daily' ? 0 : (current.duration_jp || 1), attendance_setting: e.target.value === 'daily' ? 'check_in' : current.attendance_setting }))}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === 'daily') {
+                                        sessionForm.setData((current) => ({
+                                            ...current,
+                                            event_session_type_id: '',
+                                            session_type_code: 'KEHADIRAN_HARIAN',
+                                            duration_jp: 0,
+                                            attendance_setting: 'check_in',
+                                            learning_module_id: '',
+                                            event_module_id: '',
+                                            material_id: '',
+                                            cbt_exam_package_id: '',
+                                        }));
+                                    } else {
+                                        const st = sessionTypes.find((item) => String(item.id) === String(val));
+                                        const isCbt = st?.code === 'UJIAN' || st?.code === 'CBT' || st?.name?.toLowerCase().includes('ujian') || st?.name?.toLowerCase().includes('cbt');
+                                        sessionForm.setData((current) => ({
+                                            ...current,
+                                            event_session_type_id: val,
+                                            session_type_code: st?.code || '',
+                                            duration_jp: current.duration_jp === 0 ? 1 : (current.duration_jp || 1),
+                                            attendance_setting: current.attendance_setting || 'check_in',
+                                            learning_module_id: isCbt ? '' : current.learning_module_id,
+                                            event_module_id: isCbt ? '' : current.event_module_id,
+                                            material_id: isCbt ? '' : current.material_id,
+                                            cbt_exam_package_id: isCbt ? current.cbt_exam_package_id : '',
+                                        }));
+                                    }
+                                }}
                             >
                                 <option value="daily">Kehadiran Harian (QR awal hari)</option>
                                 {sessionTypes.map((st) => (
@@ -2438,9 +2507,8 @@ export default function Show({
                                 ))}
                             </Select>
                         </FormField>
-                        {sessionForm.errors.session_type_code && <p role="alert" className="text-sm text-[#9F244D]">{sessionForm.errors.session_type_code}</p>}
 
-                        <FormField label="Pengaturan Absensi">
+                        <FormField label="Pengaturan Absensi" error={sessionForm.errors.attendance_setting}>
                             <Select
                                 value={sessionForm.data.attendance_setting}
                                 onChange={(e) => sessionForm.setData('attendance_setting', e.target.value)}
@@ -2451,10 +2519,9 @@ export default function Show({
                             </Select>
                             <p className="mt-1 text-xs text-[#6B7C93]">Sesi yang memuat materi atau ujian wajib memakai absensi masuk.</p>
                         </FormField>
-                        {sessionForm.errors.attendance_setting && <p role="alert" className="text-sm text-[#9F244D]">{sessionForm.errors.attendance_setting}</p>}
                     </div>
 
-                    <FormField label="Topik / Judul Materi Sesi" required>
+                    <FormField label="Topik / Judul Materi Sesi" required error={sessionForm.errors.topic}>
                         <Input
                             value={sessionForm.data.topic}
                             onChange={(e) => sessionForm.setData('topic', e.target.value)}
@@ -2502,6 +2569,7 @@ export default function Show({
                                         options={availableMasterCbtPackages.map((pkg) => ({ value: pkg.id, label: `[${pkg.code}] ${pkg.title} (${pkg.exam_type_label || pkg.exam_type} - ${pkg.duration_minutes}m - ${pkg.status})` }))}
                                         placeholder="Pilih paket CBT tersedia"
                                         searchPlaceholder="Cari kode atau nama paket CBT…"
+                                        error={sessionForm.errors.cbt_exam_package_id}
                                         required
                                     />
 
@@ -2575,6 +2643,7 @@ export default function Show({
                                         }))}
                                         placeholder="Pilih modul pembelajaran"
                                         searchPlaceholder="Cari kode, nama modul, atau ketik Master / Khusus Event…"
+                                        error={sessionForm.errors.learning_module_id}
                                     />
                                 )}
 
@@ -2585,7 +2654,7 @@ export default function Show({
                                             <span className="text-[#6B7C93]">{activeSelectedLearningModule.materials?.length || 0} Terhubung</span>
                                         </div>
 
-                                        <FormField label="Pilih Materi Koleksi Digital Utama Sesi (Opsional)">
+                                        <FormField label="Pilih Materi Koleksi Digital Utama Sesi (Opsional)" error={sessionForm.errors.material_id}>
                                             <Select
                                                 value={sessionForm.data.material_id || ''}
                                                 onChange={(e) => sessionForm.setData('material_id', e.target.value)}
@@ -2609,7 +2678,7 @@ export default function Show({
                                 )}
 
                                 {selectedSessionLinks.includes('collection') && !activeSelectedLearningModule && (
-                                    <FormField label="Atau Hubungkan Langsung ke Koleksi Buku Digital">
+                                    <FormField label="Atau Hubungkan Langsung ke Koleksi Buku Digital" error={sessionForm.errors.material_id}>
                                         <Select
                                             value={sessionForm.data.material_id}
                                             onChange={(e) => sessionForm.setData('material_id', e.target.value)}
@@ -2628,7 +2697,7 @@ export default function Show({
                     })()}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <FormField label="Pemateri / Instruktur">
+                        <FormField label="Pemateri / Instruktur" error={sessionForm.errors.speaker_id}>
                             <Select
                                 value={sessionForm.data.speaker_id}
                                 onChange={(e) => sessionForm.setData('speaker_id', e.target.value)}
@@ -2642,7 +2711,7 @@ export default function Show({
                             </Select>
                         </FormField>
 
-                        <FormField label="Ruangan / Lokasi" name="event-session-room">
+                        <FormField label="Ruangan / Lokasi" name="event-session-room" error={sessionForm.errors.room}>
                             <Input
                                 id="event-session-room"
                                 list="event-room-options"

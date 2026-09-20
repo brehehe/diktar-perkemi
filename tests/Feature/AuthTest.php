@@ -14,10 +14,11 @@ test('login screen can be rendered', function () {
     $response->assertInertia(fn (Assert $page) => $page->component('Auth/Login'));
 });
 
-test('guests are redirected to login when opening the portal home page', function () {
+test('guests can view the portal home page without redirect to login', function () {
     $response = $this->get('/');
 
-    $response->assertRedirect('/login');
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page->component('Portal/Home'));
     $this->assertGuest();
 });
 

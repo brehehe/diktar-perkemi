@@ -367,3 +367,38 @@ test('reader route enforces authentication and role authorization', function () 
             ->where('has_file', true)
         );
 });
+
+test('guest viewing video or external link collection requires kenshi account', function () {
+    $videoMaterial = Material::create([
+        'title' => 'Video Pembelajaran Teknik Goho',
+        'slug' => 'video-pembelajaran-teknik-goho',
+        'code' => 'VID-01',
+        'type' => 'video',
+        'status' => 'published',
+        'source_type' => 'video',
+        'video_provider' => 'youtube',
+        'video_id' => 'dQw4w9WgXcQ',
+        'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        'video_allow_portal' => true,
+        'created_by' => 1,
+    ]);
+
+    // Guest accessing video: can_read is false
+    $guestResponse = $this->get("/koleksi/{$videoMaterial->slug}");
+    $guestResponse->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Portal/Collections/Show')
+            ->where('material.title', 'Video Pembelajaran Teknik Goho')
+            ->where('can_read', false)
+        );
+
+    // Authenticated user accessing video: can_read is true
+    $kenshi = User::factory()->create(['role' => 'Peserta']);
+    $userResponse = $this->actingAs($kenshi)->get("/koleksi/{$videoMaterial->slug}");
+    $userResponse->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Portal/Collections/Show')
+            ->where('material.title', 'Video Pembelajaran Teknik Goho')
+            ->where('can_read', true)
+        );
+});

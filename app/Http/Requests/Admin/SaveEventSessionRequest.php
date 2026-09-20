@@ -22,6 +22,33 @@ class SaveEventSessionRequest extends FormRequest
                 'learning_module_id' => null,
             ]);
         }
+
+        $merge = [];
+
+        foreach (['speaker_id', 'learning_module_id', 'event_module_id', 'material_id', 'cbt_exam_package_id', 'event_session_type_id'] as $field) {
+            if ($this->has($field)) {
+                $val = $this->input($field);
+                $merge[$field] = ($val === '' || $val === null) ? null : (int) $val;
+            }
+        }
+
+        if ($this->has('attendance_setting')) {
+            $att = $this->input('attendance_setting');
+            if ($att === 'mandatory' || ! in_array($att, ['none', 'check_in', 'check_in_out'], true)) {
+                $merge['attendance_setting'] = 'check_in';
+            }
+        }
+
+        if ($this->has('status')) {
+            $st = $this->input('status');
+            if (! in_array($st, ['scheduled', 'ongoing', 'completed', 'cancelled'], true)) {
+                $merge['status'] = 'scheduled';
+            }
+        }
+
+        if (! empty($merge)) {
+            $this->merge($merge);
+        }
     }
 
     public function rules(): array

@@ -1165,3 +1165,46 @@ test('participant with in-progress exam attempt is locked to exam room when acce
         ->get('/sertifikat-saya')
         ->assertRedirect($examUrl);
 });
+
+test('admin can update rundown session to CBT exam package with empty speaker and string values', function () {
+    $event = Event::first();
+    $session = $event->sessions()->where('session_type_code', '!=', 'KEHADIRAN_AWAL')->first();
+    $package = CbtExamPackage::create([
+        'code' => 'CBT-TEST-UPDATE',
+        'title' => 'Ujian Update Session Test',
+        'exam_type' => 'theory',
+        'duration_minutes' => 60,
+        'passing_score' => 70,
+        'status' => 'draft',
+    ]);
+
+    $response = $this->actingAs($this->admin)
+        ->put("/admin/event/{$event->id}/sesi/{$session->id}", [
+            'day_number' => 1,
+            'session_number' => '3',
+            'duration_jp' => 1,
+            'start_time' => '21:30',
+            'end_time' => '22:30',
+            'event_session_type_id' => '',
+            'session_type_code' => 'UJIAN',
+            'topic' => 'Ujian Evaluasi Malam',
+            'speaker_id' => '',
+            'status' => 'ready',
+            'attendance_setting' => 'mandatory',
+            'cbt_exam_package_id' => (string) $package->id,
+            'learning_module_id' => '',
+            'material_id' => '',
+            'room' => 'Dojo Utama Pusdiklat',
+            'requires_attendance_before_cbt' => false,
+        ]);
+
+    $response->assertSessionHasNoErrors();
+    $session->refresh();
+
+    expect($session->session_type_code)->toBe('UJIAN')
+        ->and($session->cbt_exam_package_id)->toBe($package->id)
+        ->and($session->speaker_id)->toBeNull()
+        ->and($session->status)->toBe('scheduled')
+        ->and($session->attendance_setting)->toBe('check_in')
+        ->and($event->linkedCbtPackages()->where('cbt_exam_packages.id', $package->id)->exists())->toBeTrue();
+});

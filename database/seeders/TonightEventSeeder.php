@@ -75,6 +75,9 @@ class TonightEventSeeder extends Seeder
                 ],
             );
 
+            // Pastikan seluruh tanggal sesi pada event ini sinkron dengan hari ini
+            EventSession::where('event_id', $event->id)->update(['date' => $today]);
+
             // 4. Ruangan
             $room = EventRoom::updateOrCreate(
                 ['event_id' => $event->id, 'name' => 'Dojo Utama Pusdiklat'],
@@ -239,6 +242,11 @@ class TonightEventSeeder extends Seeder
                 ],
             );
 
+            // Bersihkan data absensi tester 1 pada event ini agar selalu fresh untuk simulasi scan
+            EventAttendance::where('event_id', $event->id)
+                ->where('participant_id', $participantTester1->id)
+                ->delete();
+
             // 8. Peserta 2: Sudah Hadir Awal (Siap Akses Ruang Belajar Langsung)
             $userTester2 = User::updateOrCreate(
                 ['email' => 'hadir.malam@perkemi.id'],
@@ -295,6 +303,29 @@ class TonightEventSeeder extends Seeder
                     'notes' => 'Presensi kedatangan awal otomatis oleh sistem seeder.',
                 ],
             );
+
+            // Catat juga kehadiran harian untuk Peserta 2 jika ada sesi harian
+            $dailySession = EventSession::where('event_id', $event->id)
+                ->where('session_type_code', 'KEHADIRAN_HARIAN')
+                ->first();
+
+            if ($dailySession) {
+                EventAttendance::updateOrCreate(
+                    [
+                        'event_id' => $event->id,
+                        'event_session_id' => $dailySession->id,
+                        'participant_id' => $participantTester2->id,
+                    ],
+                    [
+                        'attendance_type' => 'check_in',
+                        'status' => 'present',
+                        'checked_in_at' => now()->subMinutes(25),
+                        'method' => 'qr_scan',
+                        'recorded_by' => $organizer->id,
+                        'notes' => 'Presensi harian otomatis oleh sistem seeder.',
+                    ],
+                );
+            }
         });
     }
 }

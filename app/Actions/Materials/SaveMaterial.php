@@ -96,8 +96,8 @@ class SaveMaterial
             if ($savedFilePath !== null && Storage::disk($disk)->exists($savedFilePath)) {
                 Storage::disk($disk)->delete($savedFilePath);
             }
-            if ($savedCoverPath !== null && is_file($savedCoverPath)) {
-                unlink($savedCoverPath);
+            if ($savedCoverPath !== null && Storage::disk('public')->exists($savedCoverPath)) {
+                Storage::disk('public')->delete($savedCoverPath);
             }
 
             throw $exception;
@@ -115,10 +115,11 @@ class SaveMaterial
 
         $file = $request->file('cover_file');
         $filename = time().'_'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.$file->getClientOriginalExtension();
-        $file->move(public_path('images'), $filename);
-        $savedCoverPath = public_path('images/'.$filename);
+        $storagePath = 'covers/'.$filename;
+        Storage::disk('public')->putFileAs('covers', $file, $filename);
+        $savedCoverPath = $storagePath;
 
-        return '/images/'.$filename;
+        return Storage::disk('public')->url($storagePath);
     }
 
     /**

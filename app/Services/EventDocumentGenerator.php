@@ -10,8 +10,6 @@ use RuntimeException;
 
 class EventDocumentGenerator
 {
-    private const TEMPLATE_ISSUED_DATE = '2026-09-27';
-
     private const DUAL_TRACKS = [
         'PWAD' => ['PED', 'WAD'],
         'PWAN' => ['PEN', 'WAN'],
@@ -108,10 +106,6 @@ class EventDocumentGenerator
 
         if (! $template) {
             return 'Template resmi untuk jalur ini belum tersedia. Gunakan unggah PDF manual.';
-        }
-
-        if ($event->end_date?->toDateString() !== self::TEMPLATE_ISSUED_DATE) {
-            return 'Template resmi hanya berlaku untuk kegiatan tanggal 27 September 2026. Gunakan unggah PDF manual.';
         }
 
         if (! is_readable(resource_path("document-templates/perkemi/{$template}"))) {

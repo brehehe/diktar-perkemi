@@ -1088,7 +1088,7 @@ test('event number settings override admin defaults and preserve existing issued
     expect($enrollment->fresh()->certificate_number)->toBe('007/WST-JABAR/IX/2026');
 });
 
-test('pelatih daerah uses the event month and year but requires manual upload for a different template date', function () {
+test('pelatih daerah uses the event month and year for suggested number and supports generation', function () {
     $admin = User::factory()->create(['role' => 'Admin']);
     $enrollment = EventParticipant::query()->where('event_id', $this->event->id)->where('track_code', 'PD')->firstOrFail();
     $enrollment->update(['certificate_number' => null]);
@@ -1098,7 +1098,7 @@ test('pelatih daerah uses the event month and year but requires manual upload fo
         ->assertInertia(fn (Assert $page) => $page->where('participants', fn ($participants) => collect($participants)->contains(
             fn ($participant) => $participant['id'] === $enrollment->id
                 && $participant['suggested_certificate_number'] === '001/PLT-DRH/II/2027'
-                && ! $participant['can_generate_certificate']
+                && $participant['can_generate_certificate']
         )));
 });
 
@@ -1122,7 +1122,7 @@ test('event number settings reject invalid codes and unrelated organizers', func
     expect($this->event->fresh()->document_number_settings)->toBeNull();
 });
 
-test('automatic document generation rejects a mismatched document track and template date', function () {
+test('automatic document generation rejects an invalid or mismatched document track', function () {
     Storage::fake('local');
     $admin = User::factory()->create(['role' => 'Admin']);
     $unsupportedEnrollment = EventParticipant::query()
@@ -1135,17 +1135,17 @@ test('automatic document generation rejects a mismatched document track and temp
         'document_track' => 'WAD',
     ])->assertSessionHasErrors('certificate_number');
 
-    $supportedEnrollment = EventParticipant::query()
+    $invalidTrackEnrollment = EventParticipant::query()
         ->where('event_id', $this->event->id)
         ->where('track_code', 'WAD')
         ->firstOrFail();
+    $invalidTrackEnrollment->update(['track_code' => 'XYZ']);
 
-    $this->event->update(['end_date' => '2027-02-15']);
-    $this->post("/admin/event/{$this->event->id}/peserta/{$supportedEnrollment->id}/transkrip/generate")
+    $this->post("/admin/event/{$this->event->id}/peserta/{$invalidTrackEnrollment->id}/transkrip/generate")
         ->assertSessionHasErrors('transcript_number');
 
     expect($unsupportedEnrollment->fresh()->certificate_file_path)->toBeNull();
-    expect($supportedEnrollment->fresh()->transcript_file_path)->toBeNull();
+    expect($invalidTrackEnrollment->fresh()->transcript_file_path)->toBeNull();
 });
 
 test('certificate and transcript uploads reject non PDF files and unrelated organizers', function () {

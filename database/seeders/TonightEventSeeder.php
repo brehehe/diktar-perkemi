@@ -204,7 +204,7 @@ class TonightEventSeeder extends Seeder
             $userTester1 = User::updateOrCreate(
                 ['email' => 'tester.malam@perkemi.id'],
                 [
-                    'name' => 'Kenshi Tester Malam (Belum Absen)',
+                    'name' => 'Kenshi Tester Malam',
                     'role' => 'Peserta',
                     'password' => Hash::make('password'),
                 ],
@@ -214,14 +214,14 @@ class TonightEventSeeder extends Seeder
                 ['email' => 'tester.malam@perkemi.id'],
                 [
                     'user_id' => $userTester1->id,
-                    'name' => 'Kenshi Tester Malam (Belum Absen)',
+                    'name' => 'Kenshi Tester Malam',
                     'kenshi_id_number' => 'TEST-MALAM-01',
                     'phone' => '081234567801',
                     'origin_province' => 'DKI Jakarta',
                     'origin_city' => 'Jakarta Selatan',
                     'origin_dojo' => 'Dojo Senayan',
                     'dan_rank' => 'II-DAN',
-                    'notes' => 'Akun simulasi pengecekan absensi malam ini (status: belum absen).',
+                    'notes' => 'Akun simulasi untuk pengecekan absensi.',
                 ],
             );
 

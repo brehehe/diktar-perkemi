@@ -19,6 +19,45 @@ class EventAttendanceService
     public function resolveParticipant(User $user, Event $event): array
     {
         $participant = Participant::query()->where('user_id', $user->id)->first();
+
+        // Admin, Diktar, and Penyelenggara can preview Ruang Belajar if not explicitly enrolled
+        if ($user->isAdmin() || in_array($user->role, ['Admin', 'Diktar', 'Penyelenggara'], true)) {
+            $enrollment = $participant ? EventParticipant::query()
+                ->with('track')
+                ->where('event_id', $event->id)
+                ->where('participant_id', $participant->id)
+                ->where('admin_status', 'verified')
+                ->first() : null;
+
+            if ($enrollment) {
+                return [$participant, $enrollment];
+            }
+
+            $previewParticipant = $participant ?? new Participant([
+                'id' => 0,
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'dan_rank' => 'IV-DAN',
+                'dan_roman' => 'IV',
+                'origin_province' => 'PB PERKEMI',
+                'origin_city' => 'Pusat',
+                'origin_dojo' => 'Pengurus Pusat',
+            ]);
+
+            $previewEnrollment = new EventParticipant([
+                'id' => 0,
+                'event_id' => $event->id,
+                'participant_id' => $previewParticipant->id,
+                'track_code' => 'ALL',
+                'admin_status' => 'verified',
+                'has_seen_welcome' => true,
+                'checked_in_at' => now(),
+                'checkin_status' => 'checked_in',
+            ]);
+
+            return [$previewParticipant, $previewEnrollment];
+        }
+
         abort_unless($participant, 403, 'Akun Anda belum terhubung dengan data peserta. Hubungi penyelenggara.');
 
         $enrollment = EventParticipant::query()
@@ -34,6 +73,10 @@ class EventAttendanceService
 
     public function hasArrivalAttendance(Event $event, EventParticipant $enrollment): bool
     {
+        if ($enrollment->id === 0) {
+            return true;
+        }
+
         $arrivalSessionId = EventSession::query()
             ->where('event_id', $event->id)
             ->where('session_type_code', 'KEHADIRAN_AWAL')
@@ -66,6 +109,10 @@ class EventAttendanceService
 
     public function hasDayAttendance(Event $event, EventParticipant $enrollment, int $dayNumber): bool
     {
+        if ($enrollment->id === 0) {
+            return true;
+        }
+
         $dailySessionId = EventSession::query()
             ->where('event_id', $event->id)
             ->where('day_number', $dayNumber)

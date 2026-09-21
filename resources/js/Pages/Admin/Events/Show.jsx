@@ -287,8 +287,10 @@ export default function Show({
             event_session_type_id: sessionForm.data.event_session_type_id ? parseInt(sessionForm.data.event_session_type_id, 10) : null,
         };
 
+        sessionForm.transform(() => payload);
+
         if (editingSession) {
-            sessionForm.transform(() => payload).put(`/admin/event/${event.id}/sesi/${editingSession.id}`, {
+            sessionForm.put(`/admin/event/${event.id}/sesi/${editingSession.id}`, {
                 preserveScroll: true,
                 onSuccess: () => {
                     setIsSessionModalOpen(false);
@@ -296,7 +298,7 @@ export default function Show({
                 },
             });
         } else {
-            sessionForm.transform(() => payload).post(`/admin/event/${event.id}/sesi`, {
+            sessionForm.post(`/admin/event/${event.id}/sesi`, {
                 preserveScroll: true,
                 onSuccess: () => {
                     setIsSessionModalOpen(false);

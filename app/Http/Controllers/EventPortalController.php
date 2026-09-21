@@ -449,7 +449,20 @@ class EventPortalController extends Controller
     public function moduleFile(Request $request, string $slug, EventModule $module): StreamedResponse|RedirectResponse
     {
         $event = Event::where('slug', $slug)->firstOrFail();
-        [$participant, $enrollment] = $this->attendanceService->resolveParticipant($request->user(), $event);
+        $user = $request->user();
+
+        // Admin, Diktar, and Penyelenggara can preview/download module files directly
+        if ($user && ($user->isAdmin() || in_array($user->role, ['Admin', 'Diktar', 'Penyelenggara'], true))) {
+            abort_unless($module->event_id === $event->id && $module->source_file_path
+                && Storage::disk('local')->exists($module->source_file_path), 404);
+
+            return Storage::disk('local')->response($module->source_file_path, "materi-{$module->id}.pdf", [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline',
+            ]);
+        }
+
+        [$participant, $enrollment] = $this->attendanceService->resolveParticipant($user, $event);
 
         if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {
             return redirect()->route('event.cbt.exam', [$slug, $activeAttempt->package->code]);

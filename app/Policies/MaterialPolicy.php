@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Models\EventParticipant;
 use App\Models\Material;
 use App\Models\User;
 
@@ -68,14 +69,29 @@ class MaterialPolicy
      */
     public function read(User $user, Material $material): bool
     {
-        // Admin, Diktar, and Pemateri can always read / preview any material
-        if ($user->isAdmin() || in_array($user->role, ['Diktar', 'Pemateri'], true)) {
+        // Admin, Diktar, Pemateri, and Penyelenggara can always read / preview any material
+        if ($user->isAdmin() || in_array($user->role, ['Diktar', 'Pemateri', 'Penyelenggara'], true)) {
             return true;
         }
 
         // Readers can only access published materials
         if ($material->status !== 'published') {
             return false;
+        }
+
+        // Allow enrolled participants of any event that incorporates this material
+        $isEnrolledInEventWithMaterial = EventParticipant::query()
+            ->whereHas('participant', fn ($q) => $q->where('user_id', $user->id))
+            ->where('admin_status', 'verified')
+            ->whereHas('event', function ($q) use ($material) {
+                $q->whereHas('modules', fn ($m) => $m->where('material_id', $material->id))
+                    ->orWhereHas('sessions', fn ($s) => $s->where('material_id', $material->id))
+                    ->orWhereHas('learningModules.materials', fn ($lm) => $lm->where('materials.id', $material->id));
+            })
+            ->exists();
+
+        if ($isEnrolledInEventWithMaterial) {
+            return true;
         }
 
         // Check audience restrictions if defined

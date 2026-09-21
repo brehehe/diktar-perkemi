@@ -84,10 +84,15 @@ class EventLearningRoomService
             ->pluck('session_id')->unique()->all();
         $dailySessions = $sessions->where('session_type_code', 'KEHADIRAN_HARIAN')->keyBy('day_number');
         $todayDailySession = $dailySessions->first(fn (EventSession $session) => $session->date?->isToday());
-        $hasArrivalAttendance = $this->attendanceService->hasArrivalAttendance($event, $eventParticipant);
-        $canAccessLearning = $hasArrivalAttendance
-            && (! $todayDailySession || in_array($todayDailySession->id, $attendedSessionIds, true));
-        $canAccessSessionContent = function (EventSession $session) use ($dailySessions, $attendedSessionIds, $eventParticipant, $hasArrivalAttendance): bool {
+        $isAdminOrOrganizer = $user->isAdmin() || in_array($user->role, ['Admin', 'Diktar', 'Penyelenggara'], true);
+        $hasArrivalAttendance = $isAdminOrOrganizer || $this->attendanceService->hasArrivalAttendance($event, $eventParticipant);
+        $canAccessLearning = $isAdminOrOrganizer || ($hasArrivalAttendance
+            && (! $todayDailySession || in_array($todayDailySession->id, $attendedSessionIds, true)));
+        $canAccessSessionContent = function (EventSession $session) use ($dailySessions, $attendedSessionIds, $eventParticipant, $hasArrivalAttendance, $isAdminOrOrganizer): bool {
+            if ($isAdminOrOrganizer) {
+                return true;
+            }
+
             $dailySession = $dailySessions->get($session->day_number);
 
             return $hasArrivalAttendance
@@ -100,8 +105,12 @@ class EventLearningRoomService
             : null;
 
         $visibleEventModules = $event->modules->filter(fn (EventModule $module) => $module->publication_status === 'published'
-            && (! $module->track_codes || in_array($trackCode, $module->track_codes, true)))->values();
-        $canAccessModuleResource = function (EventModule $module) use ($sessions, $attendedSessionIds): bool {
+            && ($isAdminOrOrganizer || ! $module->track_codes || in_array($trackCode, $module->track_codes, true)))->values();
+        $canAccessModuleResource = function (EventModule $module) use ($sessions, $attendedSessionIds, $isAdminOrOrganizer): bool {
+            if ($isAdminOrOrganizer) {
+                return true;
+            }
+
             $requiredSessions = $sessions->where('event_module_id', $module->id)
                 ->filter(fn (EventSession $session) => $session->attendance_setting !== 'none');
 
@@ -114,7 +123,11 @@ class EventLearningRoomService
             ->unique('id')
             ->values();
         $myLearningModules = $availableLearningModules
-            ->filter(function ($lm) use ($trackCode) {
+            ->filter(function ($lm) use ($trackCode, $isAdminOrOrganizer) {
+                if ($isAdminOrOrganizer) {
+                    return true;
+                }
+
                 if (! empty($lm->pivot?->participant_path_id) && $lm->pivot->participant_path_id !== 'all') {
                     return $lm->pivot->participant_path_id === $trackCode;
                 }
@@ -124,7 +137,11 @@ class EventLearningRoomService
 
                 return true;
             })
-            ->filter(function (LearningModule $module) use ($sessions, $attendedSessionIds): bool {
+            ->filter(function (LearningModule $module) use ($sessions, $attendedSessionIds, $isAdminOrOrganizer): bool {
+                if ($isAdminOrOrganizer) {
+                    return true;
+                }
+
                 $requiredSessions = $sessions->where('learning_module_id', $module->id)
                     ->filter(fn (EventSession $session) => $session->attendance_setting !== 'none');
 
@@ -192,7 +209,11 @@ class EventLearningRoomService
             : null;
 
         $myCbtExams = $allPackages
-            ->filter(function ($pkg) use ($trackCode) {
+            ->filter(function ($pkg) use ($trackCode, $isAdminOrOrganizer) {
+                if ($isAdminOrOrganizer) {
+                    return true;
+                }
+
                 if (! empty($pkg->target_tracks) && is_array($pkg->target_tracks)) {
                     return in_array($trackCode, $pkg->target_tracks, true);
                 }
@@ -203,7 +224,7 @@ class EventLearningRoomService
                 return true;
             })
             ->values()
-            ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $canAccessLearning, $hasArrivalAttendance) {
+            ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $canAccessLearning, $hasArrivalAttendance, $isAdminOrOrganizer) {
                 $userAttempts = $attemptsByPackage->get($pkg->id, collect());
 
                 $attemptsCount = $userAttempts->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)->count();
@@ -253,6 +274,11 @@ class EventLearningRoomService
                 } elseif (! $canAccessLearning) {
                     $isAllowed = false;
                     $deniedReason = 'Absensi harian hari ini belum tercatat.';
+                }
+
+                if ($isAdminOrOrganizer) {
+                    $isAllowed = true;
+                    $deniedReason = null;
                 }
 
                 // Exam state for UI

@@ -81,6 +81,9 @@ class ResetEventParticipantResults
             ->when($participantId, fn ($query) => $query->where('participant_id', $participantId));
 
         $filePaths = $enrollments->pluck('certificate_file_path')
+            ->merge($enrollments->pluck('transcript_file_path'))
+            ->merge($enrollments->pluck('secondary_certificate_file_path'))
+            ->merge($enrollments->pluck('secondary_transcript_file_path'))
             ->merge((clone $attempts)->whereNotNull('revision_file_path')->pluck('revision_file_path'))
             ->filter()
             ->unique()
@@ -111,6 +114,15 @@ class ResetEventParticipantResults
                 'certificate_number' => null,
                 'certificate_file_path' => null,
                 'certificate_issued_at' => null,
+                'transcript_number' => null,
+                'transcript_file_path' => null,
+                'transcript_issued_at' => null,
+                'secondary_certificate_number' => null,
+                'secondary_certificate_file_path' => null,
+                'secondary_certificate_issued_at' => null,
+                'secondary_transcript_number' => null,
+                'secondary_transcript_file_path' => null,
+                'secondary_transcript_issued_at' => null,
             ]);
 
         ActivityLog::record(

@@ -79,6 +79,8 @@ class Participant extends Model
                 'graduation_status',
                 'certificate_number',
                 'certificate_issued_at',
+                'transcript_number',
+                'transcript_issued_at',
                 'score_theory',
                 'score_practice',
                 'evaluation_notes',

@@ -41,6 +41,7 @@ export default function LearningRoom({
     myCbtExams = [],
     attendanceRecords = [],
     certificate = null,
+    transcript = null,
 }) {
     usePoll(10000, {
         only: [
@@ -53,6 +54,7 @@ export default function LearningRoom({
             'myCbtExams',
             'attendanceRecords',
             'certificate',
+            'transcript',
         ],
         preserveScroll: true,
         preserveState: true,
@@ -179,7 +181,7 @@ export default function LearningRoom({
                             Riwayat Absensi ({attendanceRecords.length})
                         </button>
                         <button type="button" onClick={() => setActiveTab('sertifikat')} aria-pressed={activeTab === 'sertifikat'} className={`min-h-11 rounded-md px-3 py-1 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] ${activeTab === 'sertifikat' ? 'bg-[#0E2747] text-white' : 'text-[#6B7C93] hover:text-[#0E2747]'}`}>
-                            Sertifikat
+                            Dokumen Kelulusan
                         </button>
                     </div>
                 </div>
@@ -1009,14 +1011,12 @@ export default function LearningRoom({
 
                 {activeTab === 'sertifikat' && (
                     <section aria-labelledby="certificate-title" className="border border-[#DCE7F3] bg-white p-6 sm:p-8">
-                        <h2 id="certificate-title" className="font-display text-2xl font-semibold text-[#0A3F82]">Sertifikat Event</h2>
-                        {certificate?.download_url ? (
-                            <div className="mt-5 space-y-3">
-                                {certificate.number && <p className="text-sm text-[#112743]">Nomor sertifikat: <strong>{certificate.number}</strong></p>}
-                                {certificate.issued_at && <p className="text-sm text-[#6B7C93]">Diterbitkan: {certificate.issued_at}</p>}
-                                <a href={certificate.download_url} className="inline-flex min-h-11 items-center justify-center bg-[#0B63CE] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh sertifikat PDF</a>
-                            </div>
-                        ) : <p className="mt-4 text-sm leading-6 text-[#6B7C93]">Sertifikat belum tersedia. Penyelenggara akan mengunggah PDF setelah proses penilaian selesai.</p>}
+                        <h2 id="certificate-title" className="font-display text-2xl font-semibold text-[#0A3F82]">Dokumen Kelulusan</h2>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7C93]">E-Sertifikat dan E-Transkrip diterbitkan setelah proses penilaian event selesai.</p>
+                        <div className="mt-5 grid gap-4 md:grid-cols-2">
+                            <LearningDocument title="E-Sertifikat" document={certificate} />
+                            <LearningDocument title="E-Transkrip" document={transcript} />
+                        </div>
                     </section>
                 )}
 
@@ -1067,6 +1067,32 @@ export default function LearningRoom({
                 <p>Pustaka Penataran • Persaudaraan Bela Diri Kempo Indonesia (PB PERKEMI) © {new Date().getFullYear()}</p>
             </footer>
         </div>
+    );
+}
+
+function LearningDocument({ title, document }) {
+    return (
+        <section aria-label={title} className="flex min-h-44 flex-col justify-between border border-[#DCE7F3] bg-[#F8FBFF] p-5">
+            <div>
+                <div className="flex items-center gap-2">
+                    <FileText className="size-4 text-[#0B63CE]" aria-hidden="true" />
+                    <h3 className="text-sm font-semibold text-[#0E2747]">{title}</h3>
+                </div>
+                {document?.download_url ? (
+                    <div className="mt-3 space-y-1 text-sm leading-6 text-[#6B7C93]">
+                        <p>{document.number ? `Nomor ${document.number}` : 'Nomor belum dicatat'}</p>
+                        {document.issued_at && <p>Diterbitkan {document.issued_at}</p>}
+                    </div>
+                ) : (
+                    <p className="mt-3 text-sm leading-6 text-[#6B7C93]">Belum tersedia. Penyelenggara akan menerbitkan berkas setelah proses penilaian selesai.</p>
+                )}
+            </div>
+            {document?.download_url && (
+                <a href={document.download_url} className="mt-4 inline-flex min-h-11 items-center justify-center bg-[#0B63CE] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">
+                    Unduh {title} PDF
+                </a>
+            )}
+        </section>
     );
 }
 

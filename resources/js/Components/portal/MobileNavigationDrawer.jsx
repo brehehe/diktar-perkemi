@@ -60,7 +60,7 @@ export default function MobileNavigationDrawer({ isOpen, onClose }) {
         { label: 'Kategori Materi', href: '/kategori', icon: Tag, matchPrefix: '/kategori' },
         ...(user?.role === 'Pemateri' ? [{ label: 'Jadwal & Materi', href: '/pemateri/jadwal', icon: Calendar, matchPrefix: '/pemateri' }] : []),
         ...(user && user?.role !== 'Pemateri' ? [{ label: 'Event Saya', href: '/event-saya', icon: BookOpen, matchPrefixes: ['/event-saya', '/event/'] }] : []),
-        ...(user?.role === 'Peserta' ? [{ label: 'Sertifikat', href: '/sertifikat-saya', icon: Award, exact: true }] : []),
+        ...(user?.role === 'Peserta' ? [{ label: 'Dokumen Kelulusan', href: '/sertifikat-saya', icon: Award, exact: true }] : []),
         { label: 'Untuk Peran Anda', href: '/untuk', icon: Users, matchPrefix: '/untuk' },
         { label: 'Tentang Portal', href: '/tentang', icon: Info, exact: true },
         { label: 'Pusat Bantuan', href: '/bantuan', icon: HelpCircle, exact: true },

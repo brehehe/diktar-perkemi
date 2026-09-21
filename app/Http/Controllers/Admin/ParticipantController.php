@@ -166,6 +166,10 @@ class ParticipantController extends Controller
             'certificate_issued_at' => $ep->certificate_issued_at?->format('d M Y'),
             'certificate_download_url' => $ep->certificate_file_path
                 ? route('admin.event.certificate.download', [$ep->event_id, $ep->id]) : null,
+            'transcript_number' => $ep->transcript_number,
+            'transcript_issued_at' => $ep->transcript_issued_at?->format('d M Y'),
+            'transcript_download_url' => $ep->transcript_file_path
+                ? route('admin.event.transcript.download', [$ep->event_id, $ep->id]) : null,
             'attendances' => ($attendancesByEvent->get($ep->event_id) ?? collect())->map(fn (EventAttendance $attendance) => [
                 'id' => $attendance->id,
                 'session_name' => $attendance->session?->topic ?? 'Sesi dihapus',

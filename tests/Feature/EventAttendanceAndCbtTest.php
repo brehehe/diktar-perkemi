@@ -325,6 +325,15 @@ test('admin can reset all results for one participant without affecting another 
         'certificate_number' => 'CERT-TARGET',
         'certificate_file_path' => 'event-certificates/target.pdf',
         'certificate_issued_at' => today(),
+        'transcript_number' => 'TRANSCRIPT-TARGET',
+        'transcript_file_path' => 'event-transcripts/target.pdf',
+        'transcript_issued_at' => today(),
+        'secondary_certificate_number' => 'CERT-SECONDARY',
+        'secondary_certificate_file_path' => 'event-certificates/secondary.pdf',
+        'secondary_certificate_issued_at' => today(),
+        'secondary_transcript_number' => 'TRANSCRIPT-SECONDARY',
+        'secondary_transcript_file_path' => 'event-transcripts/secondary.pdf',
+        'secondary_transcript_issued_at' => today(),
     ]);
     $otherEnrollment->update(['score_theory' => 90, 'graduation_status' => 'graduated']);
 
@@ -349,7 +358,16 @@ test('admin can reset all results for one participant without affecting another 
         ->and($enrollment->graduation_status)->toBe('in_training')
         ->and($enrollment->certificate_number)->toBeNull()
         ->and($enrollment->certificate_file_path)->toBeNull()
-        ->and($enrollment->certificate_issued_at)->toBeNull();
+        ->and($enrollment->certificate_issued_at)->toBeNull()
+        ->and($enrollment->transcript_number)->toBeNull()
+        ->and($enrollment->transcript_file_path)->toBeNull()
+        ->and($enrollment->transcript_issued_at)->toBeNull()
+        ->and($enrollment->secondary_certificate_number)->toBeNull()
+        ->and($enrollment->secondary_certificate_file_path)->toBeNull()
+        ->and($enrollment->secondary_certificate_issued_at)->toBeNull()
+        ->and($enrollment->secondary_transcript_number)->toBeNull()
+        ->and($enrollment->secondary_transcript_file_path)->toBeNull()
+        ->and($enrollment->secondary_transcript_issued_at)->toBeNull();
     expect((float) $otherEnrollment->fresh()->score_theory)->toBe(90.0);
     $this->assertDatabaseHas('activity_logs', [
         'event' => 'event.participant_results.reset',
@@ -439,6 +457,9 @@ test('admin can reset all participant results without deleting event setup', fun
         'certificate_number' => 'CERT-ALL',
         'certificate_file_path' => 'event-certificates/all.pdf',
         'certificate_issued_at' => today(),
+        'transcript_number' => 'TRANSCRIPT-ALL',
+        'transcript_file_path' => 'event-transcripts/all.pdf',
+        'transcript_issued_at' => today(),
     ]);
     $package = CbtExamPackage::firstOrFail();
     $attempt = CbtExamAttempt::create([
@@ -489,6 +510,7 @@ test('admin can reset all participant results without deleting event setup', fun
         ->and($event->eventParticipants()->whereNotNull('score_theory')->count())->toBe(0)
         ->and($event->eventParticipants()->whereNotNull('score_practice')->count())->toBe(0)
         ->and($event->eventParticipants()->whereNotNull('certificate_file_path')->count())->toBe(0)
+        ->and($event->eventParticipants()->whereNotNull('transcript_file_path')->count())->toBe(0)
         ->and(CbtExamAttempt::where('event_id', $event->id)->count())->toBe(0)
         ->and(CbtProctoringEvent::where('event_id', $event->id)->count())->toBe(0);
     $this->assertDatabaseHas('activity_logs', [

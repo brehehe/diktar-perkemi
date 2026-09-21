@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\CbtPackageController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EventCertificateController;
 use App\Http\Controllers\Admin\EventController;
+use App\Http\Controllers\Admin\EventDocumentNumberSettingController;
 use App\Http\Controllers\Admin\EventReferenceController;
 use App\Http\Controllers\Admin\ExamRevisionController;
 use App\Http\Controllers\Admin\HelpController;
@@ -120,6 +121,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/event/{event}', [EventController::class, 'show'])->name('event.show');
         Route::get('/event/{event}/edit', [EventController::class, 'edit'])->name('event.edit');
         Route::put('/event/{event}', [EventController::class, 'update'])->name('event.update');
+        Route::put('/event/{event}/nomor-dokumen', [EventDocumentNumberSettingController::class, 'update'])->name('event.document-numbers.update');
         Route::delete('/event/{event}', [EventController::class, 'destroy'])->name('event.destroy');
 
         // Event Sub-actions (Rundown, Modul, Peserta)
@@ -161,8 +163,14 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::put('/event/{event}/peserta/{eventParticipant}', [EventController::class, 'updateParticipant'])->name('event.participant.update');
         Route::delete('/event/{event}/peserta/{eventParticipant}/hasil', [AttendanceController::class, 'destroyParticipantResults'])->name('event.participant-results.destroy');
         Route::delete('/event/{event}/peserta/{eventParticipant}', [EventController::class, 'removeParticipant'])->name('event.participant.destroy');
+        Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat/generate', [EventCertificateController::class, 'generateCertificate'])->name('event.certificate.generate');
         Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'store'])->name('event.certificate.store');
         Route::get('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'download'])->name('event.certificate.download');
+        Route::delete('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'destroyCertificate'])->name('event.certificate.destroy');
+        Route::post('/event/{event}/peserta/{eventParticipant}/transkrip/generate', [EventCertificateController::class, 'generateTranscript'])->name('event.transcript.generate');
+        Route::post('/event/{event}/peserta/{eventParticipant}/transkrip', [EventCertificateController::class, 'storeTranscript'])->name('event.transcript.store');
+        Route::get('/event/{event}/peserta/{eventParticipant}/transkrip', [EventCertificateController::class, 'downloadTranscript'])->name('event.transcript.download');
+        Route::delete('/event/{event}/peserta/{eventParticipant}/transkrip', [EventCertificateController::class, 'destroyTranscript'])->name('event.transcript.destroy');
         Route::get('/event/{event}/revisi/{attempt}/pdf', [ExamRevisionController::class, 'download'])->name('event.revision.download');
         Route::get('/event/{event}/revisi/{attempt}/baca', [ExamRevisionController::class, 'reader'])->name('event.revision.reader');
         Route::get('/event/{event}/revisi/{attempt}/pratinjau', [ExamRevisionController::class, 'preview'])->name('event.revision.preview');
@@ -270,6 +278,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/event/{slug}/ruang-belajar', [EventPortalController::class, 'learningRoom'])->name('event.learning-room');
     Route::get('/event/{slug}/scan', [EventPortalController::class, 'scan'])->name('event.scan');
     Route::get('/event/{slug}/sertifikat', [EventPortalController::class, 'downloadCertificate'])->name('event.certificate.mine');
+    Route::get('/event/{slug}/transkrip', [EventPortalController::class, 'downloadTranscript'])->name('event.transcript.mine');
     Route::get('/event/{slug}/materi/{module}/pdf', [EventPortalController::class, 'moduleFile'])->name('event.module.file');
     Route::post('/event/{slug}/absensi/catat', [EventPortalController::class, 'recordAttendance'])->name('event.attendance.record');
     Route::get('/event/{slug}/cbt/{packageCode}', [EventPortalController::class, 'cbtExam'])->name('event.cbt.exam');

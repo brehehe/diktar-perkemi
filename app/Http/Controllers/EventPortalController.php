@@ -17,6 +17,7 @@ use App\Models\EventSession;
 use App\Models\Participant;
 use App\Models\QuestionBank;
 use App\Services\EventAttendanceService;
+use App\Services\EventDocumentGenerator;
 use App\Services\EventLearningRoomService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -144,6 +145,9 @@ class EventPortalController extends Controller
                 'certificate_number' => $enrollment->certificate_number,
                 'certificate_download_url' => $enrollment->certificate_file_path
                     ? route('event.certificate.mine', $enrollment->event->slug) : null,
+                'transcript_number' => $enrollment->transcript_number,
+                'transcript_download_url' => $enrollment->transcript_file_path
+                    ? route('event.transcript.mine', $enrollment->event->slug) : null,
             ]),
         ]);
     }
@@ -155,23 +159,60 @@ class EventPortalController extends Controller
             return redirect()->route('event.cbt.exam', [$activeAttempt->event->slug, $activeAttempt->package->code]);
         }
 
-        $certificates = $participant ? EventParticipant::with('event')
+        $documents = $participant ? EventParticipant::with('event')
             ->where('participant_id', $participant->id)
             ->where('admin_status', 'verified')
-            ->whereNotNull('certificate_file_path')
+            ->where(function ($query) {
+                $query->whereNotNull('certificate_file_path')
+                    ->orWhereNotNull('transcript_file_path')
+                    ->orWhereNotNull('secondary_certificate_file_path')
+                    ->orWhereNotNull('secondary_transcript_file_path');
+            })
             ->whereHas('event')
             ->get()
-            ->sortByDesc(fn (EventParticipant $enrollment) => $enrollment->certificate_issued_at)
+            ->sortByDesc(fn (EventParticipant $enrollment) => max(
+                $enrollment->certificate_issued_at?->getTimestamp() ?? 0,
+                $enrollment->transcript_issued_at?->getTimestamp() ?? 0,
+                $enrollment->secondary_certificate_issued_at?->getTimestamp() ?? 0,
+                $enrollment->secondary_transcript_issued_at?->getTimestamp() ?? 0,
+            ))
             ->values() : collect();
 
         return Inertia::render('Event/Certificates', [
-            'certificates' => $certificates->map(fn (EventParticipant $enrollment) => [
+            'certificates' => $documents->map(fn (EventParticipant $enrollment) => [
                 'id' => $enrollment->id,
                 'event_name' => $enrollment->event->name,
                 'event_date' => $enrollment->event->date_formatted,
                 'certificate_number' => $enrollment->certificate_number,
                 'issued_at' => $enrollment->certificate_issued_at?->format('d M Y'),
-                'download_url' => route('event.certificate.mine', $enrollment->event->slug),
+                'download_url' => $enrollment->certificate_file_path
+                    ? route('event.certificate.mine', $enrollment->event->slug) : null,
+                'transcript_number' => $enrollment->transcript_number,
+                'transcript_issued_at' => $enrollment->transcript_issued_at?->format('d M Y'),
+                'transcript_download_url' => $enrollment->transcript_file_path
+                    ? route('event.transcript.mine', $enrollment->event->slug) : null,
+                'document_variants' => collect(EventDocumentGenerator::documentTracks($enrollment->track_code))
+                    ->map(function (string $trackCode) use ($enrollment): array {
+                        $certificateNumberField = EventDocumentGenerator::documentField('certificate', 'number', $enrollment->track_code, $trackCode);
+                        $certificatePathField = EventDocumentGenerator::documentField('certificate', 'file_path', $enrollment->track_code, $trackCode);
+                        $certificateIssuedAtField = EventDocumentGenerator::documentField('certificate', 'issued_at', $enrollment->track_code, $trackCode);
+                        $transcriptNumberField = EventDocumentGenerator::documentField('transcript', 'number', $enrollment->track_code, $trackCode);
+                        $transcriptPathField = EventDocumentGenerator::documentField('transcript', 'file_path', $enrollment->track_code, $trackCode);
+                        $transcriptIssuedAtField = EventDocumentGenerator::documentField('transcript', 'issued_at', $enrollment->track_code, $trackCode);
+
+                        return [
+                            'track_code' => $trackCode,
+                            'label' => str_replace('Sertifikat ', '', EventDocumentGenerator::NUMBER_LABELS[$trackCode] ?? $trackCode),
+                            'certificate_number' => $enrollment->{$certificateNumberField},
+                            'certificate_issued_at' => $enrollment->{$certificateIssuedAtField}?->format('d M Y'),
+                            'certificate_download_url' => $enrollment->{$certificatePathField}
+                                ? route('event.certificate.mine', [$enrollment->event->slug, 'document_track' => $trackCode]) : null,
+                            'transcript_number' => $enrollment->{$transcriptNumberField},
+                            'transcript_issued_at' => $enrollment->{$transcriptIssuedAtField}?->format('d M Y'),
+                            'transcript_download_url' => $enrollment->{$transcriptPathField}
+                                ? route('event.transcript.mine', [$enrollment->event->slug, 'document_track' => $trackCode]) : null,
+                        ];
+                    })->all(),
             ]),
         ]);
     }
@@ -368,12 +409,40 @@ class EventPortalController extends Controller
             return redirect()->route('event.cbt.exam', [$slug, $activeAttempt->package->code]);
         }
 
-        abort_unless($enrollment->certificate_file_path
-            && Storage::disk('local')->exists($enrollment->certificate_file_path), 404);
+        $requestedTrack = $request->query('document_track');
+        abort_unless($requestedTrack === null || is_string($requestedTrack), 404);
+        $documentTrack = EventDocumentGenerator::resolveDocumentTrack($enrollment->track_code, $requestedTrack);
+        abort_unless($documentTrack, 404);
+        $pathField = EventDocumentGenerator::documentField('certificate', 'file_path', $enrollment->track_code, $documentTrack);
+        $path = $enrollment->{$pathField};
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
 
         return Storage::disk('local')->download(
-            $enrollment->certificate_file_path,
-            "sertifikat-{$event->slug}.pdf"
+            $path,
+            "sertifikat-{$event->slug}-{$documentTrack}.pdf"
+        );
+    }
+
+    public function downloadTranscript(Request $request, string $slug): StreamedResponse|RedirectResponse
+    {
+        $event = Event::where('slug', $slug)->firstOrFail();
+        [$participant, $enrollment] = $this->attendanceService->resolveParticipant($request->user(), $event);
+
+        if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {
+            return redirect()->route('event.cbt.exam', [$slug, $activeAttempt->package->code]);
+        }
+
+        $requestedTrack = $request->query('document_track');
+        abort_unless($requestedTrack === null || is_string($requestedTrack), 404);
+        $documentTrack = EventDocumentGenerator::resolveDocumentTrack($enrollment->track_code, $requestedTrack);
+        abort_unless($documentTrack, 404);
+        $pathField = EventDocumentGenerator::documentField('transcript', 'file_path', $enrollment->track_code, $documentTrack);
+        $path = $enrollment->{$pathField};
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->download(
+            $path,
+            "transkrip-{$event->slug}-{$documentTrack}.pdf"
         );
     }
 

@@ -23,6 +23,8 @@ use Illuminate\Support\Carbon;
 
 class AdminEventDetailService
 {
+    public function __construct(private readonly EventDocumentGenerator $documentGenerator) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -160,6 +162,7 @@ class AdminEventDetailService
             'dan_roman' => $ep->participant?->dan_roman ?? '-',
             'track_code' => $ep->track?->code ?? '-',
             'track_name' => $ep->track?->name ?? '-',
+            'document_variants' => $this->documentVariants($event, $ep),
             'track_badge' => $ep->track?->badge_color ?? 'bg-slate-100 text-slate-700',
             'is_dual_track' => $ep->track?->is_dual_track ?? false,
             'rotation_group' => $ep->rotation_group,
@@ -171,9 +174,21 @@ class AdminEventDetailService
             'final_grade' => $ep->final_grade,
             'graduation_status' => $ep->graduation_status,
             'certificate_number' => $ep->certificate_number,
+            'suggested_certificate_number' => $this->documentGenerator->suggestedNumber($event, $ep, 'certificate'),
+            'configured_certificate_number' => $this->documentGenerator->configuredNumber($event, $ep, 'certificate'),
             'has_certificate_file' => (bool) $ep->certificate_file_path,
             'certificate_download_url' => $ep->certificate_file_path
                 ? route('admin.event.certificate.download', [$event, $ep]) : null,
+            'can_generate_certificate' => EventDocumentGenerator::supportsForEvent($event, 'certificate', EventDocumentGenerator::documentTracks($ep->track_code)[0] ?? null),
+            'certificate_generation_unavailable_reason' => EventDocumentGenerator::generationUnavailableReason($event, 'certificate', EventDocumentGenerator::documentTracks($ep->track_code)[0] ?? null),
+            'transcript_number' => $ep->transcript_number,
+            'suggested_transcript_number' => $this->documentGenerator->suggestedNumber($event, $ep, 'transcript'),
+            'configured_transcript_number' => $this->documentGenerator->configuredNumber($event, $ep, 'transcript'),
+            'has_transcript_file' => (bool) $ep->transcript_file_path,
+            'transcript_download_url' => $ep->transcript_file_path
+                ? route('admin.event.transcript.download', [$event, $ep]) : null,
+            'can_generate_transcript' => EventDocumentGenerator::supportsForEvent($event, 'transcript', EventDocumentGenerator::documentTracks($ep->track_code)[0] ?? null),
+            'transcript_generation_unavailable_reason' => EventDocumentGenerator::generationUnavailableReason($event, 'transcript', EventDocumentGenerator::documentTracks($ep->track_code)[0] ?? null),
             'has_seen_welcome' => $ep->has_seen_welcome,
             'checked_in_at' => $ep->checked_in_at?->format('H:i, d M Y'),
             'checkin_status' => $ep->checkin_status ?? ($ep->checked_in_at ? 'checked_in' : 'registered'),
@@ -403,11 +418,23 @@ class AdminEventDetailService
             'present_attendances' => $attendances->where('status', 'present')->count(),
             'cbt_packages_count' => $cbtPackages->count(),
             'cbt_attempts_count' => $cbtPackages->sum('attempts_count'),
-            'certificate_files_count' => $event->eventParticipants->whereNotNull('certificate_file_path')->count(),
+            'certificate_files_count' => $event->eventParticipants->whereNotNull('certificate_file_path')->count()
+                + $event->eventParticipants->whereNotNull('secondary_certificate_file_path')->count(),
+            'transcript_files_count' => $event->eventParticipants->whereNotNull('transcript_file_path')->count()
+                + $event->eventParticipants->whereNotNull('secondary_transcript_file_path')->count(),
+            'complete_document_sets_count' => $event->eventParticipants
+                ->filter(fn (EventParticipant $participant) => $participant->certificate_file_path && $participant->transcript_file_path)
+                ->count()
+                + $event->eventParticipants
+                    ->filter(fn (EventParticipant $participant) => $participant->secondary_certificate_file_path && $participant->secondary_transcript_file_path)
+                    ->count(),
             'proctoring_events_count' => CbtProctoringEvent::where('event_id', $event->id)->count(),
         ];
 
         return [
+            'documentNumberLabels' => EventDocumentGenerator::NUMBER_LABELS,
+            'documentNumberDefaults' => $this->documentGenerator->adminNumberSettings(),
+            'documentNumberOverrides' => $event->document_number_settings ?? [],
             'event' => [
                 'id' => $event->id,
                 'name' => $event->name,
@@ -502,5 +529,39 @@ class AdminEventDetailService
             'stats' => $stats,
         ];
 
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function documentVariants(Event $event, EventParticipant $enrollment): array
+    {
+        $variants = [];
+
+        foreach (EventDocumentGenerator::documentTracks($enrollment->track_code) as $trackCode) {
+            $certificateNumberField = EventDocumentGenerator::documentField('certificate', 'number', $enrollment->track_code, $trackCode);
+            $certificatePathField = EventDocumentGenerator::documentField('certificate', 'file_path', $enrollment->track_code, $trackCode);
+            $transcriptNumberField = EventDocumentGenerator::documentField('transcript', 'number', $enrollment->track_code, $trackCode);
+            $transcriptPathField = EventDocumentGenerator::documentField('transcript', 'file_path', $enrollment->track_code, $trackCode);
+
+            $variants[] = [
+                'track_code' => $trackCode,
+                'label' => str_replace('Sertifikat ', '', EventDocumentGenerator::NUMBER_LABELS[$trackCode] ?? $trackCode),
+                'certificate_number' => $enrollment->{$certificateNumberField},
+                'suggested_certificate_number' => $this->documentGenerator->suggestedNumber($event, $enrollment, 'certificate', $trackCode),
+                'configured_certificate_number' => $this->documentGenerator->configuredNumber($event, $enrollment, 'certificate', $trackCode),
+                'certificate_download_url' => $enrollment->{$certificatePathField}
+                    ? route('admin.event.certificate.download', [$event, $enrollment, 'document_track' => $trackCode]) : null,
+                'can_generate_certificate' => EventDocumentGenerator::supportsForEvent($event, 'certificate', $trackCode),
+                'certificate_generation_unavailable_reason' => EventDocumentGenerator::generationUnavailableReason($event, 'certificate', $trackCode),
+                'transcript_number' => $enrollment->{$transcriptNumberField},
+                'suggested_transcript_number' => $this->documentGenerator->suggestedNumber($event, $enrollment, 'transcript', $trackCode),
+                'configured_transcript_number' => $this->documentGenerator->configuredNumber($event, $enrollment, 'transcript', $trackCode),
+                'transcript_download_url' => $enrollment->{$transcriptPathField}
+                    ? route('admin.event.transcript.download', [$event, $enrollment, 'document_track' => $trackCode]) : null,
+                'can_generate_transcript' => EventDocumentGenerator::supportsForEvent($event, 'transcript', $trackCode),
+                'transcript_generation_unavailable_reason' => EventDocumentGenerator::generationUnavailableReason($event, 'transcript', $trackCode),
+            ];
+        }
+
+        return $variants;
     }
 }

@@ -16,10 +16,14 @@ import {
     Save,
     Sparkles,
     ArrowUpRight,
+    FileBadge,
 } from 'lucide-react';
 
-export default function Index({ settings = {} }) {
-    const [activeTab, setActiveTab] = useState('identity');
+export default function Index({ settings = {}, documentNumberLabels = {}, documentNumberDefaults = {} }) {
+    const [activeTab, setActiveTab] = useState(() => {
+        if (typeof window === 'undefined') return 'identity';
+        return new URLSearchParams(window.location.search).get('tab') === 'certificate_numbers' ? 'certificate_numbers' : 'identity';
+    });
 
     // Tab 1: Identitas
     const identityForm = useForm({
@@ -54,6 +58,14 @@ export default function Index({ settings = {} }) {
         notification_email: settings.notification_email || 'notifikasi@perkemi.id',
     });
 
+    const documentNumberForm = useForm({
+        settings_group: 'certificate_numbers',
+        ...Object.fromEntries(Object.entries(documentNumberDefaults).flatMap(([trackCode, values]) => [
+            [`document_number_${trackCode.toLowerCase()}_prefix`, values.prefix],
+            [`document_number_${trackCode.toLowerCase()}_start`, values.start],
+        ])),
+    });
+
     const handleIdentitySubmit = (e) => {
         e.preventDefault();
         identityForm.put('/admin/pengaturan');
@@ -79,11 +91,17 @@ export default function Index({ settings = {} }) {
         notificationForm.put('/admin/pengaturan');
     };
 
+    const handleDocumentNumberSubmit = (event) => {
+        event.preventDefault();
+        documentNumberForm.put('/admin/pengaturan', { preserveScroll: true });
+    };
+
     const tabs = [
         { id: 'identity', label: 'Identitas Portal', icon: Building },
         { id: 'landing', label: 'Tampilan Beranda', icon: LayoutTemplate },
         { id: 'access', label: 'Akses & Registrasi', icon: UserCheck },
         { id: 'notification', label: 'Notifikasi & Email', icon: Bell },
+        { id: 'certificate_numbers', label: 'Nomor Sertifikat', icon: FileBadge },
     ];
 
     return (
@@ -304,6 +322,34 @@ export default function Index({ settings = {} }) {
                             >
                                 Simpan Pengaturan Surel
                             </Button>
+                        </div>
+                    </div>
+                </form>
+            )}
+
+            {activeTab === 'certificate_numbers' && (
+                <form onSubmit={handleDocumentNumberSubmit} className="max-w-5xl space-y-5">
+                    <div className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
+                        <h2 className="font-display text-lg font-semibold text-[#0E2747]">Default nomor sertifikat dan transkrip</h2>
+                        <p className="mt-2 text-sm leading-6 text-[#6B7C93]">Atur kode surat dan nomor urut awal untuk enam kategori. Format hasil: nomor urut/kode surat/bulan Romawi/tahun. Bulan dan tahun mengikuti tanggal akhir kegiatan. Event dapat memakai default ini atau membuat pengaturan khusus.</p>
+                        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                            {Object.entries(documentNumberLabels).map(([trackCode, label]) => {
+                                const prefixKey = `document_number_${trackCode.toLowerCase()}_prefix`;
+                                const startKey = `document_number_${trackCode.toLowerCase()}_start`;
+
+                                return (
+                                    <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4">
+                                        <legend className="px-1 text-sm font-semibold text-[#0E2747]">{label} ({trackCode})</legend>
+                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                                            <Input id={prefixKey} label="Kode surat" value={documentNumberForm.data[prefixKey] ?? ''} onChange={(event) => documentNumberForm.setData(prefixKey, event.target.value.toUpperCase())} error={documentNumberForm.errors[prefixKey]} required maxLength={32} />
+                                            <Input id={startKey} label="Nomor awal" type="number" min="1" max="999999" value={documentNumberForm.data[startKey] ?? ''} onChange={(event) => documentNumberForm.setData(startKey, event.target.value)} error={documentNumberForm.errors[startKey]} required />
+                                        </div>
+                                    </fieldset>
+                                );
+                            })}
+                        </div>
+                        <div className="mt-5 flex justify-end border-t border-[#DCE7F3] pt-4">
+                            <Button type="submit" icon={Save} loading={documentNumberForm.processing}>Simpan Default Nomor</Button>
                         </div>
                     </div>
                 </form>

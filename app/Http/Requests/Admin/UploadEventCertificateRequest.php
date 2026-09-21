@@ -26,6 +26,7 @@ class UploadEventCertificateRequest extends FormRequest
         return [
             'certificate' => ['required', 'file', 'mimes:pdf', 'max:10240'],
             'certificate_number' => ['nullable', 'string', 'max:100'],
+            'document_track' => ['nullable', 'string', 'max:10'],
         ];
     }
 

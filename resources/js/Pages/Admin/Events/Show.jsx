@@ -56,6 +56,7 @@ import {
     Activity,
     AlertTriangle,
     RotateCcw,
+    Save,
 } from 'lucide-react';
 
 export default function Show({
@@ -81,6 +82,9 @@ export default function Show({
     legends = [],
     publishedMaterials = [],
     stats = {},
+    documentNumberLabels = {},
+    documentNumberDefaults = {},
+    documentNumberOverrides = {},
 }) {
     const isPortalAdmin = usePage().props.auth?.user?.is_admin;
     // Active tab state (Exact 10 Tabs)
@@ -96,6 +100,13 @@ export default function Show({
     }, [activeTab]);
     const [selectedDay, setSelectedDay] = useState(1);
     const [attendanceSessionFilter, setAttendanceSessionFilter] = useState('all');
+    const [credentialSearch, setCredentialSearch] = useState('');
+    const documentNumberForm = useForm({
+        numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
+            prefix: documentNumberOverrides[trackCode]?.prefix ?? '',
+            start: documentNumberOverrides[trackCode]?.start ?? '',
+        }])),
+    });
     const roomForm = useForm({ name: '' });
     const trackForm = useForm({ code: '', name: '', description: '' });
     const legendForm = useForm({ acronym: '', full_name: '', category: 'istilah', description: '' });
@@ -533,7 +544,7 @@ export default function Show({
         { id: 'peserta', label: 'Peserta', count: stats.total_participants },
         { id: 'absensi', label: 'Absensi', count: stats.total_attendances || attendances.length },
         { id: 'pemateri', label: 'Pemateri', count: stats.total_speakers },
-        { id: 'sertifikat', label: 'E-Sertifikat', count: stats.certificate_files_count },
+        { id: 'sertifikat', label: 'E-Sertifikat & Transkrip', count: (stats.certificate_files_count || 0) + (stats.transcript_files_count || 0) },
         { id: 'revisi', label: 'Revisi Ujian', count: examRevisions.length },
         { id: 'pengawasan', label: 'Pengawasan CBT', count: stats.proctoring_events_count || proctoringEvents.length },
         { id: 'legenda', label: 'Legenda & Singkatan', count: null },
@@ -615,6 +626,21 @@ export default function Show({
         }
         return attendances.filter((att) => String(att.session_id) === String(attendanceSessionFilter));
     }, [attendances, attendanceSessionFilter]);
+
+    const credentialParticipants = useMemo(() => {
+        const query = credentialSearch.trim().toLocaleLowerCase('id-ID');
+
+        if (!query) {
+            return participants;
+        }
+
+        return participants.filter((participant) => [
+            participant.name,
+            participant.kenshi_id,
+            participant.track_code,
+            participant.track_name,
+        ].some((value) => String(value || '').toLocaleLowerCase('id-ID').includes(query)));
+    }, [credentialSearch, participants]);
 
     const handleAttendanceReset = () => {
         if (!attendanceResetTarget) return;
@@ -1629,7 +1655,7 @@ export default function Show({
                                                             })}
                                                             className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#B42355] hover:bg-[#FFF1F5] focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
                                                             aria-label={`Reset seluruh hasil ${p.name}`}
-                                                            title="Reset presensi, nilai, ujian, revisi, dan sertifikat"
+                                                            title="Reset presensi, nilai, ujian, revisi, serta dokumen kelulusan"
                                                         >
                                                             <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
                                                         </button>
@@ -2175,20 +2201,119 @@ export default function Show({
                 )}
 
                 {activeTab === 'sertifikat' && (
-                    <section aria-labelledby="certificate-heading" className="space-y-5">
-                        <div className="border-b border-[#DCE7F3] pb-4">
-                            <h2 id="certificate-heading" className="font-display text-xl font-semibold text-[#0A3F82]">E-Sertifikat Peserta</h2>
-                            <p className="mt-2 text-sm text-[#6B7C93]">Unggah PDF per peserta. Berkas tersimpan privat dan hanya tersedia untuk peserta terkait.</p>
+                    <section aria-labelledby="certificate-heading" className="space-y-6">
+                        <div className="grid gap-5 border-b border-[#DCE7F3] pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.65fr)] lg:items-end">
+                            <div className="max-w-3xl">
+                                <div className="mb-3 flex items-center gap-3 text-sm font-semibold text-[#0B63CE]">
+                                    <span className="h-px w-8 bg-[#0B63CE]" aria-hidden="true" />
+                                    Dokumen kelulusan peserta
+                                </div>
+                                <h2 id="certificate-heading" className="text-balance font-display text-2xl font-semibold text-[#0A3F82] sm:text-3xl">E-Sertifikat & E-Transkrip</h2>
+                                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6B7C93]">Kelola PDF final per peserta. Sertifikat memuat pengukuhan, sedangkan transkrip memuat rekap kompetensi dan beban JP. Seluruh berkas disimpan privat.</p>
+                                <p className="mt-3 max-w-2xl border-l-2 border-[#0B63CE] bg-[#EAF5FF] px-3 py-2 text-xs leading-5 text-[#112743]">Nomor usulan mengikuti kode surat dan nomor awal yang diatur di bawah, sedangkan bulan Romawi dan tahun mengikuti tanggal akhir event. Template gambar saat ini bertanggal 27 September 2026 dan berlaku hingga 2029; generate PDF otomatis hanya tersedia untuk event bertanggal akhir tersebut. Tempat/tanggal lahir belum tersimpan dan tetap kosong. Periksa PDF sebelum dibagikan.</p>
+                            </div>
+                            <div className="grid grid-cols-2 border border-[#DCE7F3] bg-white" aria-label="Panduan format dokumen">
+                                <div className="border-r border-[#DCE7F3] p-4">
+                                    <Award className="size-5 text-[#0B63CE]" aria-hidden="true" />
+                                    <p className="mt-3 text-sm font-semibold text-[#0E2747]">E-Sertifikat</p>
+                                    <p className="mt-1 text-xs leading-5 text-[#6B7C93]">Pengukuhan, identitas, dan masa berlaku.</p>
+                                </div>
+                                <div className="p-4">
+                                    <FileText className="size-5 text-[#7957D5]" aria-hidden="true" />
+                                    <p className="mt-3 text-sm font-semibold text-[#0E2747]">E-Transkrip</p>
+                                    <p className="mt-1 text-xs leading-5 text-[#6B7C93]">Modul, fokus kompetensi, dan total JP.</p>
+                                </div>
+                            </div>
                         </div>
+
+                        <details className="group border border-[#DCE7F3] bg-white">
+                            <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 p-4 font-semibold text-[#0E2747] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] sm:px-5">
+                                <span>Pengaturan nomor surat event</span>
+                                <span className="text-xs font-normal text-[#6B7C93]">Kosong = default Admin</span>
+                            </summary>
+                            <form onSubmit={(submitEvent) => { submitEvent.preventDefault(); documentNumberForm.put(`/admin/event/${event.id}/nomor-dokumen`, { preserveScroll: true }); }} className="border-t border-[#DCE7F3] p-4 sm:p-5">
+                                <p className="max-w-3xl text-sm leading-6 text-[#6B7C93]">Isi hanya kategori yang perlu berbeda dari default Admin. Nomor urut dihitung per jalur peserta dalam event. Jika ada event lain dengan kode, bulan, dan tahun yang sama, atur nomor awal agar tidak bertabrakan. Nomor dokumen yang sudah terbit tidak diubah.</p>
+                                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                                    {Object.entries(documentNumberLabels).map(([trackCode, label]) => (
+                                        <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4">
+                                            <legend className="px-1 text-sm font-semibold text-[#0E2747]">{label} ({trackCode})</legend>
+                                            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                                                <Input
+                                                    id={`event-number-${trackCode}-prefix`}
+                                                    label="Kode surat khusus"
+                                                    value={documentNumberForm.data.numbers[trackCode]?.prefix ?? ''}
+                                                    onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], prefix: change.target.value.toUpperCase() } })}
+                                                    placeholder={documentNumberDefaults[trackCode]?.prefix || ''}
+                                                    error={documentNumberForm.errors[`numbers.${trackCode}.prefix`]}
+                                                    maxLength={32}
+                                                />
+                                                <Input
+                                                    id={`event-number-${trackCode}-start`}
+                                                    label="Nomor awal khusus"
+                                                    type="number"
+                                                    min="1"
+                                                    max="999999"
+                                                    value={documentNumberForm.data.numbers[trackCode]?.start ?? ''}
+                                                    onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], start: change.target.value } })}
+                                                    placeholder={String(documentNumberDefaults[trackCode]?.start || 1)}
+                                                    error={documentNumberForm.errors[`numbers.${trackCode}.start`]}
+                                                />
+                                            </div>
+                                        </fieldset>
+                                    ))}
+                                </div>
+                                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#DCE7F3] pt-4">
+                                    {isPortalAdmin ? <Link href="/admin/pengaturan?tab=certificate_numbers" className="inline-flex min-h-11 items-center text-sm font-semibold text-[#0B63CE] hover:underline">Ubah default Admin</Link> : <span className="text-xs text-[#6B7C93]">Default hanya dapat diubah oleh Admin.</span>}
+                                    <Button type="submit" icon={Save} loading={documentNumberForm.processing}>Simpan Nomor Event</Button>
+                                </div>
+                            </form>
+                        </details>
+
+                        <dl className="grid border-y border-[#DCE7F3] bg-white sm:grid-cols-2 xl:grid-cols-4">
+                            {[
+                                { label: 'Peserta', value: participants.length },
+                                { label: 'Sertifikat tersedia', value: stats.certificate_files_count || 0 },
+                                { label: 'Transkrip tersedia', value: stats.transcript_files_count || 0 },
+                                { label: 'Paket lengkap', value: stats.complete_document_sets_count || 0 },
+                            ].map((item, index) => (
+                                <div key={item.label} className={`px-5 py-4 ${index < 3 ? 'border-b border-[#DCE7F3] sm:border-b-0 sm:border-r' : ''}`}>
+                                    <dt className="text-xs font-medium text-[#6B7C93]">{item.label}</dt>
+                                    <dd className="mt-1 font-mono text-2xl font-semibold tabular-nums text-[#0E2747]">{item.value}</dd>
+                                </div>
+                            ))}
+                        </dl>
+
                         {participants.length === 0 ? (
-                            <p className="border border-[#DCE7F3] bg-white p-6 text-sm text-[#6B7C93]">Belum ada peserta pada event ini. Tambahkan peserta melalui tab Peserta.</p>
+                            <div className="border border-[#DCE7F3] bg-white p-6 sm:p-8">
+                                <h3 className="font-display text-lg font-semibold text-[#0E2747]">Belum ada peserta</h3>
+                                <p className="mt-2 text-sm leading-6 text-[#6B7C93]">Tambahkan peserta melalui tab Peserta sebelum mengunggah dokumen kelulusan.</p>
+                            </div>
                         ) : (
-                            <TableSurface className="shadow-none">
-                                <table className="w-full min-w-[900px] text-left text-sm">
-                                    <thead className="bg-[#F8FBFF] text-xs font-semibold uppercase tracking-wide text-[#6B7C93]"><tr><th scope="col" className="px-4 py-3">Peserta</th><th scope="col" className="px-4 py-3">Berkas saat ini</th><th scope="col" className="px-4 py-3">Unggah PDF dan nomor sertifikat</th></tr></thead>
-                                    <tbody className="divide-y divide-[#DCE7F3]">{participants.map((participant) => <CertificateUploadRow key={participant.id} eventId={event.id} participant={participant} />)}</tbody>
-                                </table>
-                            </TableSurface>
+                            <div className="space-y-4">
+                                <div className="max-w-xl">
+                                    <Input
+                                        id="credential-participant-search"
+                                        type="search"
+                                        label="Cari peserta"
+                                        name="credential_participant_search"
+                                        autoComplete="off"
+                                        value={credentialSearch}
+                                        onChange={(event) => setCredentialSearch(event.target.value)}
+                                        placeholder="Nama, NIK, atau jalur peserta…"
+                                        icon={Search}
+                                    />
+                                </div>
+
+                                {credentialParticipants.length === 0 ? (
+                                    <p role="status" className="border border-[#DCE7F3] bg-white p-6 text-sm text-[#6B7C93]">Tidak ada peserta yang cocok dengan pencarian.</p>
+                                ) : (
+                                    <ul className="divide-y divide-[#DCE7F3] border-y border-[#DCE7F3] bg-white" aria-label="Dokumen kelulusan peserta">
+                                        {credentialParticipants.map((participant) => (
+                                            <ParticipantCredentialRow key={participant.id} eventId={event.id} participant={participant} />
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
                         )}
                     </section>
                 )}
@@ -3466,8 +3591,8 @@ export default function Show({
                 onClose={() => setAttendanceResetTarget(null)}
                 title={attendanceResetTarget === 'all' ? 'Reset seluruh hasil peserta event?' : 'Reset seluruh hasil peserta ini?'}
                 description={attendanceResetTarget === 'all'
-                    ? 'Semua presensi, percobaan dan jawaban CBT, nilai, pengawasan ujian, revisi, sertifikat, serta status kelulusan peserta pada event ini akan dihapus. Data peserta, rundown, materi, dan paket ujian tetap tersedia.'
-                    : `Semua presensi, nilai, hasil CBT, revisi, dan sertifikat ${attendanceResetTarget?.participant_name || 'peserta'} pada event ini akan dihapus. Peserta harus memulai kembali dari pemindaian QR kedatangan.`}
+                    ? 'Semua presensi, percobaan dan jawaban CBT, nilai, pengawasan ujian, revisi, sertifikat, transkrip, serta status kelulusan peserta pada event ini akan dihapus. Data peserta, rundown, materi, dan paket ujian tetap tersedia.'
+                    : `Semua presensi, nilai, hasil CBT, revisi, sertifikat, dan transkrip ${attendanceResetTarget?.participant_name || 'peserta'} pada event ini akan dihapus. Peserta harus memulai kembali dari pemindaian QR kedatangan.`}
                 confirmText={isResettingAttendance ? 'Mereset...' : 'Reset hasil peserta'}
                 cancelText="Batal"
                 variant="danger"
@@ -3478,30 +3603,213 @@ export default function Show({
     );
 }
 
-function CertificateUploadRow({ eventId, participant }) {
-    const form = useForm({ certificate: null, certificate_number: participant.certificate_number || '' });
+function ParticipantCredentialRow({ eventId, participant }) {
+    const documentVariants = participant.document_variants?.length
+        ? participant.document_variants
+        : [{ ...participant, track_code: participant.track_code, label: participant.track_name }];
+
+    return (
+        <li className="px-4 py-5 [content-visibility:auto] [contain-intrinsic-size:auto_36rem] sm:px-6">
+            <div className="grid gap-5 xl:grid-cols-[14rem_minmax(0,1fr)] xl:gap-8">
+                <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-3 xl:block">
+                        <div>
+                            <h3 className="break-words font-display text-lg font-semibold text-[#0E2747]">{participant.name}</h3>
+                            <p className="mt-1 text-sm text-[#6B7C93]">{participant.kenshi_id && participant.kenshi_id !== '-' ? `NIK ${participant.kenshi_id}` : 'NIK belum dicatat'}</p>
+                        </div>
+                        <Badge variant="primary" className="shrink-0 xl:mt-3">{participant.track_code}</Badge>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-[#6B7C93]">{participant.track_name}</p>
+                </div>
+
+                <div className="space-y-5">
+                    {documentVariants.map((variant) => (
+                        <div key={variant.track_code}>
+                            {documentVariants.length > 1 && (
+                                <h4 className="mb-2 text-sm font-semibold text-[#0E2747]">Dokumen {variant.label}</h4>
+                            )}
+                            <div className="grid gap-4 lg:grid-cols-2">
+                                <ParticipantDocumentUpload
+                                    eventId={eventId}
+                                    participant={participant}
+                                    variant={variant}
+                                    type="certificate"
+                                    title="E-Sertifikat"
+                                    description="Berkas pengukuhan peserta"
+                                    icon={Award}
+                                    number={variant.certificate_number}
+                                    suggestedNumber={variant.suggested_certificate_number}
+                                    configuredNumber={variant.configured_certificate_number}
+                                    downloadUrl={variant.certificate_download_url}
+                                />
+                                <ParticipantDocumentUpload
+                                    eventId={eventId}
+                                    participant={participant}
+                                    variant={variant}
+                                    type="transcript"
+                                    title="E-Transkrip"
+                                    description="Rekap kompetensi dan JP"
+                                    icon={FileText}
+                                    number={variant.transcript_number}
+                                    suggestedNumber={variant.suggested_transcript_number}
+                                    configuredNumber={variant.configured_transcript_number}
+                                    downloadUrl={variant.transcript_download_url}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </li>
+    );
+}
+
+function ParticipantDocumentUpload({ eventId, participant, variant, type, title, description, icon: Icon, number, suggestedNumber, configuredNumber, downloadUrl }) {
+    const isCertificate = type === 'certificate';
+    const fileField = isCertificate ? 'certificate' : 'transcript';
+    const numberField = isCertificate ? 'certificate_number' : 'transcript_number';
+    const endpoint = isCertificate ? 'sertifikat' : 'transkrip';
+    const canGenerate = isCertificate ? variant.can_generate_certificate : variant.can_generate_transcript;
+    const generationUnavailableReason = isCertificate
+        ? variant.certificate_generation_unavailable_reason
+        : variant.transcript_generation_unavailable_reason;
+    const documentId = `${type}-${participant.id}-${variant.track_code}`;
+    const isLegacyDualPlaceholder = !downloadUrl && /^SK-PWA[DN]-/.test(number || '');
+    const initialNumber = (isLegacyDualPlaceholder ? suggestedNumber : number) || suggestedNumber || '';
+    const form = useForm({ [fileField]: null, [numberField]: initialNumber, document_track: variant.track_code });
+    const generationForm = useForm({ [numberField]: initialNumber, document_track: variant.track_code });
+    const [inputKey, setInputKey] = useState(0);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const updateNumber = (value) => {
+        form.setData(numberField, value);
+        generationForm.setData(numberField, value);
+        form.clearErrors(numberField);
+        generationForm.clearErrors(numberField);
+    };
 
     const submit = (event) => {
         event.preventDefault();
-        form.post(`/admin/event/${eventId}/peserta/${participant.id}/sertifikat`, {
+        form.post(`/admin/event/${eventId}/peserta/${participant.id}/${endpoint}`, {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => form.setData('certificate', null),
+            onError: (errors) => {
+                const invalidField = errors[fileField] ? documentId : `${documentId}-number`;
+                requestAnimationFrame(() => document.getElementById(invalidField)?.focus());
+            },
+            onSuccess: () => {
+                form.setData(fileField, null);
+                setInputKey((current) => current + 1);
+            },
+        });
+    };
+
+    const generate = () => {
+        generationForm.post(`/admin/event/${eventId}/peserta/${participant.id}/${endpoint}/generate`, {
+            preserveScroll: true,
+            onError: () => {
+                requestAnimationFrame(() => document.getElementById(`${documentId}-number`)?.focus());
+            },
+        });
+    };
+
+    const deleteDocument = () => {
+        router.delete(`/admin/event/${eventId}/peserta/${participant.id}/${endpoint}?document_track=${encodeURIComponent(variant.track_code)}`, {
+            preserveScroll: true,
+            onStart: () => setIsDeleting(true),
+            onFinish: () => setIsDeleting(false),
+            onSuccess: () => setDeleteOpen(false),
         });
     };
 
     return (
-        <tr className="align-top hover:bg-[#F8FBFF]">
-            <th scope="row" className="px-4 py-4 text-left font-normal">
-                <h3 className="font-semibold text-[#112743] break-words">{participant.name}</h3>
-                <p className="mt-1 text-sm text-[#6B7C93]">{participant.track_name} · {participant.certificate_number || 'Nomor belum dicatat'}</p>
-            </th>
-            <td className="px-4 py-4">{participant.certificate_download_url ? <a href={participant.certificate_download_url} className="inline-block text-sm font-semibold text-[#0B63CE] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh PDF</a> : <span className="text-[#6B7C93]">Belum diunggah</span>}</td>
-            <td className="px-4 py-4"><form onSubmit={submit} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-                <FileInput id={`certificate-${participant.id}`} label="Berkas PDF" accept="application/pdf,.pdf" onChange={(event) => form.setData('certificate', event.target.files?.[0] || null)} error={form.errors.certificate} />
-                <Input id={`certificate-number-${participant.id}`} label="Nomor sertifikat" value={form.data.certificate_number} onChange={(event) => form.setData('certificate_number', event.target.value)} error={form.errors.certificate_number} />
-                <Button type="submit" loading={form.processing} disabled={!form.data.certificate}>Unggah PDF</Button>
-            </form></td>
-        </tr>
+        <section aria-labelledby={`${documentId}-title`} className="border border-[#DCE7F3] bg-[#F8FBFF]/60 p-4">
+            <div className="flex items-start justify-between gap-3 border-b border-[#DCE7F3] pb-3">
+                <div className="flex min-w-0 items-start gap-3">
+                    <span className={`flex size-9 shrink-0 items-center justify-center border bg-white ${isCertificate ? 'border-[#BCE0FD] text-[#0B63CE]' : 'border-[#DDD3FA] text-[#7957D5]'}`}>
+                        <Icon className="size-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                        <h5 id={`${documentId}-title`} className="text-sm font-semibold text-[#0E2747]">{title}</h5>
+                        <p className="mt-0.5 text-xs text-[#6B7C93]">{description}</p>
+                    </div>
+                </div>
+                <Badge variant={downloadUrl ? 'success' : 'draft'} dot>{downloadUrl ? 'Tersedia' : 'Belum ada'}</Badge>
+            </div>
+
+            <div className="py-3 text-xs">
+                {downloadUrl ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[#6B7C93]">{number ? `Nomor ${number}` : 'Nomor belum dicatat'}</span>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <a href={downloadUrl} className="inline-flex min-h-11 items-center font-semibold text-[#0B63CE] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh PDF</a>
+                            <button type="button" onClick={() => setDeleteOpen(true)} className="inline-flex min-h-11 items-center gap-1 font-semibold text-[#B42318] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B42318]">
+                                <Trash2 className="size-3.5" aria-hidden="true" /> Hapus PDF
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="leading-5 text-[#6B7C93]">Buat dari template jalur atau unggah PDF final agar dapat diakses peserta.</p>
+                )}
+            </div>
+
+            <form onSubmit={submit} className="grid gap-3 border-t border-[#DCE7F3] pt-3 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
+                <div className="sm:col-span-2 lg:col-span-1 2xl:col-span-2">
+                    <Input
+                        id={`${documentId}-number`}
+                        name={numberField}
+                        autoComplete="off"
+                        spellCheck={false}
+                        label={`Nomor ${isCertificate ? 'sertifikat' : 'transkrip'}`}
+                        value={form.data[numberField]}
+                        onChange={(event) => updateNumber(event.target.value)}
+                        error={form.errors[numberField] || generationForm.errors[numberField]}
+                    />
+                    <p className="mt-1 text-[11px] leading-4 text-[#6B7C93]">
+                        Nomor sesuai pengaturan: <span className="font-semibold text-[#112743]">{configuredNumber || 'Belum tersedia'}</span>. {canGenerate ? 'Periksa sebelum menerbitkan.' : generationUnavailableReason || 'PDF otomatis belum tersedia; gunakan unggah manual.'}
+                    </p>
+                    {configuredNumber && form.data[numberField] !== configuredNumber && (
+                        <button type="button" onClick={() => updateNumber(configuredNumber)} className="mt-2 min-h-11 text-xs font-semibold text-[#0B63CE] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Gunakan nomor sesuai pengaturan</button>
+                    )}
+                </div>
+                <FileInput
+                    key={inputKey}
+                    id={documentId}
+                    name={fileField}
+                    label="Berkas PDF"
+                    accept="application/pdf,.pdf"
+                    required
+                    helperText="PDF, maksimal 10 MB"
+                    onChange={(event) => form.setData(fileField, event.target.files?.[0] || null)}
+                    error={form.errors[fileField]}
+                />
+                <div className="flex flex-col gap-2 sm:self-end">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        icon={Sparkles}
+                        loading={generationForm.processing}
+                        disabled={!canGenerate || form.processing}
+                        onClick={generate}
+                    >
+                        {downloadUrl ? 'Generate ulang' : 'Generate otomatis'}
+                    </Button>
+                    <Button type="submit" loading={form.processing} disabled={generationForm.processing}>
+                        {downloadUrl ? `Ganti ${title}` : `Unggah ${title}`}
+                    </Button>
+                </div>
+            </form>
+            <AlertDialog
+                isOpen={deleteOpen}
+                onClose={() => setDeleteOpen(false)}
+                onConfirm={deleteDocument}
+                title={`Hapus PDF ${title} ${participant.name}?`}
+                description={`PDF akan dihapus dan tidak lagi bisa diunduh peserta. Nomor ${isCertificate ? 'sertifikat' : 'transkrip'} tetap tersimpan; Anda dapat mengunggah atau membuat ulang PDF.`}
+                confirmText={isDeleting ? 'Menghapus...' : 'Hapus PDF'}
+                variant="danger"
+                loading={isDeleting}
+            />
+        </section>
     );
 }

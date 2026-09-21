@@ -145,13 +145,19 @@ export default function Show({ participant, enrolledEvents = [], matchingUser = 
                                                 )}
                                             </section>
                                             <section aria-label={`Sertifikat ${event.event_name}`}>
-                                                <h4 className="text-sm font-bold text-[#0E2747]">Sertifikat</h4>
+                                                <h4 className="text-sm font-bold text-[#0E2747]">Dokumen kelulusan</h4>
                                                 {event.certificate_download_url ? (
                                                     <div className="mt-2 text-sm">
                                                         {event.certificate_number && <p className="text-[#6B7C93]">Nomor {event.certificate_number}</p>}
                                                         <a href={event.certificate_download_url} className="mt-2 inline-flex min-h-11 items-center font-semibold text-[#0B63CE] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE]">Unduh sertifikat PDF</a>
                                                     </div>
                                                 ) : <p className="mt-3 text-sm text-[#6B7C93]">Sertifikat belum diunggah.</p>}
+                                                {event.transcript_download_url ? (
+                                                    <div className="mt-3 border-t border-[#DCE7F3] pt-3 text-sm">
+                                                        {event.transcript_number && <p className="text-[#6B7C93]">Nomor transkrip {event.transcript_number}</p>}
+                                                        <a href={event.transcript_download_url} className="mt-2 inline-flex min-h-11 items-center font-semibold text-[#0B63CE] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE]">Unduh transkrip PDF</a>
+                                                    </div>
+                                                ) : <p className="mt-3 text-sm text-[#6B7C93]">Transkrip belum diunggah.</p>}
                                             </section>
                                         </div>
                                     </div>

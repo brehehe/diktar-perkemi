@@ -10,8 +10,8 @@ export default function Badge({
     const variants = {
         default: 'bg-[#F1F5F9] text-[#6B7C93] border-[#DCE7F3]',
         primary: 'bg-[#EAF5FF] text-[#0B63CE] border-[#BCE0FD]',
-        published: 'bg-[#E8F8F2] text-[#20A47A] border-[#B2EBD6]',
-        success: 'bg-[#E8F8F2] text-[#20A47A] border-[#B2EBD6]',
+        published: 'bg-[#E8F8F2] text-[#147A5C] border-[#B2EBD6]',
+        success: 'bg-[#E8F8F2] text-[#147A5C] border-[#B2EBD6]',
         review: 'bg-[#FEF6E9] text-[#B8710B] border-[#FCDFB2]',
         warning: 'bg-[#FEF6E9] text-[#B8710B] border-[#FCDFB2]',
         draft: 'bg-[#F1F5F9] text-[#6B7C93] border-[#DCE7F3]',

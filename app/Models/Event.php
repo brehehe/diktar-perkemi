@@ -40,6 +40,7 @@ class Event extends Model
         'facilities_checklist',
         'requirements_checklist',
         'responsible_user_id',
+        'document_number_settings',
     ];
 
     protected $appends = [
@@ -68,6 +69,7 @@ class Event extends Model
             'access_roles' => 'array',
             'facilities_checklist' => 'array',
             'requirements_checklist' => 'array',
+            'document_number_settings' => 'array',
         ];
     }
 
@@ -145,6 +147,8 @@ class Event extends Model
                 'graduation_status',
                 'certificate_number',
                 'certificate_issued_at',
+                'transcript_number',
+                'transcript_issued_at',
                 'score_theory',
                 'score_practice',
                 'evaluation_notes',

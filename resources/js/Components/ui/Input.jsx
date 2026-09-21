@@ -38,7 +38,7 @@ const Input = forwardRef(function Input(
             <div className="relative">
                 {Icon && (
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B7C93]">
-                        <Icon className="w-4 h-4" />
+                        <Icon className="w-4 h-4" aria-hidden="true" />
                     </div>
                 )}
                 <input
@@ -67,7 +67,7 @@ const Input = forwardRef(function Input(
                 />
             </div>
             {error && (
-                <p id={`${inputId}-error`} className="mt-1.5 text-xs text-[#FA5252] font-medium flex items-center gap-1">
+                <p id={`${inputId}-error`} role="alert" className="mt-1.5 text-xs text-[#FA5252] font-medium flex items-center gap-1">
                     <span>{error}</span>
                 </p>
             )}

@@ -29,6 +29,8 @@ export default function Index({ events = [] }) {
                                     <p className="mt-1 text-sm text-[#6B7C93]">{event.is_checked_in ? 'Kehadiran awal tercatat' : 'Kehadiran awal belum tercatat'}</p>
                                     {event.certificate_number && <p className="mt-1 text-sm text-[#112743]">Nomor sertifikat: {event.certificate_number}</p>}
                                     {event.certificate_download_url && <a href={event.certificate_download_url} className="mt-2 inline-block text-sm font-semibold text-[#0B63CE] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh sertifikat PDF</a>}
+                                    {event.transcript_number && <p className="mt-1 text-sm text-[#112743]">Nomor transkrip: {event.transcript_number}</p>}
+                                    {event.transcript_download_url && <a href={event.transcript_download_url} className="ml-4 mt-2 inline-block text-sm font-semibold text-[#0B63CE] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh transkrip PDF</a>}
                                 </div>
                                 <Link href={`/event/${event.slug}/ruang-belajar`} className="inline-flex min-h-11 items-center justify-center bg-[#0B63CE] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">
                                     Buka ruang belajar

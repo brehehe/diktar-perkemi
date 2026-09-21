@@ -8,6 +8,7 @@ use App\Models\EventParticipant;
 use App\Models\Participant;
 use App\Models\ParticipantTrack;
 use App\Models\User;
+use App\Services\EventDocumentGenerator;
 use Database\Seeders\EventManagementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -697,7 +698,7 @@ test('daily QR attendance unlocks sessions for that day', function () {
     Carbon::setTestNow();
 });
 
-test('uploaded certificate is private and downloadable only by its enrolled participant', function () {
+test('uploaded certificate and transcript are private and downloadable only by their enrolled participant', function () {
     Storage::fake('local');
     $admin = User::factory()->create(['role' => 'Admin']);
     $enrollment = EventParticipant::where('event_id', $this->event->id)
@@ -707,26 +708,447 @@ test('uploaded certificate is private and downloadable only by its enrolled part
         'certificate' => UploadedFile::fake()->create('sertifikat.pdf', 100, 'application/pdf'),
         'certificate_number' => 'SK-2026-001',
     ])->assertSessionHasNoErrors();
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip", [
+        'transcript' => UploadedFile::fake()->create('transkrip.pdf', 100, 'application/pdf'),
+        'transcript_number' => 'TR-2026-001',
+    ])->assertSessionHasNoErrors();
 
     $enrollment->refresh();
     Storage::disk('local')->assertExists($enrollment->certificate_file_path);
+    Storage::disk('local')->assertExists($enrollment->transcript_file_path);
     expect($enrollment->certificate_number)->toBe('SK-2026-001');
+    expect($enrollment->transcript_number)->toBe('TR-2026-001');
 
     $this->actingAs($this->participantUser)->get("/event/{$this->event->slug}/sertifikat")
         ->assertOk();
+    $this->get("/event/{$this->event->slug}/transkrip")->assertOk();
     $this->get('/sertifikat-saya')->assertInertia(fn (Assert $page) => $page
         ->component('Event/Certificates')
         ->has('certificates', 1)
-        ->where('certificates.0.certificate_number', 'SK-2026-001'));
+        ->where('certificates.0.certificate_number', 'SK-2026-001')
+        ->where('certificates.0.transcript_number', 'TR-2026-001'));
 
     $otherUser = User::factory()->create(['role' => 'Peserta']);
     Participant::where('id', '!=', $this->participant->id)->firstOrFail()->update(['user_id' => $otherUser->id]);
     $this->actingAs($otherUser)->get("/event/{$this->event->slug}/sertifikat")
         ->assertNotFound();
+    $this->get("/event/{$this->event->slug}/transkrip")->assertNotFound();
     $this->get('/sertifikat-saya')->assertInertia(fn (Assert $page) => $page->has('certificates', 0));
 });
 
-test('certificate upload rejects non PDF and unrelated organizer', function () {
+test('certificate and transcript can be generated from an available track template', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $enrollment = EventParticipant::query()
+        ->where('event_id', $this->event->id)
+        ->where('track_code', 'PN')
+        ->with('participant')
+        ->firstOrFail();
+
+    $this->actingAs($admin)->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat/generate", [
+        'certificate_number' => '002/PLT-NAS/IX/2026',
+    ])->assertSessionHasNoErrors();
+
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip/generate", [
+        'transcript_number' => '002/PLT-NAS/IX/2026',
+    ])->assertSessionHasNoErrors();
+
+    $enrollment->refresh();
+    Storage::disk('local')->assertExists($enrollment->certificate_file_path);
+    Storage::disk('local')->assertExists($enrollment->transcript_file_path);
+
+    $certificate = Storage::disk('local')->get($enrollment->certificate_file_path);
+    $transcript = Storage::disk('local')->get($enrollment->transcript_file_path);
+
+    expect($certificate)
+        ->toStartWith('%PDF-1.4')
+        ->toContain('002/PLT-NAS/IX/2026')
+        ->toContain($enrollment->participant->name)
+        ->toContain('(IV) Tj')
+        ->not->toContain('(IV DAN) Tj')
+        ->and($transcript)
+        ->toStartWith('%PDF-1.4')
+        ->toContain('002/PLT-NAS/IX/2026');
+    expect($enrollment->certificate_issued_at?->toDateString())->toBe($this->event->end_date?->toDateString());
+    expect($enrollment->transcript_issued_at?->toDateString())->toBe($this->event->end_date?->toDateString());
+});
+
+test('pelatih daerah documents use the regional title and event modules', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $enrollment = EventParticipant::query()
+        ->where('event_id', $this->event->id)
+        ->where('track_code', 'PD')
+        ->firstOrFail();
+    $enrollment->update(['certificate_number' => null, 'transcript_number' => null]);
+
+    $this->actingAs($admin)->get("/admin/event/{$this->event->id}?tab=sertifikat")
+        ->assertInertia(fn (Assert $page) => $page->where('participants', fn ($participants) => collect($participants)->contains(
+            fn ($participant) => $participant['id'] === $enrollment->id
+                && $participant['can_generate_certificate']
+                && $participant['can_generate_transcript']
+        )));
+
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat/generate")
+        ->assertSessionHasNoErrors();
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip/generate")
+        ->assertSessionHasNoErrors();
+
+    $enrollment->refresh();
+    expect($enrollment->certificate_number)->toBe('001/PLT-DRH/IX/2026')
+        ->and($enrollment->transcript_number)->toBe('001/PLT-DRH/IX/2026');
+    expect(Storage::disk('local')->get($enrollment->certificate_file_path))
+        ->toContain('SERTIFIKAT PELATIH SHORINJI KEMPO DAERAH');
+    expect(Storage::disk('local')->get($enrollment->transcript_file_path))
+        ->toContain('PENATARAN PELATIH DAERAH')
+        ->toContain('TOTAL BEBAN PENATARAN');
+});
+
+test('dual tracks generate and expose separate penguji and wasit document pairs', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+
+    foreach (['PWAD' => ['PED', 'WAD'], 'PWAN' => ['PEN', 'WAN']] as $enrollmentTrack => $documentTracks) {
+        $enrollment = EventParticipant::query()
+            ->where('event_id', $this->event->id)
+            ->where('track_code', $enrollmentTrack)
+            ->with('participant')
+            ->firstOrFail();
+
+        $this->actingAs($admin)->get("/admin/event/{$this->event->id}?tab=sertifikat")
+            ->assertInertia(fn (Assert $page) => $page->where('participants', fn ($participants) => collect($participants)->contains(
+                fn ($participant) => $participant['id'] === $enrollment->id
+                    && count($participant['document_variants']) === 2
+                    && $participant['document_variants'][0]['track_code'] === $documentTracks[0]
+                    && $participant['document_variants'][1]['track_code'] === $documentTracks[1]
+            )));
+
+        foreach ($documentTracks as $documentTrack) {
+            $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat/generate", [
+                'document_track' => $documentTrack,
+            ])->assertSessionHasNoErrors();
+            $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip/generate", [
+                'document_track' => $documentTrack,
+            ])->assertSessionHasNoErrors();
+        }
+
+        $enrollment->refresh();
+        $pengujiSuffix = $documentTracks[0] === 'PED' ? 'PGJ-DRH' : 'PGJ-NAS';
+        $wasitSuffix = $documentTracks[1] === 'WAD' ? 'WST-DRH' : 'WST-NAS';
+        expect($enrollment->certificate_number)->toContain("/{$pengujiSuffix}/")
+            ->and($enrollment->secondary_certificate_number)->toContain("/{$wasitSuffix}/")
+            ->and($enrollment->transcript_number)->toBe($enrollment->certificate_number)
+            ->and($enrollment->secondary_transcript_number)->toBe($enrollment->secondary_certificate_number)
+            ->and($enrollment->certificate_file_path)->not->toBe($enrollment->secondary_certificate_file_path)
+            ->and($enrollment->transcript_file_path)->not->toBe($enrollment->secondary_transcript_file_path);
+
+        foreach (['certificate_file_path', 'transcript_file_path', 'secondary_certificate_file_path', 'secondary_transcript_file_path'] as $pathField) {
+            Storage::disk('local')->assertExists($enrollment->{$pathField});
+        }
+
+        $user = User::factory()->create(['role' => 'Peserta']);
+        $enrollment->participant->update(['user_id' => $user->id]);
+        $this->actingAs($user)->get('/sertifikat-saya')
+            ->assertInertia(fn (Assert $page) => $page->where('certificates', fn ($certificates) => collect($certificates)->contains(
+                fn ($certificate) => $certificate['id'] === $enrollment->id
+                    && count($certificate['document_variants']) === 2
+                    && $certificate['document_variants'][0]['certificate_download_url']
+                    && $certificate['document_variants'][0]['transcript_download_url']
+                    && $certificate['document_variants'][1]['certificate_download_url']
+                    && $certificate['document_variants'][1]['transcript_download_url']
+            )));
+        $this->get("/event/{$this->event->slug}/sertifikat?document_track={$documentTracks[1]}")->assertOk();
+        $this->get("/event/{$this->event->slug}/transkrip?document_track={$documentTracks[1]}")->assertOk();
+
+        $this->actingAs($admin)->delete("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip?document_track={$documentTracks[1]}")
+            ->assertSessionHasNoErrors();
+        $enrollment->refresh();
+        expect($enrollment->secondary_transcript_file_path)->toBeNull()
+            ->and($enrollment->secondary_transcript_number)->not->toBeNull()
+            ->and($enrollment->transcript_file_path)->not->toBeNull();
+    }
+});
+
+test('certificate and transcript PDFs can be removed without losing their official numbers', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $enrollment = EventParticipant::query()
+        ->where('event_id', $this->event->id)
+        ->where('track_code', 'PN')
+        ->firstOrFail();
+
+    $this->actingAs($admin)->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat/generate")
+        ->assertSessionHasNoErrors();
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip/generate")
+        ->assertSessionHasNoErrors();
+
+    $enrollment->refresh();
+    $certificatePath = $enrollment->certificate_file_path;
+    $transcriptPath = $enrollment->transcript_file_path;
+    $certificateNumber = $enrollment->certificate_number;
+    $transcriptNumber = $enrollment->transcript_number;
+
+    $this->delete("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat")
+        ->assertSessionHasNoErrors();
+    $this->delete("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip")
+        ->assertSessionHasNoErrors();
+
+    $enrollment->refresh();
+    Storage::disk('local')->assertMissing($certificatePath);
+    Storage::disk('local')->assertMissing($transcriptPath);
+    expect($enrollment->certificate_file_path)->toBeNull()
+        ->and($enrollment->transcript_file_path)->toBeNull()
+        ->and($enrollment->certificate_issued_at)->toBeNull()
+        ->and($enrollment->transcript_issued_at)->toBeNull()
+        ->and($enrollment->certificate_number)->toBe($certificateNumber)
+        ->and($enrollment->transcript_number)->toBe($transcriptNumber);
+
+    $this->delete("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat")->assertNotFound();
+});
+
+test('document deletion is restricted to event managers and participants in that event', function () {
+    Storage::fake('local');
+    $enrollment = EventParticipant::query()->where('event_id', $this->event->id)->firstOrFail();
+    $path = "event-certificates/{$this->event->id}/{$enrollment->id}/existing.pdf";
+    Storage::disk('local')->put($path, '%PDF-1.4');
+    $enrollment->update(['certificate_file_path' => $path, 'certificate_number' => '001/PLT-NAS/IX/2026']);
+
+    $organizer = User::factory()->create(['role' => 'Penyelenggara']);
+    $this->actingAs($organizer)->delete("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat")
+        ->assertForbidden();
+
+    $otherEvent = $this->event->replicate();
+    $otherEvent->slug = 'event-dokumen-lain';
+    $otherEvent->save();
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $this->actingAs($admin)->delete("/admin/event/{$otherEvent->id}/peserta/{$enrollment->id}/sertifikat")
+        ->assertNotFound();
+
+    Storage::disk('local')->assertExists($path);
+    expect($enrollment->fresh()->certificate_file_path)->toBe($path);
+});
+
+test('automatic document generation reports a server-side template failure as a form error', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $enrollment = EventParticipant::query()
+        ->where('event_id', $this->event->id)
+        ->where('track_code', 'PN')
+        ->firstOrFail();
+    $generator = Mockery::mock(EventDocumentGenerator::class)->makePartial();
+    $generator->shouldReceive('generateCertificate')->once()->andThrow(new RuntimeException('Template tidak dapat dibaca.'));
+    $generator->shouldReceive('generateTranscript')->once()->andThrow(new RuntimeException('Template tidak dapat dibaca.'));
+    app()->instance(EventDocumentGenerator::class, $generator);
+
+    $this->actingAs($admin)->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat/generate")
+        ->assertSessionHasErrors('certificate_number');
+    $this->actingAs($admin)->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip/generate")
+        ->assertSessionHasErrors('transcript_number');
+
+    expect($enrollment->fresh()->certificate_file_path)->toBeNull()
+        ->and($enrollment->transcript_file_path)->toBeNull();
+});
+
+test('automatic document generation suggests a number from the event and uses it when the field is empty', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $enrollment = EventParticipant::query()
+        ->where('event_id', $this->event->id)
+        ->where('track_code', 'WAD')
+        ->firstOrFail();
+    $enrollment->update(['certificate_number' => null, 'transcript_number' => null]);
+
+    $this->actingAs($admin)->get("/admin/event/{$this->event->id}?tab=sertifikat")
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Events/Show')
+            ->where('participants', fn ($participants) => collect($participants)->contains(
+                fn ($participant) => $participant['id'] === $enrollment->id
+                    && $participant['suggested_certificate_number'] === '001/WST-DRH/IX/2026'
+                    && $participant['suggested_transcript_number'] === '001/WST-DRH/IX/2026'
+                    && $participant['can_generate_certificate']
+                    && $participant['can_generate_transcript']
+            )));
+
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat/generate")
+        ->assertSessionHasNoErrors();
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip/generate")
+        ->assertSessionHasNoErrors();
+
+    $enrollment->refresh();
+    expect($enrollment->certificate_number)->toBe('001/WST-DRH/IX/2026')
+        ->and($enrollment->transcript_number)->toBe('001/WST-DRH/IX/2026');
+    Storage::disk('local')->assertExists($enrollment->certificate_file_path);
+    Storage::disk('local')->assertExists($enrollment->transcript_file_path);
+    expect(Storage::disk('local')->get($enrollment->certificate_file_path))
+        ->toContain('001/WST-DRH/IX/2026')
+        ->toContain($enrollment->participant->name)
+        ->toContain($enrollment->participant->kenshi_id_number)
+        ->toContain($enrollment->participant->origin_province);
+});
+
+test('automatic certificate generation keeps an existing official number when the request omits it', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $enrollment = EventParticipant::query()
+        ->where('event_id', $this->event->id)
+        ->where('track_code', 'PN')
+        ->firstOrFail();
+
+    $this->actingAs($admin)->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat/generate")
+        ->assertSessionHasNoErrors();
+
+    $enrollment->refresh();
+    expect($enrollment->certificate_number)->toBe('SK-PN-2026-002');
+    Storage::disk('local')->assertExists($enrollment->certificate_file_path);
+    expect(Storage::disk('local')->get($enrollment->certificate_file_path))->toContain('SK-PN-2026-002');
+});
+
+test('admin defaults set the code and initial sequence for all six document categories', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $numbers = ['PD' => 'PLT-DRH', 'PN' => 'PLT-NAS', 'PED' => 'PGJ-DRH', 'PEN' => 'PGJ-NAS', 'WAD' => 'WST-LOK', 'WAN' => 'WST-NAS'];
+    $payload = ['settings_group' => 'certificate_numbers'];
+
+    foreach ($numbers as $trackCode => $prefix) {
+        $payload['document_number_'.strtolower($trackCode).'_prefix'] = $prefix;
+        $payload['document_number_'.strtolower($trackCode).'_start'] = $trackCode === 'WAD' ? 50 : 1;
+    }
+
+    $this->actingAs($admin)->put('/admin/pengaturan', $payload)->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('settings', ['key' => 'document_number_wad_prefix', 'value' => 'WST-LOK']);
+    $this->assertDatabaseHas('settings', ['key' => 'document_number_wad_start', 'value' => '50']);
+    $this->get('/admin/pengaturan')->assertInertia(fn (Assert $page) => $page
+        ->component('Admin/Settings/Index')
+        ->where('documentNumberDefaults.WAD.prefix', 'WST-LOK')
+        ->where('documentNumberLabels.PD', 'Sertifikat Pelatih Daerah'));
+
+    $enrollment = EventParticipant::query()->where('event_id', $this->event->id)->where('track_code', 'WAD')->firstOrFail();
+    $enrollment->update(['certificate_number' => null]);
+    $this->get("/admin/event/{$this->event->id}?tab=sertifikat")
+        ->assertInertia(fn (Assert $page) => $page->where('participants', fn ($participants) => collect($participants)->contains(
+            fn ($participant) => $participant['id'] === $enrollment->id
+                && $participant['suggested_certificate_number'] === '050/WST-LOK/IX/2026'
+        )));
+
+    $this->put('/admin/pengaturan', array_replace($payload, ['document_number_wad_prefix' => 'WST/INVALID']))
+        ->assertSessionHasErrors('document_number_wad_prefix');
+    $this->assertDatabaseHas('settings', ['key' => 'document_number_wad_prefix', 'value' => 'WST-LOK']);
+});
+
+test('event number settings override admin defaults and preserve existing issued numbers', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $numbers = [];
+
+    foreach (['PD', 'PN', 'PED', 'PEN', 'WAD', 'WAN'] as $trackCode) {
+        $numbers[$trackCode] = ['prefix' => '', 'start' => ''];
+    }
+
+    $numbers['WAD'] = ['prefix' => 'WST-JABAR', 'start' => 7];
+    $this->actingAs($admin)->put("/admin/event/{$this->event->id}/nomor-dokumen", ['numbers' => $numbers])
+        ->assertSessionHasNoErrors();
+
+    expect($this->event->fresh()->document_number_settings)->toBe(['WAD' => ['prefix' => 'WST-JABAR', 'start' => 7]]);
+
+    $enrollment = EventParticipant::query()->where('event_id', $this->event->id)->where('track_code', 'WAD')->firstOrFail();
+    $enrollment->update(['certificate_number' => null, 'transcript_number' => null]);
+    $nextParticipant = Participant::create(['name' => 'Wasit Kedua', 'email' => 'wasit-kedua@example.test']);
+    $nextEnrollment = EventParticipant::create([
+        'event_id' => $this->event->id,
+        'participant_id' => $nextParticipant->id,
+        'track_code' => 'WAD',
+        'admin_status' => 'verified',
+    ]);
+    $this->get("/admin/event/{$this->event->id}?tab=sertifikat")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('documentNumberOverrides.WAD.prefix', 'WST-JABAR')
+            ->where('participants', fn ($participants) => collect($participants)->contains(
+                fn ($participant) => $participant['id'] === $enrollment->id
+                    && $participant['suggested_certificate_number'] === '007/WST-JABAR/IX/2026'
+                    && $participant['suggested_transcript_number'] === '007/WST-JABAR/IX/2026'
+            ) && collect($participants)->contains(
+                fn ($participant) => $participant['id'] === $nextEnrollment->id
+                    && $participant['suggested_certificate_number'] === '010/WST-JABAR/IX/2026'
+            )));
+
+    $issuedEnrollment = EventParticipant::query()->where('event_id', $this->event->id)->where('track_code', 'PN')->firstOrFail();
+    $this->get("/admin/event/{$this->event->id}?tab=sertifikat")
+        ->assertInertia(fn (Assert $page) => $page->where('participants', fn ($participants) => collect($participants)->contains(
+            fn ($participant) => $participant['id'] === $issuedEnrollment->id
+                && $participant['suggested_certificate_number'] === 'SK-PN-2026-002'
+                && $participant['configured_certificate_number'] === '001/PLT-NAS/IX/2026'
+        )));
+
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat/generate")
+        ->assertSessionHasNoErrors();
+    expect($enrollment->fresh()->certificate_number)->toBe('007/WST-JABAR/IX/2026');
+
+    $numbers['WAD'] = ['prefix' => 'WST-BARU', 'start' => 10];
+    $this->put("/admin/event/{$this->event->id}/nomor-dokumen", ['numbers' => $numbers])
+        ->assertSessionHasNoErrors();
+    expect($enrollment->fresh()->certificate_number)->toBe('007/WST-JABAR/IX/2026');
+});
+
+test('pelatih daerah uses the event month and year but requires manual upload for a different template date', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $enrollment = EventParticipant::query()->where('event_id', $this->event->id)->where('track_code', 'PD')->firstOrFail();
+    $enrollment->update(['certificate_number' => null]);
+    $this->event->update(['end_date' => '2027-02-15']);
+
+    $this->actingAs($admin)->get("/admin/event/{$this->event->id}?tab=sertifikat")
+        ->assertInertia(fn (Assert $page) => $page->where('participants', fn ($participants) => collect($participants)->contains(
+            fn ($participant) => $participant['id'] === $enrollment->id
+                && $participant['suggested_certificate_number'] === '001/PLT-DRH/II/2027'
+                && ! $participant['can_generate_certificate']
+        )));
+});
+
+test('event number settings reject invalid codes and unrelated organizers', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $numbers = [];
+
+    foreach (['PD', 'PN', 'PED', 'PEN', 'WAD', 'WAN'] as $trackCode) {
+        $numbers[$trackCode] = ['prefix' => '', 'start' => ''];
+    }
+
+    $numbers['WAD']['prefix'] = 'WST/INVALID';
+    $this->actingAs($admin)->put("/admin/event/{$this->event->id}/nomor-dokumen", ['numbers' => $numbers])
+        ->assertSessionHasErrors('numbers.WAD.prefix');
+    expect($this->event->fresh()->document_number_settings)->toBeNull();
+
+    $numbers['WAD']['prefix'] = 'WST-OK';
+    $organizer = User::factory()->create(['role' => 'Penyelenggara']);
+    $this->actingAs($organizer)->put("/admin/event/{$this->event->id}/nomor-dokumen", ['numbers' => $numbers])
+        ->assertForbidden();
+    expect($this->event->fresh()->document_number_settings)->toBeNull();
+});
+
+test('automatic document generation rejects a mismatched document track and template date', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $unsupportedEnrollment = EventParticipant::query()
+        ->where('event_id', $this->event->id)
+        ->where('track_code', 'PD')
+        ->firstOrFail();
+
+    $this->actingAs($admin)->post("/admin/event/{$this->event->id}/peserta/{$unsupportedEnrollment->id}/sertifikat/generate", [
+        'certificate_number' => '001/PLT-DRH/IX/2026',
+        'document_track' => 'WAD',
+    ])->assertSessionHasErrors('certificate_number');
+
+    $supportedEnrollment = EventParticipant::query()
+        ->where('event_id', $this->event->id)
+        ->where('track_code', 'WAD')
+        ->firstOrFail();
+
+    $this->event->update(['end_date' => '2027-02-15']);
+    $this->post("/admin/event/{$this->event->id}/peserta/{$supportedEnrollment->id}/transkrip/generate")
+        ->assertSessionHasErrors('transcript_number');
+
+    expect($unsupportedEnrollment->fresh()->certificate_file_path)->toBeNull();
+    expect($supportedEnrollment->fresh()->transcript_file_path)->toBeNull();
+});
+
+test('certificate and transcript uploads reject non PDF files and unrelated organizers', function () {
     Storage::fake('local');
     $admin = User::factory()->create(['role' => 'Admin']);
     $enrollment = EventParticipant::where('event_id', $this->event->id)
@@ -737,8 +1159,16 @@ test('certificate upload rejects non PDF and unrelated organizer', function () {
     ])->assertSessionHasErrors('certificate');
     expect($enrollment->fresh()->certificate_file_path)->toBeNull();
 
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip", [
+        'transcript' => UploadedFile::fake()->create('catatan.txt', 10, 'text/plain'),
+    ])->assertSessionHasErrors('transcript');
+    expect($enrollment->fresh()->transcript_file_path)->toBeNull();
+
     $organizer = User::factory()->create(['role' => 'Penyelenggara']);
     $this->actingAs($organizer)->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/sertifikat", [
         'certificate' => UploadedFile::fake()->create('sertifikat.pdf', 100, 'application/pdf'),
+    ])->assertForbidden();
+    $this->post("/admin/event/{$this->event->id}/peserta/{$enrollment->id}/transkrip", [
+        'transcript' => UploadedFile::fake()->create('transkrip.pdf', 100, 'application/pdf'),
     ])->assertForbidden();
 });

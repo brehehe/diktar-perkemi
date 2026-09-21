@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateSettingsRequest;
 use App\Models\ActivityLog;
 use App\Models\Setting;
+use App\Services\EventDocumentGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -16,12 +17,14 @@ class SettingController extends Controller
     /**
      * Display the portal settings form with tabs.
      */
-    public function index(): Response
+    public function index(EventDocumentGenerator $documentGenerator): Response
     {
         $settings = Setting::all()->pluck('value', 'key');
 
         return Inertia::render('Admin/Settings/Index', [
             'settings' => $settings,
+            'documentNumberLabels' => EventDocumentGenerator::NUMBER_LABELS,
+            'documentNumberDefaults' => $documentGenerator->adminNumberSettings(),
         ]);
     }
 
@@ -30,8 +33,10 @@ class SettingController extends Controller
      */
     public function update(UpdateSettingsRequest $request): RedirectResponse
     {
-        $data = $request->except(['_token', '_method']);
         $group = $request->input('settings_group', 'general');
+        $data = $group === 'certificate_numbers'
+            ? collect($request->validated())->except('settings_group')->all()
+            : $request->except(['_token', '_method']);
         $timestamp = now();
         $settings = collect($data)
             ->except('settings_group')

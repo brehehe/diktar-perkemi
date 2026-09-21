@@ -9,7 +9,7 @@ export default function MainNavigation({ className = '' }) {
         { label: 'Kategori', href: '/kategori', matchPrefix: '/kategori' },
         ...(props.auth?.user?.role === 'Pemateri' ? [{ label: 'Jadwal & Materi', href: '/pemateri/jadwal', matchPrefix: '/pemateri' }] : []),
         ...(props.auth?.user && props.auth?.user?.role !== 'Pemateri' ? [{ label: 'Event Saya', href: '/event-saya', matchPrefixes: ['/event-saya', '/event/'] }] : []),
-        ...(props.auth?.user?.role === 'Peserta' ? [{ label: 'Sertifikat', href: '/sertifikat-saya', exact: true }] : []),
+        ...(props.auth?.user?.role === 'Peserta' ? [{ label: 'Dokumen', href: '/sertifikat-saya', exact: true }] : []),
         { label: 'Untuk Peran Anda', href: '/untuk', matchPrefix: '/untuk' },
         { label: 'Tentang', href: '/tentang', exact: true },
         { label: 'Bantuan', href: '/bantuan', exact: true },

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import PortalLayout from '../../Layouts/PortalLayout';
+import PortalEntrySplash from '../../Components/portal/PortalEntrySplash';
 import HeroSearch from '../../Components/portal/HeroSearch';
 import HeroBookShowcase from '../../Components/portal/HeroBookShowcase';
 import FeaturedCollection from '../../Components/portal/FeaturedCollection';
@@ -32,6 +33,8 @@ export default function Home({
 
     return (
         <PortalLayout title="Portal Buku Digital PERKEMI — Satu Akses, Banyak Pengetahuan">
+            <PortalEntrySplash />
+
             {/* ═══════════════════════════════════════════════════════════
                  1. HERO SECTION (SPLIT 2-KOLOM DENGAN 3D BOOKS SHOWCASE)
                  ═══════════════════════════════════════════════════════════ */}

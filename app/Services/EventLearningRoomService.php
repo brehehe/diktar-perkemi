@@ -418,6 +418,12 @@ class EventLearningRoomService
                 'download_url' => $eventParticipant->certificate_file_path
                     ? route('event.certificate.mine', $event->slug) : null,
             ],
+            'transcript' => [
+                'number' => $eventParticipant->transcript_number,
+                'issued_at' => $eventParticipant->transcript_issued_at?->format('d M Y'),
+                'download_url' => $eventParticipant->transcript_file_path
+                    ? route('event.transcript.mine', $event->slug) : null,
+            ],
         ];
 
     }

@@ -13,6 +13,7 @@ use App\Models\EventParticipant;
 use App\Services\EventDocumentGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +23,82 @@ use Throwable;
 
 class EventCertificateController extends Controller
 {
+    public function generateMissingDocuments(Event $event, EventDocumentGenerator $generator): RedirectResponse
+    {
+        Gate::authorize('update', $event);
+
+        $event->load(['modules', 'eventParticipants' => fn ($query) => $query->with('participant')->orderBy('id')]);
+        $generated = ['certificate' => 0, 'transcript' => 0];
+        $failed = 0;
+        $unavailable = 0;
+
+        foreach ($event->eventParticipants as $eventParticipant) {
+            $eventParticipant->setRelation('event', $event);
+
+            foreach (EventDocumentGenerator::documentTracks($eventParticipant->track_code) as $documentTrack) {
+                foreach (['certificate', 'transcript'] as $type) {
+                    $pathField = EventDocumentGenerator::documentField($type, 'file_path', $eventParticipant->track_code, $documentTrack);
+
+                    if ($eventParticipant->{$pathField}) {
+                        continue;
+                    }
+
+                    if (! EventDocumentGenerator::supportsForEvent($event, $type, $documentTrack)) {
+                        $unavailable++;
+
+                        continue;
+                    }
+
+                    $numberField = EventDocumentGenerator::documentField($type, 'number', $eventParticipant->track_code, $documentTrack);
+                    $issuedAtField = EventDocumentGenerator::documentField($type, 'issued_at', $eventParticipant->track_code, $documentTrack);
+                    $number = $generator->suggestedNumber($event, $eventParticipant, $type, $documentTrack);
+
+                    if (! $number) {
+                        $failed++;
+
+                        continue;
+                    }
+
+                    $directory = $type === 'certificate' ? 'event-certificates' : 'event-transcripts';
+                    $path = "{$directory}/{$event->id}/{$eventParticipant->id}/{$documentTrack}/".Str::uuid().'.pdf';
+
+                    try {
+                        $pdf = $type === 'certificate'
+                            ? $generator->generateCertificate($eventParticipant, $number, $documentTrack)
+                            : $generator->generateTranscript($eventParticipant, $number, $documentTrack);
+
+                        if (! Storage::disk('local')->put($path, $pdf)) {
+                            throw new RuntimeException('Dokumen hasil generate tidak dapat disimpan.');
+                        }
+
+                        $eventParticipant->update([
+                            $pathField => $path,
+                            $issuedAtField => $event->end_date,
+                            $numberField => $number,
+                        ]);
+                        $generated[$type]++;
+                    } catch (Throwable $exception) {
+                        Storage::disk('local')->delete($path);
+                        report($exception);
+                        $failed++;
+                    }
+                }
+            }
+        }
+
+        $message = "Generate selesai: {$generated['certificate']} sertifikat dan {$generated['transcript']} e-transkrip dibuat.";
+
+        if ($unavailable > 0) {
+            $message .= " {$unavailable} dokumen dilewati karena template tidak tersedia.";
+        }
+
+        if ($failed > 0) {
+            $message .= " {$failed} dokumen gagal dibuat; periksa template atau penyimpanan lalu coba lagi.";
+        }
+
+        return back()->with('success', $message);
+    }
+
     public function generateCertificate(
         GenerateEventCertificateRequest $request,
         Event $event,
@@ -116,6 +193,11 @@ class EventCertificateController extends Controller
             $path,
             "sertifikat-{$event->slug}-{$documentTrack}-{$eventParticipant->id}.pdf"
         );
+    }
+
+    public function previewCertificate(Request $request, Event $event, EventParticipant $eventParticipant): StreamedResponse
+    {
+        return $this->previewDocument($request, $event, $eventParticipant, 'certificate');
     }
 
     public function destroyCertificate(
@@ -222,6 +304,11 @@ class EventCertificateController extends Controller
         );
     }
 
+    public function previewTranscript(Request $request, Event $event, EventParticipant $eventParticipant): StreamedResponse
+    {
+        return $this->previewDocument($request, $event, $eventParticipant, 'transcript');
+    }
+
     public function destroyTranscript(
         DeleteEventDocumentRequest $request,
         Event $event,
@@ -260,5 +347,24 @@ class EventCertificateController extends Controller
         abort_unless($documentTrack, 404);
 
         return $documentTrack;
+    }
+
+    private function previewDocument(Request $request, Event $event, EventParticipant $eventParticipant, string $type): StreamedResponse
+    {
+        Gate::authorize('update', $event);
+
+        $documentTrack = $this->documentTrack($eventParticipant, $request->query('document_track'));
+        $pathField = EventDocumentGenerator::documentField($type, 'file_path', $eventParticipant->track_code, $documentTrack);
+        $path = $eventParticipant->{$pathField};
+
+        abort_unless($eventParticipant->event_id === $event->id
+            && $path
+            && Storage::disk('local')->exists($path), 404);
+
+        $label = $type === 'certificate' ? 'sertifikat' : 'transkrip';
+
+        return Storage::disk('local')->response($path, "{$label}-{$event->slug}-{$documentTrack}-{$eventParticipant->id}.pdf", [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 }

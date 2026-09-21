@@ -164,12 +164,15 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::delete('/event/{event}/peserta/{eventParticipant}/hasil', [AttendanceController::class, 'destroyParticipantResults'])->name('event.participant-results.destroy');
         Route::delete('/event/{event}/peserta/{eventParticipant}', [EventController::class, 'removeParticipant'])->name('event.participant.destroy');
         Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat/generate', [EventCertificateController::class, 'generateCertificate'])->name('event.certificate.generate');
+        Route::post('/event/{event}/dokumen/generate', [EventCertificateController::class, 'generateMissingDocuments'])->name('event.documents.generate');
         Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'store'])->name('event.certificate.store');
         Route::get('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'download'])->name('event.certificate.download');
+        Route::get('/event/{event}/peserta/{eventParticipant}/sertifikat/preview', [EventCertificateController::class, 'previewCertificate'])->name('event.certificate.preview');
         Route::delete('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'destroyCertificate'])->name('event.certificate.destroy');
         Route::post('/event/{event}/peserta/{eventParticipant}/transkrip/generate', [EventCertificateController::class, 'generateTranscript'])->name('event.transcript.generate');
         Route::post('/event/{event}/peserta/{eventParticipant}/transkrip', [EventCertificateController::class, 'storeTranscript'])->name('event.transcript.store');
         Route::get('/event/{event}/peserta/{eventParticipant}/transkrip', [EventCertificateController::class, 'downloadTranscript'])->name('event.transcript.download');
+        Route::get('/event/{event}/peserta/{eventParticipant}/transkrip/preview', [EventCertificateController::class, 'previewTranscript'])->name('event.transcript.preview');
         Route::delete('/event/{event}/peserta/{eventParticipant}/transkrip', [EventCertificateController::class, 'destroyTranscript'])->name('event.transcript.destroy');
         Route::get('/event/{event}/revisi/{attempt}/pdf', [ExamRevisionController::class, 'download'])->name('event.revision.download');
         Route::get('/event/{event}/revisi/{attempt}/baca', [ExamRevisionController::class, 'reader'])->name('event.revision.reader');

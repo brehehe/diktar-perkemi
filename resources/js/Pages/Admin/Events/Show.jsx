@@ -101,6 +101,7 @@ export default function Show({
     const [selectedDay, setSelectedDay] = useState(1);
     const [attendanceSessionFilter, setAttendanceSessionFilter] = useState('all');
     const [credentialSearch, setCredentialSearch] = useState('');
+    const [isGeneratingDocuments, setIsGeneratingDocuments] = useState(false);
     const documentNumberForm = useForm({
         numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
             prefix: documentNumberOverrides[trackCode]?.prefix ?? '',
@@ -2212,7 +2213,7 @@ export default function Show({
                                 </div>
                                 <h2 id="certificate-heading" className="text-balance font-display text-2xl font-semibold text-[#0A3F82] sm:text-3xl">E-Sertifikat & E-Transkrip</h2>
                                 <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6B7C93]">Kelola PDF final per peserta. Sertifikat memuat pengukuhan, sedangkan transkrip memuat rekap kompetensi dan beban JP. Seluruh berkas disimpan privat.</p>
-                                <p className="mt-3 max-w-2xl border-l-2 border-[#0B63CE] bg-[#EAF5FF] px-3 py-2 text-xs leading-5 text-[#112743]">Nomor usulan mengikuti kode surat dan nomor awal yang diatur di bawah, sedangkan bulan Romawi dan tahun mengikuti tanggal akhir event. Template gambar saat ini bertanggal 27 September 2026 dan berlaku hingga 2029; generate PDF otomatis hanya tersedia untuk event bertanggal akhir tersebut. Tempat/tanggal lahir belum tersimpan dan tetap kosong. Periksa PDF sebelum dibagikan.</p>
+                                <p className="mt-3 max-w-2xl border-l-2 border-[#0B63CE] bg-[#EAF5FF] px-3 py-2 text-xs leading-5 text-[#112743]">Cukup atur kode surat dan nomor awal. Nomor peserta diurutkan otomatis per jalur; bulan Romawi dan tahun mengikuti tanggal akhir kegiatan. PDF baru memakai A4 lanskap. Tempat/tanggal lahir belum tersimpan dan tetap kosong. Preview tersedia setelah dokumen dibuat.</p>
                             </div>
                             <div className="grid grid-cols-2 border border-[#DCE7F3] bg-white" aria-label="Panduan format dokumen">
                                 <div className="border-r border-[#DCE7F3] p-4">
@@ -2270,6 +2271,27 @@ export default function Show({
                                 </div>
                             </form>
                         </details>
+
+                        {participants.length > 0 && (
+                            <div className="flex flex-wrap items-center justify-between gap-4 border border-[#BCE0FD] bg-[#EAF5FF] p-4 sm:p-5">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-[#0E2747]">Generate dokumen otomatis</h3>
+                                    <p className="mt-1 max-w-2xl text-xs leading-5 text-[#425973]">Simpan pengaturan nomor event terlebih dahulu. Sertifikat dan e-transkrip yang belum ada akan dibuat berurutan per jalur; PDF serta nomor yang sudah terbit tetap digunakan.</p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    icon={Sparkles}
+                                    loading={isGeneratingDocuments}
+                                    onClick={() => router.post(`/admin/event/${event.id}/dokumen/generate`, {}, {
+                                        preserveScroll: true,
+                                        onStart: () => setIsGeneratingDocuments(true),
+                                        onFinish: () => setIsGeneratingDocuments(false),
+                                    })}
+                                >
+                                    Generate semua yang belum ada
+                                </Button>
+                            </div>
+                        )}
 
                         <dl className="grid border-y border-[#DCE7F3] bg-white sm:grid-cols-2 xl:grid-cols-4">
                             {[
@@ -3643,6 +3665,7 @@ function ParticipantCredentialRow({ eventId, participant }) {
                                     suggestedNumber={variant.suggested_certificate_number}
                                     configuredNumber={variant.configured_certificate_number}
                                     downloadUrl={variant.certificate_download_url}
+                                    previewUrl={variant.certificate_preview_url}
                                 />
                                 <ParticipantDocumentUpload
                                     eventId={eventId}
@@ -3656,6 +3679,7 @@ function ParticipantCredentialRow({ eventId, participant }) {
                                     suggestedNumber={variant.suggested_transcript_number}
                                     configuredNumber={variant.configured_transcript_number}
                                     downloadUrl={variant.transcript_download_url}
+                                    previewUrl={variant.transcript_preview_url}
                                 />
                             </div>
                         </div>
@@ -3666,7 +3690,7 @@ function ParticipantCredentialRow({ eventId, participant }) {
     );
 }
 
-function ParticipantDocumentUpload({ eventId, participant, variant, type, title, description, icon: Icon, number, suggestedNumber, configuredNumber, downloadUrl }) {
+function ParticipantDocumentUpload({ eventId, participant, variant, type, title, description, icon: Icon, number, suggestedNumber, configuredNumber, downloadUrl, previewUrl }) {
     const isCertificate = type === 'certificate';
     const fileField = isCertificate ? 'certificate' : 'transcript';
     const numberField = isCertificate ? 'certificate_number' : 'transcript_number';
@@ -3682,6 +3706,7 @@ function ParticipantDocumentUpload({ eventId, participant, variant, type, title,
     const generationForm = useForm({ [numberField]: initialNumber, document_track: variant.track_code });
     const [inputKey, setInputKey] = useState(0);
     const [deleteOpen, setDeleteOpen] = useState(false);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
     const updateNumber = (value) => {
@@ -3745,6 +3770,7 @@ function ParticipantDocumentUpload({ eventId, participant, variant, type, title,
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-[#6B7C93]">{number ? `Nomor ${number}` : 'Nomor belum dicatat'}</span>
                         <div className="flex flex-wrap items-center gap-4">
+                            {previewUrl && <button type="button" onClick={() => setIsPreviewOpen(true)} className="inline-flex min-h-11 items-center gap-1 font-semibold text-[#0B63CE] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"><Eye className="size-3.5" aria-hidden="true" /> Preview</button>}
                             <a href={downloadUrl} className="inline-flex min-h-11 items-center font-semibold text-[#0B63CE] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh PDF</a>
                             <button type="button" onClick={() => setDeleteOpen(true)} className="inline-flex min-h-11 items-center gap-1 font-semibold text-[#B42318] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B42318]">
                                 <Trash2 className="size-3.5" aria-hidden="true" /> Hapus PDF
@@ -3802,6 +3828,23 @@ function ParticipantDocumentUpload({ eventId, participant, variant, type, title,
                     </Button>
                 </div>
             </form>
+            {isPreviewOpen && previewUrl && (
+                <Modal
+                    isOpen
+                    onClose={() => setIsPreviewOpen(false)}
+                    title={`Preview ${title} ${participant.name}`}
+                    description={`${variant.label} · Nomor ${number || 'belum dicatat'}`}
+                    size="full"
+                    footer={<a href={downloadUrl} className="inline-flex min-h-11 items-center font-semibold text-[#0B63CE] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh PDF</a>}
+                >
+                    <iframe
+                        src={previewUrl}
+                        title={`${title} ${participant.name}`}
+                        className="h-[calc(100dvh-13rem)] min-h-80 w-full border border-[#DCE7F3] bg-white"
+                    />
+                    <p className="mt-2 text-xs text-[#6B7C93]">Jika PDF tidak tampil di perangkat ini, gunakan tombol Unduh PDF.</p>
+                </Modal>
+            )}
             <AlertDialog
                 isOpen={deleteOpen}
                 onClose={() => setDeleteOpen(false)}

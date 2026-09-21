@@ -427,7 +427,13 @@ class EventDocumentGenerator
         }
 
         [$width, $height] = $dimensions;
-        $content = "q\n{$width} 0 0 {$height} 0 0 cm\n/Im0 Do\nQ\n";
+        $pageWidth = 841.89;
+        $pageHeight = 595.28;
+        $scale = min($pageWidth / $width, $pageHeight / $height);
+        $offsetX = ($pageWidth - $width * $scale) / 2;
+        $offsetY = ($pageHeight - $height * $scale) / 2;
+        $content = sprintf("q\n%.6F 0 0 %.6F %.6F %.6F cm\n", $scale, $scale, $offsetX, $offsetY);
+        $content .= "q\n{$width} 0 0 {$height} 0 0 cm\n/Im0 Do\nQ\n";
 
         foreach ($overlays as $overlay) {
             if ($overlay['type'] === 'rectangle') {
@@ -445,10 +451,12 @@ class EventDocumentGenerator
             $content .= "{$color} rg\nBT\n{$font} {$overlay['size']} Tf\n1 0 0 1 {$overlay['x']} {$pdfY} Tm\n({$text}) Tj\nET\n";
         }
 
+        $content .= "Q\n";
+
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
             2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-            3 => "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$width} {$height}] /Resources << /XObject << /Im0 4 0 R >> /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 7 0 R >>",
+            3 => "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Resources << /XObject << /Im0 4 0 R >> /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 7 0 R >>",
             4 => "<< /Type /XObject /Subtype /Image /Width {$width} /Height {$height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ".strlen($image)." >>\nstream\n{$image}\nendstream",
             5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>',
             6 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>',

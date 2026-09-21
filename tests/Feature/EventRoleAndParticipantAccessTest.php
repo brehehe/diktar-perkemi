@@ -736,6 +736,72 @@ test('uploaded certificate and transcript are private and downloadable only by t
     $this->get('/sertifikat-saya')->assertInertia(fn (Assert $page) => $page->has('certificates', 0));
 });
 
+test('bulk generation uses event numbering and preserves issued documents', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $event = $this->event->replicate();
+    $event->slug = 'event-dokumen-massal';
+    $event->document_number_settings = ['PN' => ['prefix' => 'PLT-KHUSUS', 'start' => 12]];
+    $event->save();
+
+    $firstParticipant = Participant::create(['name' => 'Peserta Pertama', 'email' => 'sertifikat-pertama@example.test']);
+    $secondParticipant = Participant::create(['name' => 'Peserta Kedua', 'email' => 'sertifikat-kedua@example.test']);
+    $first = EventParticipant::create(['event_id' => $event->id, 'participant_id' => $firstParticipant->id, 'track_code' => 'PN']);
+    $second = EventParticipant::create(['event_id' => $event->id, 'participant_id' => $secondParticipant->id, 'track_code' => 'PN']);
+    $first->update(['certificate_number' => 'SK-LAMA-012', 'certificate_file_path' => 'event-certificates/existing.pdf']);
+    Storage::disk('local')->put('event-certificates/existing.pdf', 'PDF lama');
+
+    $this->actingAs($admin)->post("/admin/event/{$event->id}/dokumen/generate")
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('success', 'Generate selesai: 1 sertifikat dan 2 e-transkrip dibuat.');
+
+    $first->refresh();
+    $second->refresh();
+    expect($first->certificate_number)->toBe('SK-LAMA-012')
+        ->and($first->certificate_file_path)->toBe('event-certificates/existing.pdf')
+        ->and($first->transcript_number)->toBe('SK-LAMA-012')
+        ->and($second->certificate_number)->toBe('013/PLT-KHUSUS/IX/2026')
+        ->and($second->transcript_number)->toBe('013/PLT-KHUSUS/IX/2026');
+    Storage::disk('local')->assertExists([$first->transcript_file_path, $second->certificate_file_path, $second->transcript_file_path]);
+
+    $this->get("/admin/event/{$event->id}/peserta/{$second->id}/sertifikat/preview?document_track=PN")
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+    $this->get("/admin/event/{$event->id}/peserta/{$second->id}/transkrip/preview?document_track=PN")
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+    $this->get("/admin/event/{$event->id}?tab=sertifikat")
+        ->assertInertia(fn (Assert $page) => $page->where('participants', fn ($participants) => collect($participants)->contains(
+            fn ($participant) => $participant['id'] === $second->id
+                && str_contains($participant['document_variants'][0]['transcript_preview_url'], '/transkrip/preview')
+        )));
+    $this->post("/admin/event/{$event->id}/dokumen/generate")
+        ->assertSessionHas('success', 'Generate selesai: 0 sertifikat dan 0 e-transkrip dibuat.');
+    expect($second->fresh()->certificate_file_path)->toBe($second->certificate_file_path);
+
+    $this->actingAs($this->participantUser)->post("/admin/event/{$event->id}/dokumen/generate")->assertForbidden();
+    $this->get("/admin/event/{$event->id}/peserta/{$second->id}/sertifikat/preview")->assertForbidden();
+    $this->get("/admin/event/{$event->id}/peserta/{$second->id}/transkrip/preview")->assertForbidden();
+    $this->actingAs($admin)->get("/admin/event/{$this->event->id}/peserta/{$second->id}/sertifikat/preview")->assertNotFound();
+    $this->get("/admin/event/{$this->event->id}/peserta/{$second->id}/transkrip/preview")->assertNotFound();
+});
+
+test('bulk generation reports unavailable templates without creating documents', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $event = $this->event->replicate();
+    $event->slug = 'event-jalur-tanpa-template';
+    $event->save();
+    $participant = Participant::create(['name' => 'Peserta Jalur Khusus', 'email' => 'dokumen-khusus@example.test']);
+    $enrollment = EventParticipant::create(['event_id' => $event->id, 'participant_id' => $participant->id, 'track_code' => 'KHUSUS']);
+
+    $this->actingAs($admin)->post("/admin/event/{$event->id}/dokumen/generate")
+        ->assertSessionHas('success', 'Generate selesai: 0 sertifikat dan 0 e-transkrip dibuat. 2 dokumen dilewati karena template tidak tersedia.');
+
+    expect($enrollment->fresh()->certificate_file_path)->toBeNull()
+        ->and($enrollment->transcript_file_path)->toBeNull();
+});
+
 test('certificate and transcript can be generated from an available track template', function () {
     Storage::fake('local');
     $admin = User::factory()->create(['role' => 'Admin']);
@@ -762,12 +828,14 @@ test('certificate and transcript can be generated from an available track templa
 
     expect($certificate)
         ->toStartWith('%PDF-1.4')
+        ->toContain('/MediaBox [0 0 841.89 595.28]')
         ->toContain('002/PLT-NAS/IX/2026')
         ->toContain($enrollment->participant->name)
         ->toContain('(IV) Tj')
         ->not->toContain('(IV DAN) Tj')
         ->and($transcript)
         ->toStartWith('%PDF-1.4')
+        ->toContain('/MediaBox [0 0 841.89 595.28]')
         ->toContain('002/PLT-NAS/IX/2026');
     expect($enrollment->certificate_issued_at?->toDateString())->toBe($this->event->end_date?->toDateString());
     expect($enrollment->transcript_issued_at?->toDateString())->toBe($this->event->end_date?->toDateString());

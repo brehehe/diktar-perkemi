@@ -550,6 +550,8 @@ class AdminEventDetailService
                 'configured_certificate_number' => $this->documentGenerator->configuredNumber($event, $enrollment, 'certificate', $trackCode),
                 'certificate_download_url' => $enrollment->{$certificatePathField}
                     ? route('admin.event.certificate.download', [$event, $enrollment, 'document_track' => $trackCode]) : null,
+                'certificate_preview_url' => $enrollment->{$certificatePathField}
+                    ? route('admin.event.certificate.preview', [$event, $enrollment, 'document_track' => $trackCode]) : null,
                 'can_generate_certificate' => EventDocumentGenerator::supportsForEvent($event, 'certificate', $trackCode),
                 'certificate_generation_unavailable_reason' => EventDocumentGenerator::generationUnavailableReason($event, 'certificate', $trackCode),
                 'transcript_number' => $enrollment->{$transcriptNumberField},
@@ -557,6 +559,8 @@ class AdminEventDetailService
                 'configured_transcript_number' => $this->documentGenerator->configuredNumber($event, $enrollment, 'transcript', $trackCode),
                 'transcript_download_url' => $enrollment->{$transcriptPathField}
                     ? route('admin.event.transcript.download', [$event, $enrollment, 'document_track' => $trackCode]) : null,
+                'transcript_preview_url' => $enrollment->{$transcriptPathField}
+                    ? route('admin.event.transcript.preview', [$event, $enrollment, 'document_track' => $trackCode]) : null,
                 'can_generate_transcript' => EventDocumentGenerator::supportsForEvent($event, 'transcript', $trackCode),
                 'transcript_generation_unavailable_reason' => EventDocumentGenerator::generationUnavailableReason($event, 'transcript', $trackCode),
             ];

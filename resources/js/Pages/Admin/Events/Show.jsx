@@ -3594,7 +3594,7 @@ export default function Show({
                 isOpen={isSessionModalOpen}
                 onClose={() => setIsSessionModalOpen(false)}
                 title={editingSession ? 'Edit Sesi Rundown' : `Tambah Sesi Rundown (Hari ${selectedDay})`}
-                size="lg"
+                size="2xl"
                 footer={
                     <>
                         <Button variant="secondary" onClick={() => setIsSessionModalOpen(false)}>

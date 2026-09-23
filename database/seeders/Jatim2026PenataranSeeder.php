@@ -195,7 +195,7 @@ class Jatim2026PenataranSeeder extends Seeder
     {
         $organizer = $organizer ?? User::query()->where('role', 'Penyelenggara')->first() ?? User::query()->where('role', 'Admin')->first();
 
-        return Event::query()->updateOrCreate(
+        $event = Event::withTrashed()->updateOrCreate(
             ['slug' => self::EVENT_SLUG],
             [
                 'title' => 'Penataran Pelatih, Penguji, Wasit Daerah dan Nasional Provinsi Jawa Timur 2026',
@@ -223,6 +223,12 @@ class Jatim2026PenataranSeeder extends Seeder
                 ],
             ]
         );
+
+        if ($event->trashed()) {
+            $event->restore();
+        }
+
+        return $event;
     }
 
     /**
@@ -300,7 +306,7 @@ class Jatim2026PenataranSeeder extends Seeder
         ];
 
         return collect($pastEventsConfig)->mapWithKeys(function (array $data, string $key) use ($organizer): array {
-            $event = Event::query()->updateOrCreate(
+            $event = Event::withTrashed()->updateOrCreate(
                 ['slug' => $data['slug']],
                 [
                     ...$data,
@@ -313,6 +319,10 @@ class Jatim2026PenataranSeeder extends Seeder
                     'responsible_user_id' => $organizer->id,
                 ]
             );
+
+            if ($event->trashed()) {
+                $event->restore();
+            }
 
             return [$key => $event];
         });
@@ -737,12 +747,12 @@ class Jatim2026PenataranSeeder extends Seeder
                 'attempts_allowed' => 1,
             ],
 
-            // --- 3. KUIS FORMATIF (15 MENIT) ---
+            // --- 3. KUIS FORMATIF (60 MENIT) ---
             'CBT-QUIZ-WAD-26' => [
                 'title' => 'Kuis Formatif Wasit Daerah (WAD) PERKEMI 2026',
                 'description' => 'Kuis pemahaman cepat materi sinyal wasit, istilah perwasitan jepang, dan batas gelanggang.',
                 'exam_type' => 'module_eval',
-                'duration_minutes' => 15,
+                'duration_minutes' => 60,
                 'target_tracks' => ['WAD'],
                 'module_code' => 'QM-WAD-KUIS',
                 'passing_score' => 75.00,
@@ -752,7 +762,7 @@ class Jatim2026PenataranSeeder extends Seeder
                 'title' => 'Kuis Formatif Wasit Nasional (WAN) PERKEMI 2026',
                 'description' => 'Kuis pemahaman cepat studi kasus pertandingan Kumi Embu & Randori tingkat nasional.',
                 'exam_type' => 'module_eval',
-                'duration_minutes' => 15,
+                'duration_minutes' => 60,
                 'target_tracks' => ['WAN'],
                 'module_code' => 'QM-WAN-KUIS',
                 'passing_score' => 75.00,
@@ -762,7 +772,7 @@ class Jatim2026PenataranSeeder extends Seeder
                 'title' => 'Kuis Formatif Penguji Daerah (PED) PERKEMI 2026',
                 'description' => 'Kuis pemahaman rubrik pengujian Kyu Kenshi dan kalibrasi score sheet.',
                 'exam_type' => 'module_eval',
-                'duration_minutes' => 15,
+                'duration_minutes' => 60,
                 'target_tracks' => ['PED'],
                 'module_code' => 'QM-PED-KUIS',
                 'passing_score' => 75.00,
@@ -772,7 +782,7 @@ class Jatim2026PenataranSeeder extends Seeder
                 'title' => 'Kuis Formatif Penguji Nasional (PEN) PERKEMI 2026',
                 'description' => 'Kuis pemahaman rubrik pengujian Yudansha tingkat Dan dan moderasi dewan penguji.',
                 'exam_type' => 'module_eval',
-                'duration_minutes' => 15,
+                'duration_minutes' => 60,
                 'target_tracks' => ['PEN'],
                 'module_code' => 'QM-PEN-KUIS',
                 'passing_score' => 75.00,
@@ -782,7 +792,7 @@ class Jatim2026PenataranSeeder extends Seeder
                 'title' => 'Kuis Formatif Pelatih Daerah (PD) PERKEMI 2026',
                 'description' => 'Kuis pemahaman materi didaktik metodik dasar dan keselamatan latihan kenshi pemula.',
                 'exam_type' => 'module_eval',
-                'duration_minutes' => 15,
+                'duration_minutes' => 60,
                 'target_tracks' => ['PD'],
                 'module_code' => 'QM-PD-KUIS',
                 'passing_score' => 75.00,
@@ -792,7 +802,7 @@ class Jatim2026PenataranSeeder extends Seeder
                 'title' => 'Kuis Formatif Pelatih Nasional (PN) PERKEMI 2026',
                 'description' => 'Kuis pemahaman materi periodisasi latihan fisik, nutrisi, dan pemulihan atlet.',
                 'exam_type' => 'module_eval',
-                'duration_minutes' => 15,
+                'duration_minutes' => 60,
                 'target_tracks' => ['PN'],
                 'module_code' => 'QM-PN-KUIS',
                 'passing_score' => 75.00,
@@ -916,7 +926,7 @@ class Jatim2026PenataranSeeder extends Seeder
                     'question_module_ids' => $moduleId ? [$moduleId] : [],
                     'passing_score' => $cfg['passing_score'],
                     'attempts_allowed' => $cfg['attempts_allowed'],
-                    'status' => 'ready',
+                    'status' => 'open',
                     'randomize_questions' => false,
                     'randomize_answers' => false,
                     'result_display' => 'immediate',
@@ -964,7 +974,7 @@ class Jatim2026PenataranSeeder extends Seeder
 
                 $package->update([
                     'total_questions' => count($syncData),
-                    'status' => 'ready',
+                    'status' => 'open',
                 ]);
             }
 
@@ -1198,10 +1208,10 @@ class Jatim2026PenataranSeeder extends Seeder
                         'date' => $date,
                         'session_number' => sprintf('SESI-D%02d-%02d-QUIZ-%s', $day, $counter, $tCode),
                         'start' => $startTime,
-                        'end' => '18:30:00',
+                        'end' => '19:15:00',
                         'jp' => 1,
                         'type' => 'UJIAN',
-                        'topic' => sprintf('Kuis Formatif Materi — %s (15 Menit)', $tCfg['name']),
+                        'topic' => sprintf('Kuis Formatif Materi — %s (60 Menit)', $tCfg['name']),
                         'subtopic' => sprintf('Kuis pemahaman formatif materi penataran jalur %s', $tCfg['name']),
                         'method' => 'CBT Online Formatif',
                         'room' => $tCfg['room'],
@@ -1480,11 +1490,12 @@ class Jatim2026PenataranSeeder extends Seeder
         }
 
         // 2. Reset seluruh data operasional event penataran utama
-        // Seluruh data absensi, verifikasi, hasil CBT, dan formulir dikosongkan agar siap diproses pada hari pelaksanaan
+        // Seluruh data absensi, verifikasi, hasil CBT, formulir, dan pakta integritas dikosongkan agar siap diproses pada hari pelaksanaan
         DB::table('event_attendances')->where('event_id', $event->id)->delete();
         DB::table('cbt_proctoring_events')->where('event_id', $event->id)->delete();
         DB::table('cbt_exam_attempts')->where('event_id', $event->id)->delete();
         DB::table('event_registration_forms')->where('event_id', $event->id)->delete();
+        DB::table('event_integrity_pacts')->where('event_id', $event->id)->delete();
 
         // 3. Ambil seluruh data peserta dari API SIM Perkemi (atau fallback lokal)
         $records = $this->fetchPesertaRecords();

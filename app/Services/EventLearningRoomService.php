@@ -99,21 +99,25 @@ class EventLearningRoomService
             ->filter(fn ($record) => $record['type'] === 'check_in' && in_array($record['status'], ['present', 'late', 'manual_override'], true))
             ->pluck('session_id')->unique()->all();
         $dailySessions = $sessions->where('session_type_code', 'KEHADIRAN_HARIAN')->keyBy('day_number');
-        $todayDailySession = $dailySessions->first(fn (EventSession $session) => $session->date?->isToday());
-        $hasArrivalAttendance = $isAdminOrOrganizer || $this->attendanceService->hasArrivalAttendance($event, $eventParticipant);
-        $canAccessLearning = $isAdminOrOrganizer || ($hasArrivalAttendance
-            && (! $todayDailySession || in_array($todayDailySession->id, $attendedSessionIds, true)));
-        $canAccessSessionContent = function (EventSession $session) use ($dailySessions, $attendedSessionIds, $eventParticipant, $hasArrivalAttendance, $isAdminOrOrganizer): bool {
+        $todayDailySession = $dailySessions->first(fn (EventSession $session) => $session->date?->isToday() && $session->isAttendanceActive());
+        $hasArrivalAttendance = $isAdminOrOrganizer || $this->attendanceService->hasArrivalAttendance($event, $eventParticipant)
+            || ! $sessions->where('session_type_code', 'KEHADIRAN_AWAL')->contains(fn ($s) => $s->isAttendanceActive());
+        $canAccessLearning = true;
+        $canAccessSessionContent = function (EventSession $session) use ($attendedSessionIds, $eventParticipant, $isAdminOrOrganizer): bool {
             if ($isAdminOrOrganizer) {
                 return true;
             }
 
-            $dailySession = $dailySessions->get($session->day_number);
+            if ($session->track_codes && ! in_array($eventParticipant->track_code, $session->track_codes, true)) {
+                return false;
+            }
 
-            return $hasArrivalAttendance
-                && (! $session->track_codes || in_array($eventParticipant->track_code, $session->track_codes, true))
-                && (! $dailySession || in_array($dailySession->id, $attendedSessionIds, true))
-                && ($session->attendance_setting === 'none' || in_array($session->id, $attendedSessionIds, true));
+            // Jika sesi tidak memerlukan absensi (none/disabled) atau absensi sudah tertutup/tidak aktif, bisa dilewati
+            if (in_array($session->attendance_setting, ['none', 'disabled'], true) || ! $session->isAttendanceActive()) {
+                return true;
+            }
+
+            return in_array($session->id, $attendedSessionIds, true);
         };
         $eventReaderUrl = fn (?string $materialSlug): ?string => $materialSlug
             ? route('reader.show', ['slug' => $materialSlug, 'event' => $event->slug])
@@ -127,7 +131,7 @@ class EventLearningRoomService
             }
 
             $requiredSessions = $sessions->where('event_module_id', $module->id)
-                ->filter(fn (EventSession $session) => $session->attendance_setting !== 'none');
+                ->filter(fn (EventSession $session) => ! in_array($session->attendance_setting, ['none', 'disabled'], true) && $session->isAttendanceActive());
 
             return $requiredSessions->isEmpty() || $requiredSessions->contains(fn (EventSession $session) => in_array($session->id, $attendedSessionIds, true));
         };
@@ -239,7 +243,7 @@ class EventLearningRoomService
                 return true;
             })
             ->values()
-            ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $canAccessLearning, $hasArrivalAttendance, $isAdminOrOrganizer) {
+            ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $hasArrivalAttendance, $isAdminOrOrganizer) {
                 $userAttempts = $attemptsByPackage->get($pkg->id, collect());
 
                 $attemptsCount = $userAttempts->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)->count();
@@ -249,16 +253,17 @@ class EventLearningRoomService
                 // Check attendance prerequisite
                 $attendanceReqSessionId = $pkg->pivot?->requires_attendance_session_id;
                 $missingExamSession = $event->sessions->first(fn (EventSession $session) => $session->cbt_exam_package_id === $pkg->id
-                    && $session->attendance_setting !== 'none'
+                    && ! in_array($session->attendance_setting, ['none', 'disabled'], true)
+                    && $session->isAttendanceActive()
                     && ! in_array($session->id, $attendedSessionIds, true));
                 $sessionPrereqMet = ! $missingExamSession;
                 $sessionPrereqName = $missingExamSession?->topic;
 
                 if ($attendanceReqSessionId) {
-                    if (! in_array($attendanceReqSessionId, $attendedSessionIds, true)) {
+                    $reqSession = $event->sessions->firstWhere('id', $attendanceReqSessionId);
+                    if ($reqSession && ! in_array($reqSession->attendance_setting, ['none', 'disabled'], true) && $reqSession->isAttendanceActive() && ! in_array($attendanceReqSessionId, $attendedSessionIds, true)) {
                         $sessionPrereqMet = false;
-                        $reqSession = $event->sessions->firstWhere('id', $attendanceReqSessionId);
-                        $sessionPrereqName = $reqSession?->topic ?? "Sesi #{$attendanceReqSessionId}";
+                        $sessionPrereqName = $reqSession->topic ?? "Sesi #{$attendanceReqSessionId}";
                     }
                 }
 
@@ -283,12 +288,10 @@ class EventLearningRoomService
                     $deniedReason = 'Revisi ujian ini menggunakan unggah makalah PDF.';
                 }
 
-                if (! $hasArrivalAttendance) {
+                $arrivalSessionActive = $event->sessions->where('session_type_code', 'KEHADIRAN_AWAL')->contains(fn ($s) => $s->isAttendanceActive());
+                if (! $hasArrivalAttendance && $arrivalSessionActive) {
                     $isAllowed = false;
                     $deniedReason = 'Kehadiran awal event belum tercatat.';
-                } elseif (! $canAccessLearning) {
-                    $isAllowed = false;
-                    $deniedReason = 'Absensi harian hari ini belum tercatat.';
                 }
 
                 if ($isAdminOrOrganizer) {

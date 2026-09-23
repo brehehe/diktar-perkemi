@@ -91,6 +91,16 @@ class EventAttendanceService
 
     public function ensureArrivalAttendance(Event $event, EventParticipant $enrollment): void
     {
+        $arrivalSession = EventSession::query()
+            ->where('event_id', $event->id)
+            ->where('session_type_code', 'KEHADIRAN_AWAL')
+            ->first();
+
+        // Jika sesi kedatangan awal tidak ada atau absensinya sudah ditutup / tidak aktif, absensi bisa dilewati
+        if (! $arrivalSession || ! $arrivalSession->isAttendanceActive()) {
+            return;
+        }
+
         abort_unless(
             $this->hasArrivalAttendance($event, $enrollment),
             403,
@@ -100,6 +110,17 @@ class EventAttendanceService
 
     public function ensureDayAttendance(Event $event, EventParticipant $enrollment, int $dayNumber): void
     {
+        $dailySession = EventSession::query()
+            ->where('event_id', $event->id)
+            ->where('day_number', $dayNumber)
+            ->where('session_type_code', 'KEHADIRAN_HARIAN')
+            ->first();
+
+        // Jika sesi harian tidak ada atau absensinya sudah ditutup / tidak aktif, absensi bisa dilewati
+        if (! $dailySession || ! $dailySession->isAttendanceActive()) {
+            return;
+        }
+
         abort_unless(
             $this->hasDayAttendance($event, $enrollment, $dayNumber),
             403,
@@ -133,7 +154,7 @@ class EventAttendanceService
         $examSessions = EventSession::query()
             ->where('event_id', $event->id)
             ->where('cbt_exam_package_id', $package->id)
-            ->get(['id', 'day_number', 'attendance_setting']);
+            ->get(['id', 'day_number', 'attendance_setting', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open']);
 
         $linkedRequirementId = $event->linkedCbtPackages()
             ->where('cbt_exam_packages.id', $package->id)
@@ -143,7 +164,7 @@ class EventAttendanceService
             ? EventSession::query()
                 ->where('event_id', $event->id)
                 ->whereKey($linkedRequirementId)
-                ->firstOrFail(['id', 'day_number'])
+                ->first(['id', 'day_number', 'attendance_setting', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open'])
             : null;
 
         $dayNumbers = $examSessions->pluck('day_number');
@@ -155,7 +176,7 @@ class EventAttendanceService
             ->where('event_id', $event->id)
             ->where('session_type_code', 'KEHADIRAN_HARIAN')
             ->whereDate('date', today())
-            ->first(['id', 'day_number']);
+            ->first(['id', 'day_number', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open']);
         if ($todayDailySession) {
             $dayNumbers->push($todayDailySession->day_number);
         }
@@ -164,19 +185,28 @@ class EventAttendanceService
             ->where('event_id', $event->id)
             ->where('session_type_code', 'KEHADIRAN_HARIAN')
             ->whereIn('day_number', $dayNumbers->unique())
-            ->get(['id', 'day_number']);
+            ->get(['id', 'day_number', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open']);
 
+        // Hanya wajibkan absensi yang sedang aktif (sesi yang tertutup atau tanpa absensi bisa dilewati)
         $requiredSessionIds = $examSessions
-            ->where('attendance_setting', '!=', 'none')
+            ->filter(fn (EventSession $s) => ! in_array($s->attendance_setting, ['none', 'disabled'], true) && $s->isAttendanceActive())
             ->pluck('id');
-        if ($linkedRequirement) {
+
+        if ($linkedRequirement && ! in_array($linkedRequirement->attendance_setting, ['none', 'disabled'], true) && $linkedRequirement->isAttendanceActive()) {
             $requiredSessionIds->push($linkedRequirement->id);
         }
 
-        $attendanceSessionIds = $dailySessions->pluck('id')
+        $activeDailySessions = $dailySessions->filter(fn (EventSession $s) => $s->isAttendanceActive());
+
+        $attendanceSessionIds = $activeDailySessions->pluck('id')
             ->merge($requiredSessionIds)
             ->unique()
             ->values();
+
+        if ($attendanceSessionIds->isEmpty()) {
+            return;
+        }
+
         $attendedSessionIds = EventAttendance::query()
             ->where('event_id', $event->id)
             ->where('participant_id', $enrollment->participant_id)
@@ -185,7 +215,7 @@ class EventAttendanceService
             ->whereIn('event_session_id', $attendanceSessionIds)
             ->pluck('event_session_id');
 
-        foreach ($dailySessions as $dailySession) {
+        foreach ($activeDailySessions as $dailySession) {
             abort_unless(
                 $attendedSessionIds->contains($dailySession->id),
                 403,

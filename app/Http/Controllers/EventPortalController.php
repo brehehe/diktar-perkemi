@@ -481,16 +481,17 @@ class EventPortalController extends Controller
 
         $todayDailySession = $event->sessions()->where('session_type_code', 'KEHADIRAN_HARIAN')
             ->whereDate('date', today())->first();
-        if ($todayDailySession) {
+        if ($todayDailySession && $todayDailySession->isAttendanceActive()) {
             $this->attendanceService->ensureDayAttendance($event, $enrollment, $todayDailySession->day_number);
         }
 
-        $requiredSessionIds = $event->sessions()->where('event_module_id', $module->id)
-            ->where('attendance_setting', '!=', 'none')->pluck('id');
-        if ($requiredSessionIds->isNotEmpty()) {
+        $activeRequiredSessionIds = $event->sessions()->where('event_module_id', $module->id)
+            ->filter(fn ($s) => ! in_array($s->attendance_setting, ['none', 'disabled'], true) && $s->isAttendanceActive())
+            ->pluck('id');
+        if ($activeRequiredSessionIds->isNotEmpty()) {
             abort_unless(EventAttendance::where('event_id', $event->id)
                 ->where('participant_id', $enrollment->participant_id)
-                ->whereIn('event_session_id', $requiredSessionIds)
+                ->whereIn('event_session_id', $activeRequiredSessionIds)
                 ->where('attendance_type', 'check_in')
                 ->whereIn('status', ['present', 'late', 'manual_override'])->exists(), 403,
                 'Absensi sesi wajib dicatat sebelum membuka materi.');
@@ -542,30 +543,8 @@ class EventPortalController extends Controller
             return back()->with('error', "Absensi untuk sesi \"{$session->topic}\" belum dibuka oleh panitia.");
         }
 
-        if ($session->attendance_setting === 'none') {
+        if (in_array($session->attendance_setting, ['none', 'disabled'], true)) {
             return back()->with('error', 'Sesi ini tidak memerlukan absensi.');
-        }
-
-        if ($session->session_type_code !== 'KEHADIRAN_AWAL'
-            && $event->sessions()->where('session_type_code', 'KEHADIRAN_AWAL')->exists()
-            && ! $this->attendanceService->hasArrivalAttendance($event, $eventParticipant)) {
-            return back()->withInput()->with(
-                'error',
-                'Pindai QR kedatangan awal event sebelum absensi harian, sesi, materi, atau ujian.',
-            );
-        }
-
-        if ($session->session_type_code === 'KEHADIRAN_HARIAN') {
-            if (! $session->date?->isToday()) {
-                return back()->with('error', 'QR kehadiran harian hanya berlaku pada tanggal yang dijadwalkan.');
-            }
-        } elseif ($session->session_type_code !== 'KEHADIRAN_AWAL') {
-            if (! $this->attendanceService->hasDayAttendance($event, $eventParticipant, $session->day_number)) {
-                return back()->withInput()->with(
-                    'error',
-                    "Catat kehadiran hari ke-{$session->day_number} sebelum melakukan absensi sesi ini.",
-                );
-            }
         }
 
         if ($session->attendance_close_at && now()->isAfter($session->attendance_close_at)) {

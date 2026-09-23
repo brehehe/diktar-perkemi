@@ -219,6 +219,40 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
             ),
         },
         {
+            header: 'Sertifikasi & Riwayat',
+            cell: (row) => (
+                <div className="text-xs space-y-1 max-w-[200px]">
+                    {row.target_track ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                🎯 {row.target_track}
+                            </span>
+                        </div>
+                    ) : (
+                        <span className="text-[#6B7C93] text-[11px]">-</span>
+                    )}
+                    {row.certifications_history && row.certifications_history.length > 0 ? (
+                        <div className="flex items-center gap-1 flex-wrap">
+                            {row.certifications_history.slice(0, 2).map((cert, idx) => (
+                                <span
+                                    key={idx}
+                                    title={`${cert.event_title} (${cert.certificate_number || 'Lulus'})`}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium truncate max-w-[170px]"
+                                >
+                                    📜 {cert.track_name || cert.track_code}
+                                </span>
+                            ))}
+                            {row.certifications_history.length > 2 && (
+                                <span className="text-[10px] text-[#6B7C93] font-medium">
+                                    +{row.certifications_history.length - 2}
+                                </span>
+                            )}
+                        </div>
+                    ) : null}
+                </div>
+            ),
+        },
+        {
             header: 'Akun Portal',
             cell: (row) => (
                 <span

@@ -40,52 +40,110 @@ export default function Show({ participant, enrolledEvents = [], matchingUser = 
             />
 
             {activeTab === 'informasi' ? (
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
-                    <section aria-labelledby="participant-identity" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
-                        <h2 id="participant-identity" className="font-display text-lg font-bold text-[#0E2747]">Informasi peserta</h2>
-                        <dl className="mt-3">
-                            <Detail label="Nama" value={participant.name} />
-                            <Detail label="Email" value={participant.email} />
-                            <Detail label="Nomor Induk Kenshi (NIK)" value={participant.kenshi_id} />
-                            <Detail label="Telepon" value={participant.phone} />
-                            <Detail label="Asal" value={participant.origin} />
-                            <Detail label="Dojo" value={participant.dojo} />
-                            <Detail label="Tingkat Dan" value={participant.dan_roman || participant.dan_level} />
-                            <Detail label="Terdaftar" value={participant.created_at} />
-                        </dl>
-                    </section>
-                    <div className="space-y-6">
-                        <section aria-labelledby="participant-account" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
-                            <h2 id="participant-account" className="font-display text-lg font-bold text-[#0E2747]">Akun portal</h2>
-                            {participant.user ? (
-                                <dl className="mt-3">
-                                    <Detail label="Nama akun" value={participant.user.name} />
-                                    <Detail label="Email akun" value={participant.user.email} />
-                                    <Detail label="Login NIK" value={participant.kenshi_id} />
-                                    <Detail label="Peran" value={participant.user.role} />
-                                </dl>
-                            ) : (
-                                <div className="mt-3 text-sm leading-relaxed text-[#6B7C93]">
-                                    <p>Belum terhubung dengan akun portal. Hubungkan akun agar peserta dapat login menggunakan email atau NIK.</p>
-                                    {matchingUser && (
-                                        <div className="mt-3">
-                                            <p>Akun Peserta dengan email yang sama: <strong className="text-[#112743]">{matchingUser.name}</strong></p>
-                                            <button type="button" onClick={() => router.patch(`${baseUrl}/akun`)}
-                                                className="mt-3 min-h-11 border border-[#0B63CE] px-4 py-2 font-semibold text-[#0B63CE] hover:bg-[#EAF5FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE] focus-visible:ring-offset-2">
-                                                Hubungkan akun
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                <div className="space-y-6">
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
+                        <section aria-labelledby="participant-identity" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
+                            <h2 id="participant-identity" className="font-display text-lg font-bold text-[#0E2747]">Informasi peserta</h2>
+                            <dl className="mt-3">
+                                <Detail label="Nama" value={participant.name} />
+                                <Detail label="Email" value={participant.email} />
+                                <Detail label="Nomor Induk Kenshi (NIK)" value={participant.kenshi_id} />
+                                <Detail label="Telepon" value={participant.phone} />
+                                <Detail label="Asal" value={participant.origin} />
+                                <Detail label="Dojo" value={participant.dojo} />
+                                <Detail label="Tingkat Dan" value={participant.dan_roman || participant.dan_level} />
+                                <Detail label="Terdaftar" value={participant.created_at} />
+                            </dl>
                         </section>
-                        {participant.admin_notes && (
-                            <section aria-labelledby="participant-notes" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
-                                <h2 id="participant-notes" className="font-display text-lg font-bold text-[#0E2747]">Catatan admin</h2>
-                                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#112743]">{participant.admin_notes}</p>
+                        <div className="space-y-6">
+                            <section aria-labelledby="participant-account" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
+                                <h2 id="participant-account" className="font-display text-lg font-bold text-[#0E2747]">Akun portal</h2>
+                                {participant.user ? (
+                                    <dl className="mt-3">
+                                        <Detail label="Nama akun" value={participant.user.name} />
+                                        <Detail label="Email akun" value={participant.user.email} />
+                                        <Detail label="Login & Kata Sandi" value={`${participant.kenshi_id} (NIK)`} />
+                                        <Detail label="Peran" value={participant.user.role} />
+                                    </dl>
+                                ) : (
+                                    <div className="mt-3 text-sm leading-relaxed text-[#6B7C93]">
+                                        <p>Belum terhubung dengan akun portal. Hubungkan akun agar peserta dapat login menggunakan email atau NIK.</p>
+                                        {matchingUser && (
+                                            <div className="mt-3">
+                                                <p>Akun Peserta dengan email yang sama: <strong className="text-[#112743]">{matchingUser.name}</strong></p>
+                                                <button type="button" onClick={() => router.patch(`${baseUrl}/akun`)}
+                                                    className="mt-3 min-h-11 border border-[#0B63CE] px-4 py-2 font-semibold text-[#0B63CE] hover:bg-[#EAF5FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE] focus-visible:ring-offset-2">
+                                                    Hubungkan akun
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </section>
-                        )}
+                            {participant.admin_notes && (
+                                <section aria-labelledby="participant-notes" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
+                                    <h2 id="participant-notes" className="font-display text-lg font-bold text-[#0E2747]">Catatan admin</h2>
+                                    <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#112743]">{participant.admin_notes}</p>
+                                </section>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Section Riwayat Sertifikasi */}
+                    <section aria-labelledby="participant-certifications" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
+                        <div className="flex items-center justify-between pb-3 border-b border-[#DCE7F3]">
+                            <div>
+                                <h2 id="participant-certifications" className="font-display text-lg font-bold text-[#0E2747]">
+                                    Riwayat Sertifikasi & Kualifikasi
+                                </h2>
+                                <p className="text-sm text-[#6B7C93] mt-0.5">
+                                    Sertifikat dan lisensi kualifikasi yang pernah diikuti kenshi.
+                                </p>
+                            </div>
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded bg-[#EAF5FF] text-[#0B63CE] border border-[#0B63CE]/20">
+                                {participant.certifications_history?.length || 0} Sertifikasi Terdata
+                            </span>
+                        </div>
+
+                        {participant.certifications_history && participant.certifications_history.length > 0 ? (
+                            <div className="grid gap-4 mt-4 sm:grid-cols-2">
+                                {participant.certifications_history.map((cert) => (
+                                    <div key={cert.id} className="p-4 border border-[#DCE7F3] rounded-lg bg-slate-50/50 hover:bg-white hover:border-[#0B63CE]/40 transition-all">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="font-bold text-sm text-[#0E2747]">{cert.track_name}</span>
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                                                {cert.graduation_status === 'passed' ? 'Lulus / Bersertifikat' : cert.graduation_status}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-[#6B7C93] mt-1.5 font-medium">{cert.event_title}</p>
+                                        <div className="mt-3 pt-2.5 border-t border-[#DCE7F3]/70 grid grid-cols-2 gap-2 text-xs">
+                                            <div>
+                                                <span className="text-[#6B7C93] block text-[11px]">No. Sertifikat:</span>
+                                                <span className="font-mono font-medium text-[#112743]">{cert.certificate_number || '—'}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[#6B7C93] block text-[11px]">Waktu:</span>
+                                                <span className="text-[#112743] font-medium">{cert.date_formatted || '—'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-6 text-center text-sm text-[#6B7C93]">
+                                Belum ada riwayat sertifikasi sebelumnya yang tercatat di sistem.
+                            </div>
+                        )}
+
+                        {participant.notes && (
+                            <div className="mt-4 pt-4 border-t border-[#DCE7F3]">
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Data SIM PERKEMI & Catatan Tambahan</h3>
+                                <div className="mt-2 p-3 bg-blue-50/50 border border-blue-100 rounded text-xs text-[#112743] leading-relaxed">
+                                    {participant.notes}
+                                </div>
+                            </div>
+                        )}
+                    </section>
                 </div>
             ) : (
                 <section aria-labelledby="participant-events">

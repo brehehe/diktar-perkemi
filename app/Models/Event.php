@@ -157,6 +157,16 @@ class Event extends Model
             ->withTimestamps();
     }
 
+    public function registrationForms(): HasMany
+    {
+        return $this->hasMany(EventRegistrationForm::class);
+    }
+
+    public function integrityPacts(): HasMany
+    {
+        return $this->hasMany(EventIntegrityPact::class);
+    }
+
     public function getNameAttribute(): ?string
     {
         return $this->title;

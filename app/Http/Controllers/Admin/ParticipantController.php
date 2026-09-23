@@ -26,18 +26,27 @@ class ParticipantController extends Controller
     public function index(Request $request): Response
     {
         $query = Participant::query()
-            ->with(['user', 'event:id,title', 'latestEventParticipant.event', 'latestEventParticipant.track'])
+            ->with([
+                'user',
+                'event:id,title',
+                'latestEventParticipant.event',
+                'latestEventParticipant.track',
+                'eventParticipants.event:id,title,start_date,end_date,status',
+                'eventParticipants.track:id,code,name,color',
+            ])
             ->withCount('eventParticipants');
+
+        $likeOp = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
 
         if ($request->filled('q')) {
             $search = trim((string) $request->input('q'));
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'ilike', "%{$search}%")
-                    ->orWhere('kenshi_id_number', 'ilike', "%{$search}%")
-                    ->orWhere('email', 'ilike', "%{$search}%")
-                    ->orWhere('origin_province', 'ilike', "%{$search}%")
-                    ->orWhere('origin_city', 'ilike', "%{$search}%")
-                    ->orWhere('origin_dojo', 'ilike', "%{$search}%");
+            $query->where(function ($q) use ($search, $likeOp) {
+                $q->where('name', $likeOp, "%{$search}%")
+                    ->orWhere('kenshi_id_number', $likeOp, "%{$search}%")
+                    ->orWhere('email', $likeOp, "%{$search}%")
+                    ->orWhere('origin_province', $likeOp, "%{$search}%")
+                    ->orWhere('origin_city', $likeOp, "%{$search}%")
+                    ->orWhere('origin_dojo', $likeOp, "%{$search}%");
             });
         }
 
@@ -45,15 +54,15 @@ class ParticipantController extends Controller
             $danVal = (int) $request->input('dan_level');
             $danMap = [1 => 'I-DAN', 2 => 'II-DAN', 3 => 'III-DAN', 4 => 'IV-DAN', 5 => 'V-DAN', 6 => 'VI-DAN', 7 => 'VII-DAN', 8 => 'VIII-DAN'];
             $targetDan = $danMap[$danVal] ?? "{$danVal}-DAN";
-            $query->where('dan_rank', 'ilike', "%{$targetDan}%");
+            $query->where('dan_rank', $likeOp, "%{$targetDan}%");
         }
 
         if ($request->filled('origin')) {
             $originSearch = trim((string) $request->input('origin'));
-            $query->where(function ($oq) use ($originSearch) {
-                $oq->where('origin_province', 'ilike', "%{$originSearch}%")
-                    ->orWhere('origin_city', 'ilike', "%{$originSearch}%")
-                    ->orWhere('origin_dojo', 'ilike', "%{$originSearch}%");
+            $query->where(function ($oq) use ($originSearch, $likeOp) {
+                $oq->where('origin_province', $likeOp, "%{$originSearch}%")
+                    ->orWhere('origin_city', $likeOp, "%{$originSearch}%")
+                    ->orWhere('origin_dojo', $likeOp, "%{$originSearch}%");
             });
         }
 
@@ -74,30 +83,54 @@ class ParticipantController extends Controller
             }
         }
 
-        $participants = $query->orderBy('name')->paginate(10)->withQueryString()->through(fn (Participant $p) => [
-            'id' => $p->id,
-            'event_id' => $p->event_id,
-            'event_title' => $p->event?->title,
-            'name' => $p->name,
-            'email' => $p->email,
-            'kenshi_id' => $p->kenshi_id,
-            'phone' => $p->phone,
-            'dan_level' => $p->dan_level,
-            'dan_roman' => $p->dan_roman,
-            'origin' => $p->origin,
-            'dojo' => $p->dojo,
-            'has_account' => $p->user_id !== null,
-            'user' => $p->user ? [
-                'id' => $p->user->id,
-                'name' => $p->user->name,
-                'email' => $p->user->email,
-                'role' => $p->user->role,
-            ] : null,
-            'events_count' => $p->event_participants_count,
-            'latest_event' => $p->latestEventParticipant?->event?->name ?? 'Belum ada',
-            'latest_track' => $p->latestEventParticipant?->track?->code ?? '-',
-            'created_at' => $p->created_at?->format('d M Y'),
-        ]);
+        $participants = $query->orderBy('name')->paginate(10)->withQueryString()->through(function (Participant $p) {
+            $currentEp = $p->event_id ? $p->eventParticipants->firstWhere('event_id', $p->event_id) : $p->latestEventParticipant;
+            $targetTrack = $currentEp?->track?->name ?? $currentEp?->track_code;
+
+            $certHistory = $p->eventParticipants
+                ->filter(fn (EventParticipant $ep) => $ep->graduation_status === 'passed' || ! empty($ep->certificate_number))
+                ->map(fn (EventParticipant $ep) => [
+                    'event_id' => $ep->event_id,
+                    'event_title' => $ep->event?->title ?? $ep->event?->name ?? 'Event Penataran',
+                    'track_name' => $ep->track?->name ?? $ep->track_code,
+                    'track_code' => $ep->track_code,
+                    'certificate_number' => $ep->certificate_number,
+                    'graduation_status' => $ep->graduation_status,
+                    'year' => $ep->event?->start_date?->format('Y') ?? $ep->certificate_issued_at?->format('Y'),
+                    'is_current' => $ep->event_id === $p->event_id,
+                ])
+                ->values();
+
+            return [
+                'id' => $p->id,
+                'event_id' => $p->event_id,
+                'event_title' => $p->event?->title,
+                'name' => $p->name,
+                'email' => $p->email,
+                'kenshi_id' => $p->kenshi_id,
+                'phone' => $p->phone,
+                'dan_level' => $p->dan_level,
+                'dan_roman' => $p->dan_roman,
+                'origin' => $p->origin,
+                'dojo' => $p->dojo,
+                'notes' => $p->notes,
+                'admin_notes' => $p->admin_notes,
+                'has_account' => $p->user_id !== null,
+                'user' => $p->user ? [
+                    'id' => $p->user->id,
+                    'name' => $p->user->name,
+                    'email' => $p->user->email,
+                    'role' => $p->user->role,
+                ] : null,
+                'events_count' => $p->event_participants_count,
+                'target_track' => $targetTrack,
+                'target_track_code' => $currentEp?->track_code,
+                'certifications_history' => $certHistory,
+                'latest_event' => $p->latestEventParticipant?->event?->title ?? $p->latestEventParticipant?->event?->name ?? 'Belum ada',
+                'latest_track' => $p->latestEventParticipant?->track?->code ?? '-',
+                'created_at' => $p->created_at?->format('d M Y'),
+            ];
+        });
 
         $participantStats = Participant::query()->selectRaw(
             'COUNT(*) as total_participants,
@@ -212,6 +245,7 @@ class ParticipantController extends Controller
                 'dan_level' => $participant->dan_level,
                 'dan_roman' => $participant->dan_roman,
                 'documents' => $participant->documents ?? [],
+                'notes' => $participant->notes,
                 'admin_notes' => $participant->admin_notes,
                 'created_at' => $participant->created_at?->format('d M Y'),
                 'user' => $participant->user ? [
@@ -220,6 +254,21 @@ class ParticipantController extends Controller
                     'email' => $participant->user->email,
                     'role' => $participant->user->role,
                 ] : null,
+                'certifications_history' => $participant->eventParticipants
+                    ->filter(fn (EventParticipant $ep) => $ep->graduation_status === 'passed' || ! empty($ep->certificate_number))
+                    ->map(fn (EventParticipant $ep) => [
+                        'id' => $ep->id,
+                        'event_id' => $ep->event_id,
+                        'event_title' => $ep->event?->title ?? $ep->event?->name ?? 'Event Penataran',
+                        'track_name' => $ep->track?->name ?? $ep->track_code,
+                        'track_code' => $ep->track_code,
+                        'certificate_number' => $ep->certificate_number,
+                        'graduation_status' => $ep->graduation_status,
+                        'date_formatted' => $ep->event?->date_formatted ?? $ep->event?->start_date?->format('d M Y'),
+                        'place' => $ep->event?->place ?? $ep->event?->location,
+                        'theory_score' => $ep->theory_score ?? $ep->score_theory,
+                        'practice_score' => $ep->practice_score ?? $ep->score_practice,
+                    ])->values(),
             ],
             'enrolledEvents' => $enrolledEvents,
         ]);

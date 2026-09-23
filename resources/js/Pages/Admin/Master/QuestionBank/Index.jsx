@@ -5,6 +5,7 @@ import PageHeader from '../../../../Components/admin/PageHeader';
 import Button from '../../../../Components/ui/Button';
 import Badge from '../../../../Components/ui/Badge';
 import Modal from '../../../../Components/ui/Modal';
+import AlertDialog from '../../../../Components/ui/AlertDialog';
 import FormField from '../../../../Components/ui/FormField';
 import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
@@ -65,6 +66,11 @@ export default function Index({
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [previewQuestion, setPreviewQuestion] = useState(null);
     const [activeQuestion, setActiveQuestion] = useState(null);
+    const [questionToDelete, setQuestionToDelete] = useState(null);
+    const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+    const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 
     const importForm = useForm({
         file: null,
@@ -189,9 +195,7 @@ export default function Index({
     };
 
     const handleDelete = (q) => {
-        if (confirm(`Hapus butir soal "${q.code}" dari Bank Soal?`)) {
-            router.delete(`/admin/master/bank-soal/${q.id}`);
-        }
+        setQuestionToDelete(q);
     };
 
     const handleOptionTextChange = (index, text) => {
@@ -376,11 +380,57 @@ export default function Index({
                 </TableToolbar>
             </div>
 
+            {/* Bulk Actions Banner */}
+            {selectedQuestionIds.length > 0 && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 mb-4 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                        <span className="font-bold font-mono px-2 py-0.5 rounded bg-amber-200 text-amber-900">
+                            {selectedQuestionIds.length}
+                        </span>
+                        <span>butir soal dipilih</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="xs"
+                            onClick={() => setSelectedQuestionIds([])}
+                        >
+                            Batal Pilih
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="danger"
+                            size="xs"
+                            icon={Trash2}
+                            onClick={() => setIsBulkDeleteDialogOpen(true)}
+                        >
+                            Hapus ({selectedQuestionIds.length}) Soal Terpilih
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {/* Table of Question Bank */}
             <TableSurface pagination={questions} ariaLabel="Daftar bank soal">
                 <table className="w-full text-left text-xs text-[#112743]">
                         <thead className="bg-[#F8FBFF] text-[#6B7C93] uppercase font-mono text-[10px] tracking-wider border-b border-[#DCE7F3]">
                             <tr>
+                                <th className="px-3 py-3 w-10 text-center">
+                                    <input
+                                        type="checkbox"
+                                        aria-label="Pilih semua soal pada halaman ini"
+                                        className="rounded border-[#DCE7F3] text-[#0B63CE] focus:ring-[#0B63CE]/20 cursor-pointer"
+                                        checked={questions.data.length > 0 && selectedQuestionIds.length === questions.data.length}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedQuestionIds(questions.data.map((q) => q.id));
+                                            } else {
+                                                setSelectedQuestionIds([]);
+                                            }
+                                        }}
+                                    />
+                                </th>
                                 <th className="px-4 py-3">Kode</th>
                                 <th className="px-4 py-3">Pertanyaan Ringkas</th>
                                 <th className="px-4 py-3">Modul Soal</th>
@@ -394,7 +444,7 @@ export default function Index({
                         <tbody className="divide-y divide-[#DCE7F3]">
                             {questions.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-12 text-center text-[#6B7C93]">
+                                    <td colSpan={9} className="px-4 py-12 text-center text-[#6B7C93]">
                                         <FileQuestion className="w-8 h-8 mx-auto text-[#6B7C93]/40 mb-2" />
                                         <p className="font-semibold text-sm text-[#0E2747]">Belum ada butir soal.</p>
                                         <p className="text-xs text-[#6B7C93] mt-1">
@@ -408,6 +458,21 @@ export default function Index({
                             ) : (
                                 questions.data.map((q) => (
                                     <tr key={q.id} className="hover:bg-[#F8FBFF]/60 transition-colors">
+                                        <td className="px-3 py-3 text-center">
+                                            <input
+                                                type="checkbox"
+                                                aria-label={`Pilih soal ${q.code}`}
+                                                className="rounded border-[#DCE7F3] text-[#0B63CE] focus:ring-[#0B63CE]/20 cursor-pointer"
+                                                checked={selectedQuestionIds.includes(q.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedQuestionIds([...selectedQuestionIds, q.id]);
+                                                    } else {
+                                                        setSelectedQuestionIds(selectedQuestionIds.filter((id) => id !== q.id));
+                                                    }
+                                                }}
+                                            />
+                                        </td>
                                         <td className="px-4 py-3">
                                             <div className="flex flex-col">
                                                 <span className="font-mono font-bold text-[#0B63CE]">{q.code}</span>
@@ -873,6 +938,53 @@ export default function Index({
                     />
                 </form>
             </Modal>
+
+            {/* Modal Konfirmasi Hapus Butir Soal Tunggal */}
+            <AlertDialog
+                isOpen={Boolean(questionToDelete)}
+                onClose={() => !isDeleting && setQuestionToDelete(null)}
+                title="Hapus Butir Soal?"
+                description={`Apakah Anda yakin ingin menghapus butir soal "${questionToDelete?.code}"? Butir soal akan dihapus dari Bank Soal dan dilepaskan dari seluruh modul terkait.`}
+                confirmText={isDeleting ? 'Menghapus...' : 'Hapus Soal'}
+                variant="danger"
+                loading={isDeleting}
+                onConfirm={() => {
+                    setIsDeleting(true);
+                    router.delete(`/admin/master/bank-soal/${questionToDelete.id}`, {
+                        preserveScroll: true,
+                        onFinish: () => {
+                            setIsDeleting(false);
+                            setQuestionToDelete(null);
+                        },
+                    });
+                }}
+            />
+
+            {/* Modal Konfirmasi Hapus Massal Butir Soal */}
+            <AlertDialog
+                isOpen={isBulkDeleteDialogOpen}
+                onClose={() => !isBulkDeleting && setIsBulkDeleteDialogOpen(false)}
+                title="Hapus Butir Soal Terpilih?"
+                description={`Apakah Anda yakin ingin menghapus ${selectedQuestionIds.length} butir soal yang dipilih secara bersamaan? Tindakan ini akan menghapus soal-soal tersebut dari Bank Soal.`}
+                confirmText={isBulkDeleting ? 'Menghapus...' : `Hapus ${selectedQuestionIds.length} Soal`}
+                variant="danger"
+                loading={isBulkDeleting}
+                onConfirm={() => {
+                    setIsBulkDeleting(true);
+                    router.post('/admin/master/bank-soal/hapus-massal', {
+                        ids: selectedQuestionIds,
+                    }, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            setSelectedQuestionIds([]);
+                        },
+                        onFinish: () => {
+                            setIsBulkDeleting(false);
+                            setIsBulkDeleteDialogOpen(false);
+                        },
+                    });
+                }}
+            />
         </AdminLayout>
     );
 }

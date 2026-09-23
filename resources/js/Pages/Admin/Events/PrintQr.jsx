@@ -12,6 +12,23 @@ export default function PrintQr({ event, session, scanUrl, qrSvg }) {
         <div className="min-h-screen bg-[#F8FBFF] text-[#112743] font-sans antialiased py-6 sm:py-10 px-4">
             <Head title={`Cetak QR Code — ${session.topic} (${event.name})`} />
 
+            <style>{`
+                .qr-code-wrapper {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    margin: 0 auto !important;
+                }
+                .qr-code-wrapper svg {
+                    display: block !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                    max-width: 100% !important;
+                    max-height: 100% !important;
+                    margin: 0 auto !important;
+                }
+            `}</style>
+
             {/* Screen-only Top Navigation Bar */}
             <div className="max-w-2xl mx-auto mb-6 flex items-center justify-between print:hidden">
                 <Link
@@ -89,12 +106,12 @@ export default function PrintQr({ event, session, scanUrl, qrSvg }) {
                 {/* Big High-Res QR Code */}
                 <div className="flex flex-col items-center justify-center p-6 sm:p-8 bg-[#F8FBFF] rounded-2xl border-2 border-dashed border-[#0B63CE]/30 max-w-sm mx-auto mb-8 shadow-xs">
                     <div
-                        className="w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
+                        className="w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center qr-code-wrapper"
                         role="img"
                         aria-label={`QR absensi ${session.topic}`}
                         dangerouslySetInnerHTML={{ __html: qrSvg }}
                     />
-                    <div className="mt-4 text-xs font-medium text-[#6B7C93] flex items-center gap-1.5">
+                    <div className="mt-4 text-xs font-medium text-[#6B7C93] flex items-center justify-center gap-1.5 text-center">
                         <QrCode className="w-4 h-4 text-[#0B63CE]" />
                         <span>Pindai QR dengan kamera smartphone peserta</span>
                     </div>

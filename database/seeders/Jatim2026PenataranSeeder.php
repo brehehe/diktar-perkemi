@@ -2,23 +2,34 @@
 
 namespace Database\Seeders;
 
+use App\Http\Controllers\EventIntegrityPactController;
+use App\Models\CbtExamAttempt;
+use App\Models\CbtExamPackage;
+use App\Models\CbtQuestion;
 use App\Models\Event;
+use App\Models\EventAttendance;
+use App\Models\EventIntegrityPact;
 use App\Models\EventModule;
 use App\Models\EventParticipant;
+use App\Models\EventRegistrationForm;
 use App\Models\EventRoom;
 use App\Models\EventSession;
 use App\Models\EventSessionType;
 use App\Models\Material;
 use App\Models\Participant;
 use App\Models\ParticipantTrack;
+use App\Models\QuestionBank;
+use App\Models\QuestionModule;
 use App\Models\Speaker;
 use App\Models\User;
+use App\Services\QuestionModuleImportService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 class Jatim2026PenataranSeeder extends Seeder
 {
@@ -41,13 +52,26 @@ class Jatim2026PenataranSeeder extends Seeder
             $this->seedParticipantTracks();
             $this->seedSessionTypes();
 
-            $event = $this->seedEvent();
+            $organizer = User::query()->where('role', 'Penyelenggara')->first()
+                ?? User::query()->where('role', 'Admin')->first()
+                ?? User::query()->first()
+                ?? User::query()->create([
+                    'name' => 'Panitia Pelaksana Penataran 2026',
+                    'email' => 'panitia@jatim.perkemi.id',
+                    'role' => 'Penyelenggara',
+                    'password' => Hash::make('password'),
+                ]);
+
+            $event = $this->seedEvent($organizer);
+            $pastEvents = $this->seedPastEvents($organizer);
+
             $rooms = $this->seedRooms($event);
             $speakers = $this->seedSpeakers($event);
             $modules = $this->seedModules($event, $speakers);
+            $cbtPackages = $this->seedCbtPackages($event, $organizer);
 
-            $this->seedSessions($event, $rooms, $speakers, $modules);
-            $this->seedParticipants($event);
+            $this->seedSessions($event, $rooms, $speakers, $modules, $cbtPackages);
+            $this->seedParticipants($event, $pastEvents);
 
             $totalEffectiveJp = (int) $event->sessions()
                 ->whereNotIn('session_type_code', ['KEHADIRAN_AWAL', 'KEHADIRAN_HARIAN', 'OPERASIONAL'])
@@ -167,9 +191,9 @@ class Jatim2026PenataranSeeder extends Seeder
         }
     }
 
-    private function seedEvent(): Event
+    private function seedEvent(?User $organizer = null): Event
     {
-        $organizer = User::query()->where('role', 'Penyelenggara')->first() ?? User::query()->where('role', 'Admin')->first();
+        $organizer = $organizer ?? User::query()->where('role', 'Penyelenggara')->first() ?? User::query()->where('role', 'Admin')->first();
 
         return Event::query()->updateOrCreate(
             ['slug' => self::EVENT_SLUG],
@@ -199,6 +223,99 @@ class Jatim2026PenataranSeeder extends Seeder
                 ],
             ]
         );
+    }
+
+    /**
+     * @return Collection<string, Event>
+     */
+    private function seedPastEvents(User $organizer): Collection
+    {
+        $pastEventsConfig = [
+            'PD' => [
+                'slug' => 'penataran-pelatih-daerah-2024',
+                'title' => 'Penataran Pelatih Daerah PERKEMI Jawa Timur 2024',
+                'description' => 'Penataran Standardisasi Kompetensi Kepelatihan Tingkat Daerah PERKEMI Jawa Timur 2024.',
+                'start_date' => Carbon::parse('2024-12-10 08:00:00'),
+                'end_date' => Carbon::parse('2024-12-13 18:00:00'),
+                'location' => 'Dojo Pengprov PERKEMI Jawa Timur, Surabaya',
+                'organizer' => 'Pengurus Provinsi PERKEMI Jawa Timur',
+                'duration_text' => '4 Hari (10–13 Desember 2024)',
+                'status' => 'completed',
+            ],
+            'WAD' => [
+                'slug' => 'penataran-wasit-daerah-2025',
+                'title' => 'Penataran Wasit Daerah PERKEMI Jawa Timur 2025',
+                'description' => 'Penataran dan Penyegaran Wasit Daerah PERKEMI Jawa Timur untuk Kejurda dan Kejuaraan Daerah.',
+                'start_date' => Carbon::parse('2025-10-20 08:00:00'),
+                'end_date' => Carbon::parse('2025-10-23 18:00:00'),
+                'location' => 'GOR Kertajaya Surabaya, Jawa Timur',
+                'organizer' => 'Pengurus Provinsi PERKEMI Jawa Timur',
+                'duration_text' => '4 Hari (20–23 Oktober 2025)',
+                'status' => 'completed',
+            ],
+            'PED' => [
+                'slug' => 'penataran-penguji-daerah-2025',
+                'title' => 'Penataran Penguji Daerah PERKEMI Jawa Timur 2025',
+                'description' => 'Penataran dan Standardisasi Dewan Penguji Daerah Ujian Kenaikan Tingkat Kyu 6–Kyu 1.',
+                'start_date' => Carbon::parse('2025-10-15 08:00:00'),
+                'end_date' => Carbon::parse('2025-10-18 18:00:00'),
+                'location' => 'Ubaya Training Center (UTC), Trawas Mojokerto',
+                'organizer' => 'Pengurus Provinsi PERKEMI Jawa Timur',
+                'duration_text' => '4 Hari (15–18 Oktober 2025)',
+                'status' => 'completed',
+            ],
+            'PN' => [
+                'slug' => 'penataran-pelatih-nasional-2024',
+                'title' => 'Penataran Pelatih Nasional PB PERKEMI 2024',
+                'description' => 'Penataran Terpadu Pelatih Tingkat Nasional PB PERKEMI dalam Rangka Standardisasi Pembinaan Atlet Pelatda dan Pelatnas.',
+                'start_date' => Carbon::parse('2024-12-18 08:00:00'),
+                'end_date' => Carbon::parse('2024-12-22 18:00:00'),
+                'location' => 'Pusdiklat Shorinji Kempo PB PERKEMI, Pondok Gede, Jakarta Timur',
+                'organizer' => 'Pengurus Besar Persaudaraan Shorinji Kempo Indonesia (PB PERKEMI)',
+                'duration_text' => '5 Hari (18–22 Desember 2024)',
+                'status' => 'completed',
+            ],
+            'PEN' => [
+                'slug' => 'penataran-penguji-nasional-2025',
+                'title' => 'Penataran Penguji Nasional PB PERKEMI 2025',
+                'description' => 'Penataran Dewan Penguji Bersertifikat Nasional untuk Pengujian UKT Dan PB PERKEMI.',
+                'start_date' => Carbon::parse('2025-12-10 08:00:00'),
+                'end_date' => Carbon::parse('2025-12-14 18:00:00'),
+                'location' => 'Pusdiklat Shorinji Kempo PB PERKEMI, Jakarta',
+                'organizer' => 'PB PERKEMI',
+                'duration_text' => '5 Hari (10–14 Desember 2025)',
+                'status' => 'completed',
+            ],
+            'WAN' => [
+                'slug' => 'penataran-wasit-nasional-2025',
+                'title' => 'Penataran Wasit Nasional PB PERKEMI 2025',
+                'description' => 'Penataran dan Sertifikasi Wasit Nasional untuk Kejurnas, Babak Kualifikasi PON, dan PON.',
+                'start_date' => Carbon::parse('2025-12-15 08:00:00'),
+                'end_date' => Carbon::parse('2025-12-19 18:00:00'),
+                'location' => 'Pusdiklat Shorinji Kempo PB PERKEMI, Jakarta',
+                'organizer' => 'PB PERKEMI',
+                'duration_text' => '5 Hari (15–19 Desember 2025)',
+                'status' => 'completed',
+            ],
+        ];
+
+        return collect($pastEventsConfig)->mapWithKeys(function (array $data, string $key) use ($organizer): array {
+            $event = Event::query()->updateOrCreate(
+                ['slug' => $data['slug']],
+                [
+                    ...$data,
+                    'total_effective_jp' => 40,
+                    'total_schedule_jp' => 44,
+                    'jp_duration_minutes' => 45,
+                    'learning_method' => 'Pleno & Kelas Praktik',
+                    'quota' => 100,
+                    'access_roles' => ['Peserta', 'Pelatih', 'Penguji', 'Wasit', 'Pemateri', 'Penyelenggara'],
+                    'responsible_user_id' => $organizer->id,
+                ]
+            );
+
+            return [$key => $event];
+        });
     }
 
     /**
@@ -499,15 +616,477 @@ class Jatim2026PenataranSeeder extends Seeder
     }
 
     /**
+     * @return array<string, CbtExamPackage>
+     */
+    private function seedCbtPackages(Event $event, ?User $organizer = null): array
+    {
+        // 1. Import Soal dari 3 File Excel ke Master Modul & Bank Soal
+        $excelFiles = [
+            public_path('xlsx/Bank_Soal_WAD_WAN_PERKEMI_2026.xlsx'),
+            public_path('xlsx/Bank_Soal_PED_PEN_PERKEMI_2026_TERINTEGRASI.xlsx'),
+            public_path('xlsx/Bank_Soal_Gabungan_Penguji_Wasit_PERKEMI_2026.xlsx'),
+        ];
+
+        $importService = new QuestionModuleImportService;
+        foreach ($excelFiles as $excelPath) {
+            if (file_exists($excelPath)) {
+                try {
+                    $importService->import($excelPath, $organizer?->id, null);
+                } catch (\Throwable $e) {
+                    // Berkas telah diproses atau format modul sudah terbentuk
+                }
+            }
+        }
+
+        // 2. Seed Modul & Bank Soal Khusus Pelatih (PD & PN)
+        $this->seedPelatihModulesAndQuestions($organizer);
+
+        // 3. Pastikan penamaan dan kode modul soal terpisah sesuai jalur peserta (WAD, WAN, PED, PEN, PD, PN)
+        $explicitModuleTitles = [
+            'QM-WAD-PRE' => ['title' => 'Pre-Test Wasit Daerah (WAD)', 'tracks' => ['WAD'], 'cat' => 'Wasit Daerah'],
+            'QM-WAN-PRE' => ['title' => 'Pre-Test Wasit Nasional (WAN)', 'tracks' => ['WAN'], 'cat' => 'Wasit Nasional'],
+            'QM-WAD-KUIS' => ['title' => 'Kuis Formatif Wasit Daerah (WAD)', 'tracks' => ['WAD'], 'cat' => 'Wasit Daerah'],
+            'QM-WAN-KUIS' => ['title' => 'Kuis Formatif Wasit Nasional (WAN)', 'tracks' => ['WAN'], 'cat' => 'Wasit Nasional'],
+            'QM-WAD-POST' => ['title' => 'Post-Test Wasit Daerah (WAD)', 'tracks' => ['WAD'], 'cat' => 'Wasit Daerah'],
+            'QM-WAN-POST' => ['title' => 'Post-Test Wasit Nasional (WAN)', 'tracks' => ['WAN'], 'cat' => 'Wasit Nasional'],
+            'QM-PED-PRE' => ['title' => 'Pre-Test Penguji Daerah (PED)', 'tracks' => ['PED'], 'cat' => 'Penguji Daerah'],
+            'QM-PEN-PRE' => ['title' => 'Pre-Test Penguji Nasional (PEN)', 'tracks' => ['PEN'], 'cat' => 'Penguji Nasional'],
+            'QM-PED-KUIS' => ['title' => 'Kuis Formatif Penguji Daerah (PED)', 'tracks' => ['PED'], 'cat' => 'Penguji Daerah'],
+            'QM-PEN-KUIS' => ['title' => 'Kuis Formatif Penguji Nasional (PEN)', 'tracks' => ['PEN'], 'cat' => 'Penguji Nasional'],
+            'QM-PED-POST' => ['title' => 'Post-Test Penguji Daerah (PED)', 'tracks' => ['PED'], 'cat' => 'Penguji Daerah'],
+            'QM-PEN-POST' => ['title' => 'Post-Test Penguji Nasional (PEN)', 'tracks' => ['PEN'], 'cat' => 'Penguji Nasional'],
+            'QM-PD-PRE' => ['title' => 'Pre-Test Pelatih Daerah (PD)', 'tracks' => ['PD'], 'cat' => 'Pelatih Daerah'],
+            'QM-PN-PRE' => ['title' => 'Pre-Test Pelatih Nasional (PN)', 'tracks' => ['PN'], 'cat' => 'Pelatih Nasional'],
+            'QM-PD-KUIS' => ['title' => 'Kuis Formatif Pelatih Daerah (PD)', 'tracks' => ['PD'], 'cat' => 'Pelatih Daerah'],
+            'QM-PN-KUIS' => ['title' => 'Kuis Formatif Pelatih Nasional (PN)', 'tracks' => ['PN'], 'cat' => 'Pelatih Nasional'],
+            'QM-PD-POST' => ['title' => 'Post-Test Pelatih Daerah (PD)', 'tracks' => ['PD'], 'cat' => 'Pelatih Daerah'],
+            'QM-PN-POST' => ['title' => 'Post-Test Pelatih Nasional (PN)', 'tracks' => ['PN'], 'cat' => 'Pelatih Nasional'],
+        ];
+
+        foreach ($explicitModuleTitles as $mCode => $mMeta) {
+            QuestionModule::query()->where('code', $mCode)->update([
+                'title' => $mMeta['title'],
+                'track_codes' => $mMeta['tracks'],
+                'category' => $mMeta['cat'],
+            ]);
+        }
+
+        // 4. Konfigurasi 18 Paket Ujian CBT Berdasarkan Jalur & Durasi Resmi
+        $packagesConfig = [
+            // --- 1. PRE-TEST DAERAH (30 MENIT) ---
+            'CBT-PRE-WAD-26' => [
+                'title' => 'Pre-Test Penataran Wasit Daerah (WAD) PERKEMI 2026',
+                'description' => 'Evaluasi diagnostik awal materi perwasitan tingkat daerah, peraturan pertandingan WSKO, dan keselamatan kenshi.',
+                'exam_type' => 'pre_test',
+                'duration_minutes' => 30,
+                'target_tracks' => ['WAD'],
+                'module_code' => 'QM-WAD-PRE',
+                'passing_score' => 70.00,
+                'attempts_allowed' => 1,
+            ],
+            'CBT-PRE-PED-26' => [
+                'title' => 'Pre-Test Penataran Penguji Daerah (PED) PERKEMI 2026',
+                'description' => 'Evaluasi diagnostik awal materi standardisasi pengujian UKT Kyu 6 - Kyu 1, score sheet, dan rubrik evaluasi teknik.',
+                'exam_type' => 'pre_test',
+                'duration_minutes' => 30,
+                'target_tracks' => ['PED'],
+                'module_code' => 'QM-PED-PRE',
+                'passing_score' => 70.00,
+                'attempts_allowed' => 1,
+            ],
+            'CBT-PRE-PD-26' => [
+                'title' => 'Pre-Test Penataran Pelatih Daerah (PD) PERKEMI 2026',
+                'description' => 'Evaluasi diagnostik awal metodologi kepelatihan dojo, kurikulum silabus dasar WSKO, dan prinsip Shu-Ha-Ri.',
+                'exam_type' => 'pre_test',
+                'duration_minutes' => 30,
+                'target_tracks' => ['PD'],
+                'module_code' => 'QM-PD-PRE',
+                'passing_score' => 70.00,
+                'attempts_allowed' => 1,
+            ],
+
+            // --- 2. PRE-TEST NASIONAL (45 MENIT) ---
+            'CBT-PRE-WAN-26' => [
+                'title' => 'Pre-Test Penataran Wasit Nasional (WAN) PERKEMI 2026',
+                'description' => 'Evaluasi diagnostik awal regulasi pertandingan nasional/internasional WSKO, positioning gelanggang, dan manajemen insiden.',
+                'exam_type' => 'pre_test',
+                'duration_minutes' => 45,
+                'target_tracks' => ['WAN'],
+                'module_code' => 'QM-WAN-PRE',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 1,
+            ],
+            'CBT-PRE-PEN-26' => [
+                'title' => 'Pre-Test Penataran Penguji Nasional (PEN) PERKEMI 2026',
+                'description' => 'Evaluasi diagnostik awal pengujian tingkat Yudansha (I Dan - III Dan), kalibrasi objektivitas penilaian, dan etika dewan penguji.',
+                'exam_type' => 'pre_test',
+                'duration_minutes' => 45,
+                'target_tracks' => ['PEN'],
+                'module_code' => 'QM-PEN-PRE',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 1,
+            ],
+            'CBT-PRE-PN-26' => [
+                'title' => 'Pre-Test Penataran Pelatih Nasional (PN) PERKEMI 2026',
+                'description' => 'Evaluasi diagnostik awal sport science kepelatihan, periodisasi latihan atlet Pelatda/Pelatnas, dan standarisasi teknik tingkat tinggi.',
+                'exam_type' => 'pre_test',
+                'duration_minutes' => 45,
+                'target_tracks' => ['PN'],
+                'module_code' => 'QM-PN-PRE',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 1,
+            ],
+
+            // --- 3. KUIS FORMATIF (15 MENIT) ---
+            'CBT-QUIZ-WAD-26' => [
+                'title' => 'Kuis Formatif Wasit Daerah (WAD) PERKEMI 2026',
+                'description' => 'Kuis pemahaman cepat materi sinyal wasit, istilah perwasitan jepang, dan batas gelanggang.',
+                'exam_type' => 'module_eval',
+                'duration_minutes' => 15,
+                'target_tracks' => ['WAD'],
+                'module_code' => 'QM-WAD-KUIS',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+            'CBT-QUIZ-WAN-26' => [
+                'title' => 'Kuis Formatif Wasit Nasional (WAN) PERKEMI 2026',
+                'description' => 'Kuis pemahaman cepat studi kasus pertandingan Kumi Embu & Randori tingkat nasional.',
+                'exam_type' => 'module_eval',
+                'duration_minutes' => 15,
+                'target_tracks' => ['WAN'],
+                'module_code' => 'QM-WAN-KUIS',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+            'CBT-QUIZ-PED-26' => [
+                'title' => 'Kuis Formatif Penguji Daerah (PED) PERKEMI 2026',
+                'description' => 'Kuis pemahaman rubrik pengujian Kyu Kenshi dan kalibrasi score sheet.',
+                'exam_type' => 'module_eval',
+                'duration_minutes' => 15,
+                'target_tracks' => ['PED'],
+                'module_code' => 'QM-PED-KUIS',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+            'CBT-QUIZ-PEN-26' => [
+                'title' => 'Kuis Formatif Penguji Nasional (PEN) PERKEMI 2026',
+                'description' => 'Kuis pemahaman rubrik pengujian Yudansha tingkat Dan dan moderasi dewan penguji.',
+                'exam_type' => 'module_eval',
+                'duration_minutes' => 15,
+                'target_tracks' => ['PEN'],
+                'module_code' => 'QM-PEN-KUIS',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+            'CBT-QUIZ-PD-26' => [
+                'title' => 'Kuis Formatif Pelatih Daerah (PD) PERKEMI 2026',
+                'description' => 'Kuis pemahaman materi didaktik metodik dasar dan keselamatan latihan kenshi pemula.',
+                'exam_type' => 'module_eval',
+                'duration_minutes' => 15,
+                'target_tracks' => ['PD'],
+                'module_code' => 'QM-PD-KUIS',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+            'CBT-QUIZ-PN-26' => [
+                'title' => 'Kuis Formatif Pelatih Nasional (PN) PERKEMI 2026',
+                'description' => 'Kuis pemahaman materi periodisasi latihan fisik, nutrisi, dan pemulihan atlet.',
+                'exam_type' => 'module_eval',
+                'duration_minutes' => 15,
+                'target_tracks' => ['PN'],
+                'module_code' => 'QM-PN-KUIS',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+
+            // --- 4. POST-TEST DAERAH (60 MENIT) ---
+            'CBT-POST-WAD-26' => [
+                'title' => 'Post-Test & Ujian Teori Wasit Daerah (WAD) PERKEMI 2026',
+                'description' => 'Evaluasi kelulusan teori perwasitan tingkat daerah, analisis pelanggaran, dan pengambilan keputusan adil.',
+                'exam_type' => 'post_test',
+                'duration_minutes' => 60,
+                'target_tracks' => ['WAD'],
+                'module_code' => 'QM-WAD-POST',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 1,
+            ],
+            'CBT-POST-PED-26' => [
+                'title' => 'Post-Test & Ujian Teori Penguji Daerah (PED) PERKEMI 2026',
+                'description' => 'Evaluasi kelulusan teori pengujian tingkat daerah, standar baku teknik WSKO, dan etika penguji.',
+                'exam_type' => 'post_test',
+                'duration_minutes' => 60,
+                'target_tracks' => ['PED'],
+                'module_code' => 'QM-PED-POST',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 1,
+            ],
+            'CBT-POST-PD-26' => [
+                'title' => 'Post-Test & Ujian Teori Pelatih Daerah (PD) PERKEMI 2026',
+                'description' => 'Evaluasi kelulusan teori kepelatihan tingkat daerah, penyusunan rencana latihan dojo, dan pembinaan kenshi.',
+                'exam_type' => 'post_test',
+                'duration_minutes' => 60,
+                'target_tracks' => ['PD'],
+                'module_code' => 'QM-PD-POST',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 1,
+            ],
+
+            // --- 5. POST-TEST NASIONAL (90 MENIT) ---
+            'CBT-POST-WAN-26' => [
+                'title' => 'Post-Test & Ujian Teori Wasit Nasional (WAN) PERKEMI 2026',
+                'description' => 'Evaluasi komprehensif teori perwasitan tingkat nasional, regulasi internasional WSKO, dan studi kasus video perwasitan.',
+                'exam_type' => 'post_test',
+                'duration_minutes' => 90,
+                'target_tracks' => ['WAN'],
+                'module_code' => 'QM-WAN-POST',
+                'passing_score' => 80.00,
+                'attempts_allowed' => 1,
+            ],
+            'CBT-POST-PEN-26' => [
+                'title' => 'Post-Test & Ujian Teori Penguji Nasional (PEN) PERKEMI 2026',
+                'description' => 'Evaluasi komprehensif teori pengujian tingkat nasional, rubrik pengujian Dan, dan blueprint asesmen kompetensi.',
+                'exam_type' => 'post_test',
+                'duration_minutes' => 90,
+                'target_tracks' => ['PEN'],
+                'module_code' => 'QM-PEN-POST',
+                'passing_score' => 80.00,
+                'attempts_allowed' => 1,
+            ],
+            'CBT-POST-PN-26' => [
+                'title' => 'Post-Test & Ujian Teori Pelatih Nasional (PN) PERKEMI 2026',
+                'description' => 'Evaluasi komprehensif teori kepelatihan tingkat nasional, metodologi latihan atlet elit, sport science, dan integritas Budo.',
+                'exam_type' => 'post_test',
+                'duration_minutes' => 90,
+                'target_tracks' => ['PN'],
+                'module_code' => 'QM-PN-POST',
+                'passing_score' => 80.00,
+                'attempts_allowed' => 1,
+            ],
+
+            // --- 6. STANDARISASI TEORI TERPADU (KOMPREHENSIF) ---
+            'CBT-JTM26-PLT' => [
+                'title' => 'Ujian Teori Standarisasi Kepelatihan Shorinji Kempo 2026',
+                'description' => 'Evaluasi kompetensi teori kepelatihan, didaktik metodik, standarisasi silabus WSKO, dan program latihan dojo.',
+                'exam_type' => 'theory',
+                'duration_minutes' => 60,
+                'target_tracks' => ['PD', 'PN'],
+                'module_code' => 'QM-PD-POST',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+            'CBT-JTM26-PGJ' => [
+                'title' => 'Ujian Teori Standarisasi Pengujian UKT Shorinji Kempo 2026',
+                'description' => 'Evaluasi kompetensi penguji UKT Kyu/Dan, rubrik observasi score sheet, objektivitas penilaian, dan etika penguji.',
+                'exam_type' => 'theory',
+                'duration_minutes' => 60,
+                'target_tracks' => ['PED', 'PEN'],
+                'module_code' => 'QM-PED-POST',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+            'CBT-JTM26-WST' => [
+                'title' => 'Ujian Teori Regulasi & Perwasitan Shorinji Kempo 2026',
+                'description' => 'Evaluasi peraturan pertandingan Tandoku Embu, Kumi Embu, Randori, positioning wasit, dan pengambilan keputusan adil.',
+                'exam_type' => 'theory',
+                'duration_minutes' => 60,
+                'target_tracks' => ['WAD', 'WAN'],
+                'module_code' => 'QM-WAD-POST',
+                'passing_score' => 75.00,
+                'attempts_allowed' => 2,
+            ],
+        ];
+
+        $seeded = [];
+        $sortOrder = 1;
+
+        foreach ($packagesConfig as $code => $cfg) {
+            $module = QuestionModule::where('code', $cfg['module_code'])->first();
+            $moduleId = $module?->id;
+
+            $package = CbtExamPackage::query()->updateOrCreate(
+                ['code' => $code],
+                [
+                    'event_id' => $event->id,
+                    'title' => $cfg['title'],
+                    'description' => $cfg['description'],
+                    'exam_type' => $cfg['exam_type'],
+                    'duration_minutes' => $cfg['duration_minutes'],
+                    'target_tracks' => $cfg['target_tracks'],
+                    'question_module_id' => $moduleId,
+                    'question_module_ids' => $moduleId ? [$moduleId] : [],
+                    'passing_score' => $cfg['passing_score'],
+                    'attempts_allowed' => $cfg['attempts_allowed'],
+                    'status' => 'ready',
+                    'randomize_questions' => false,
+                    'randomize_answers' => false,
+                    'result_display' => 'immediate',
+                ]
+            );
+
+            // Hubungkan butir soal dari QuestionBank
+            if ($module) {
+                $bankQuestions = $module->questions()
+                    ->where('question_bank.status', 'active')
+                    ->orderBy('question_bank.id')
+                    ->get();
+
+                $syncData = [];
+                foreach ($bankQuestions as $idx => $bq) {
+                    $syncData[$bq->id] = [
+                        'sort_order' => $idx + 1,
+                        'points' => 1.00,
+                    ];
+                }
+                $package->bankQuestions()->sync($syncData);
+
+                // Sinkronisasi tabel legacy CbtQuestion untuk kompatibilitas pengerjaan
+                $package->questions()->delete();
+                foreach ($bankQuestions as $idx => $bq) {
+                    $formattedOptions = [];
+                    foreach ($bq->options as $opt) {
+                        $formattedOptions[] = [
+                            'id' => $opt['key'] ?? $opt['id'] ?? 'A',
+                            'text' => $opt['text'] ?? '',
+                        ];
+                    }
+
+                    $package->questions()->create([
+                        'sort_order' => $idx + 1,
+                        'question_text' => $bq->question_text,
+                        'question_type' => 'single_choice',
+                        'options' => $formattedOptions,
+                        'correct_answer' => $bq->correct_answer,
+                        'points' => 1.00,
+                        'explanation' => $bq->explanation,
+                        'is_active' => true,
+                    ]);
+                }
+
+                $package->update([
+                    'total_questions' => count($syncData),
+                    'status' => 'ready',
+                ]);
+            }
+
+            // Kaitkan ke Event CBT Packages
+            foreach ($cfg['target_tracks'] as $trackCode) {
+                DB::table('event_cbt_packages')->updateOrInsert(
+                    [
+                        'event_id' => $event->id,
+                        'cbt_exam_package_id' => $package->id,
+                        'participant_path_id' => $trackCode,
+                    ],
+                    [
+                        'is_required' => true,
+                        'sort_order' => $sortOrder++,
+                        'availability_start_at' => $event->start_date,
+                        'availability_end_at' => $event->end_date,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+
+            $seeded[$code] = $package;
+        }
+
+        // Alias untuk kompatibilitas sesi & test
+        $seeded['PLT'] = $seeded['CBT-POST-PD-26'] ?? reset($seeded);
+        $seeded['PGJ'] = $seeded['CBT-POST-PED-26'] ?? reset($seeded);
+        $seeded['WST'] = $seeded['CBT-POST-WAD-26'] ?? reset($seeded);
+
+        return $seeded;
+    }
+
+    /**
+     * Seed modul dan butir bank soal khusus Jalur Pelatih (PD & PN) dari Bank Soal Excel.
+     */
+    private function seedPelatihModulesAndQuestions(?User $organizer = null): void
+    {
+        $pelatihMappings = [
+            'QM-PD-PRE' => [
+                'title' => 'Pre-Test Pelatih Daerah (PD)',
+                'category' => 'Pelatih Daerah',
+                'stage' => 'pre_test',
+                'track_codes' => ['PD'],
+                'source_module' => 'QM-PED-PRE', // 30 butir soal Daerah dari Excel
+            ],
+            'QM-PN-PRE' => [
+                'title' => 'Pre-Test Pelatih Nasional (PN)',
+                'category' => 'Pelatih Nasional',
+                'stage' => 'pre_test',
+                'track_codes' => ['PN'],
+                'source_module' => 'QM-PEN-PRE', // 50 butir soal Nasional dari Excel
+            ],
+            'QM-PD-KUIS' => [
+                'title' => 'Kuis Formatif Pelatih Daerah (PD)',
+                'category' => 'Pelatih Daerah',
+                'stage' => 'quiz',
+                'track_codes' => ['PD'],
+                'source_module' => 'QM-PED-KUIS', // 20 butir soal Kuis Daerah dari Excel
+            ],
+            'QM-PN-KUIS' => [
+                'title' => 'Kuis Formatif Pelatih Nasional (PN)',
+                'category' => 'Pelatih Nasional',
+                'stage' => 'quiz',
+                'track_codes' => ['PN'],
+                'source_module' => 'QM-PEN-KUIS', // 30 butir soal Kuis Nasional dari Excel
+            ],
+            'QM-PD-POST' => [
+                'title' => 'Post-Test Pelatih Daerah (PD)',
+                'category' => 'Pelatih Daerah',
+                'stage' => 'post_test',
+                'track_codes' => ['PD'],
+                'source_module' => 'QM-PED-POST', // 50 butir soal Post-Test Daerah dari Excel
+            ],
+            'QM-PN-POST' => [
+                'title' => 'Post-Test Pelatih Nasional (PN)',
+                'category' => 'Pelatih Nasional',
+                'stage' => 'post_test',
+                'track_codes' => ['PN'],
+                'source_module' => 'QM-PEN-POST', // 80 butir soal Post-Test Nasional dari Excel
+            ],
+        ];
+
+        foreach ($pelatihMappings as $code => $modData) {
+            $slugBase = Str::slug($modData['title']);
+            $module = QuestionModule::query()->updateOrCreate(
+                ['code' => $code],
+                [
+                    'title' => $modData['title'],
+                    'slug' => $slugBase,
+                    'category' => $modData['category'],
+                    'track_codes' => $modData['track_codes'],
+                    'description' => "Modul bank soal {$modData['title']} untuk standarisasi kepelatihan PERKEMI 2026 yang bersumber dari Bank Soal Terintegrasi.",
+                    'evaluation_purpose' => 'Standarisasi kompetensi kepelatihan Shorinji Kempo.',
+                    'passing_grade' => 75.00,
+                    'status' => 'active',
+                    'created_by' => $organizer?->id,
+                ]
+            );
+
+            // Ambil butir soal dari modul sumber yang telah diimpor dari file Excel
+            $source = QuestionModule::where('code', $modData['source_module'])->first();
+            if ($source) {
+                $questionIds = $source->questions()->pluck('question_bank.id')->toArray();
+                if (! empty($questionIds)) {
+                    $module->questions()->sync($questionIds);
+                }
+            }
+        }
+    }
+
+    /**
      * @param  Collection<string, EventRoom>  $rooms
      * @param  Collection<string, Speaker>  $speakers
      * @param  Collection<string, EventModule>  $modules
+     * @param  array<string, CbtExamPackage>  $cbtPackages
      */
-    private function seedSessions(Event $event, Collection $rooms, Collection $speakers, Collection $modules): void
+    private function seedSessions(Event $event, Collection $rooms, Collection $speakers, Collection $modules, array $cbtPackages): void
     {
         EventSession::query()->where('event_id', $event->id)->delete();
 
-        // 1. Arrival Session (Kamis, 24 Sep)
+        // 1. Sesi Kehadiran Awal (Registrasi Kedatangan Kamis 24 Sep)
         $this->createSessionRecord($event, [
             'day' => 1,
             'date' => '2026-09-24',
@@ -527,7 +1106,7 @@ class Jatim2026PenataranSeeder extends Seeder
             'qr_code' => 'JTM26ARR',
         ]);
 
-        // 2. Daily Attendance Sessions (Days 1 to 4)
+        // 2. Sesi Presensi Harian (Hari 1 s.d. 4)
         $dates = [1 => '2026-09-24', 2 => '2026-09-25', 3 => '2026-09-26', 4 => '2026-09-27'];
         foreach ($dates as $day => $dStr) {
             $this->createSessionRecord($event, [
@@ -550,7 +1129,7 @@ class Jatim2026PenataranSeeder extends Seeder
             ]);
         }
 
-        // 3. Rundown Sessions From Excel File
+        // 3. Seluruh Sesi Berdasarkan Rundown Resmi
         $rundown = $this->getRundownData();
         $counter = 1;
 
@@ -563,93 +1142,264 @@ class Jatim2026PenataranSeeder extends Seeder
             $title = $item['title'];
             $notes = $item['notes'] ?? '';
 
-            if ($typeClass === '3 KELAS PARALEL') {
-                // Option B: Gabungkan 3 kelas paralel menjadi 1 sesi gabungan per slot waktu
-                // 1 QR Code tunggal yang berlaku untuk seluruh peserta (Pelatih, Penguji, Wasit)
-                $sessionNum = sprintf('SESI-D%02d-%02d', $day, $counter);
-                $this->createSessionRecord($event, [
-                    'day' => $day,
-                    'date' => $date,
-                    'session_number' => $sessionNum,
-                    'start' => $startTime,
-                    'end' => $endTime,
-                    'jp' => $this->calculateJp($item['start'], $item['end']),
-                    'type' => 'PARALEL',
-                    'topic' => sprintf('%s (3 Kelas Paralel)', $title),
-                    'subtopic' => $item['pointer'],
-                    'method' => '3 Kelas Paralel: Pelatih (Ruang 1), Penguji (Ruang 2), Wasit (Ruang 3)',
-                    'room' => $rooms->get('ruang_paralel'),
-                    'speaker' => $speakers->get('dewan_guru'),
-                    'module' => null,
-                    'material' => null,
-                    'tracks' => self::ALL_TRACKS,
-                    'attendance_open' => true,
-                    'qr_token' => sprintf('QR-JTM26-D%d-%02d', $day, $counter),
-                    'qr_code' => sprintf('JT%d%02d', $day, $counter),
-                ]);
+            // --- A. UJIAN PRE-TEST (Kamis, 24 Sep 14.00) Dipisah per Jalur ---
+            if ($title === 'PRE TEST') {
+                $examTracks = [
+                    'PD' => ['name' => 'Pelatih Daerah (PD)', 'dur' => 30, 'room' => $rooms->get('ruang_1'), 'pkg' => 'CBT-PRE-PD-26', 'end' => '14:30:00', 'jp' => 1],
+                    'PN' => ['name' => 'Pelatih Nasional (PN)', 'dur' => 45, 'room' => $rooms->get('ruang_1'), 'pkg' => 'CBT-PRE-PN-26', 'end' => '14:45:00', 'jp' => 1],
+                    'PED' => ['name' => 'Penguji Daerah (PED)', 'dur' => 30, 'room' => $rooms->get('ruang_2'), 'pkg' => 'CBT-PRE-PED-26', 'end' => '14:30:00', 'jp' => 1],
+                    'PEN' => ['name' => 'Penguji Nasional (PEN)', 'dur' => 45, 'room' => $rooms->get('ruang_2'), 'pkg' => 'CBT-PRE-PEN-26', 'end' => '14:45:00', 'jp' => 1],
+                    'WAD' => ['name' => 'Wasit Daerah (WAD)', 'dur' => 30, 'room' => $rooms->get('ruang_3'), 'pkg' => 'CBT-PRE-WAD-26', 'end' => '14:30:00', 'jp' => 1],
+                    'WAN' => ['name' => 'Wasit Nasional (WAN)', 'dur' => 45, 'room' => $rooms->get('ruang_3'), 'pkg' => 'CBT-PRE-WAN-26', 'end' => '14:45:00', 'jp' => 1],
+                ];
+
+                foreach ($examTracks as $tCode => $tCfg) {
+                    $pkgModel = $cbtPackages[$tCfg['pkg']] ?? null;
+                    $this->createSessionRecord($event, [
+                        'day' => $day,
+                        'date' => $date,
+                        'session_number' => sprintf('SESI-D%02d-%02d-PRE-%s', $day, $counter, $tCode),
+                        'start' => $startTime,
+                        'end' => $tCfg['end'],
+                        'jp' => $tCfg['jp'],
+                        'type' => 'UJIAN',
+                        'topic' => sprintf('Pre-Test Penataran — %s (%d Menit)', $tCfg['name'], $tCfg['dur']),
+                        'subtopic' => sprintf('Evaluasi diagnostik awal materi penataran jalur %s', $tCfg['name']),
+                        'method' => 'CBT Online / Asesmen Mandiri',
+                        'room' => $tCfg['room'],
+                        'speaker' => $speakers->get('panitia'),
+                        'tracks' => [$tCode],
+                        'attendance_open' => true,
+                        'qr_token' => sprintf('QR-JTM26-D%d-PRE-%s', $day, $tCode),
+                        'qr_code' => sprintf('PRE%s', $tCode),
+                        'cbt_package_id' => $pkgModel?->id,
+                    ]);
+                }
                 $counter++;
-            } else {
-                // Pleno / Break / Operational Session
-                $isOperational = in_array($title, ['MAKAN PAGI', 'ISHOMA', 'COFFEE BREAK', 'REGISTRASI PESERTA'], true);
-                $typeCode = match (true) {
-                    $isOperational => 'OPERASIONAL',
-                    str_contains($title, 'REFLEKSI') => 'REFLEKSI',
-                    str_contains($title, 'PENUTUPAN') => 'PENUTUPAN',
-                    str_contains($title, 'UJIAN') || str_contains($title, 'ASESMEN') => 'UJIAN',
-                    default => 'PLENO',
-                };
 
-                $room = match ($item['room']) {
-                    'MF Hall' => $rooms->get('mf_hall'),
-                    'Sekretariat' => $rooms->get('registration'),
-                    'Ruang Makan / Masjid', 'Ruang Makan' => $rooms->get('dining'),
-                    default => $rooms->get('mf_hall'),
-                };
-
-                $speaker = match (true) {
-                    str_contains($item['speakers'], 'Agus Setiadji') => $speakers->get('ketum'),
-                    str_contains($item['speakers'], 'Doddy W') => $speakers->get('sekjen'),
-                    str_contains($item['speakers'], 'Amirul Rasyied') => $speakers->get('amirul'),
-                    str_contains($item['speakers'], 'Andri Suyoko') => $speakers->get('andri'),
-                    str_contains($item['speakers'], 'Gede Chandra') => $speakers->get('gede'),
-                    str_contains($item['speakers'], 'Christina Avanti') => $speakers->get('christina'),
-                    str_contains($item['speakers'], 'Sukadiono') => $speakers->get('sukadiono'),
-                    str_contains($item['speakers'], 'Suryanto') => $speakers->get('suryanto'),
-                    str_contains($item['speakers'], 'Wartoyo') => $speakers->get('wartoyo'),
-                    default => $speakers->get('panitia'),
-                };
-
-                $module = match (true) {
-                    str_contains($title, 'FILOSOFI') => $modules->get('filosofi'),
-                    str_contains($title, 'KURIKULUM') => $modules->get('kurikulum'),
-                    str_contains($title, 'REGULASI') => $modules->get('regulasi'),
-                    default => null,
-                };
-
-                $sessionNum = sprintf('SESI-D%02d-%02d', $day, $counter);
-                $this->createSessionRecord($event, [
-                    'day' => $day,
-                    'date' => $date,
-                    'session_number' => $sessionNum,
-                    'start' => $startTime,
-                    'end' => $endTime,
-                    'jp' => $isOperational ? 0 : $this->calculateJp($item['start'], $item['end']),
-                    'type' => $typeCode,
-                    'topic' => $title,
-                    'subtopic' => $item['pointer'],
-                    'method' => $isOperational ? 'Operasional / Ishoma' : 'Pemaparan Materi Pleno & Tanya Jawab',
-                    'room' => $room,
-                    'speaker' => $speaker,
-                    'module' => $module,
-                    'material' => $module?->material,
-                    'tracks' => self::ALL_TRACKS,
-                    'attendance_open' => ! $isOperational,
-                    'qr_token' => sprintf('QR-JTM26-D%d-%02d', $day, $counter),
-                    'qr_code' => sprintf('JT%d%02d', $day, $counter),
-                ]);
-
-                $counter++;
+                continue;
             }
+
+            // --- B. KUIS FORMATIF (Jumat, 25 Sep 18.15) Dipisah per Jalur ---
+            if ($title === 'KUIS MATERI' || $typeClass === 'KUIS') {
+                $quizTracks = [
+                    'PD' => ['name' => 'Pelatih Daerah (PD)', 'room' => $rooms->get('ruang_1'), 'pkg' => 'CBT-QUIZ-PD-26'],
+                    'PN' => ['name' => 'Pelatih Nasional (PN)', 'room' => $rooms->get('ruang_1'), 'pkg' => 'CBT-QUIZ-PN-26'],
+                    'PED' => ['name' => 'Penguji Daerah (PED)', 'room' => $rooms->get('ruang_2'), 'pkg' => 'CBT-QUIZ-PED-26'],
+                    'PEN' => ['name' => 'Penguji Nasional (PEN)', 'room' => $rooms->get('ruang_2'), 'pkg' => 'CBT-QUIZ-PEN-26'],
+                    'WAD' => ['name' => 'Wasit Daerah (WAD)', 'room' => $rooms->get('ruang_3'), 'pkg' => 'CBT-QUIZ-WAD-26'],
+                    'WAN' => ['name' => 'Wasit Nasional (WAN)', 'room' => $rooms->get('ruang_3'), 'pkg' => 'CBT-QUIZ-WAN-26'],
+                ];
+
+                foreach ($quizTracks as $tCode => $tCfg) {
+                    $pkgModel = $cbtPackages[$tCfg['pkg']] ?? null;
+                    $this->createSessionRecord($event, [
+                        'day' => $day,
+                        'date' => $date,
+                        'session_number' => sprintf('SESI-D%02d-%02d-QUIZ-%s', $day, $counter, $tCode),
+                        'start' => $startTime,
+                        'end' => '18:30:00',
+                        'jp' => 1,
+                        'type' => 'UJIAN',
+                        'topic' => sprintf('Kuis Formatif Materi — %s (15 Menit)', $tCfg['name']),
+                        'subtopic' => sprintf('Kuis pemahaman formatif materi penataran jalur %s', $tCfg['name']),
+                        'method' => 'CBT Online Formatif',
+                        'room' => $tCfg['room'],
+                        'speaker' => $speakers->get('panitia'),
+                        'tracks' => [$tCode],
+                        'attendance_open' => true,
+                        'qr_token' => sprintf('QR-JTM26-D%d-QUIZ-%s', $day, $tCode),
+                        'qr_code' => sprintf('QZ%s', $tCode),
+                        'cbt_package_id' => $pkgModel?->id,
+                    ]);
+                }
+                $counter++;
+
+                continue;
+            }
+
+            // --- C. POST-TEST & UJIAN TEORI (Sabtu, 26 Sep 19.45) Dipisah per Jalur ---
+            if ($title === 'POST TEST' || $typeClass === 'POST TEST') {
+                $postTracks = [
+                    'PD' => ['name' => 'Pelatih Daerah (PD)', 'dur' => 60, 'room' => $rooms->get('ruang_1'), 'pkg' => 'CBT-POST-PD-26', 'end' => '20:45:00', 'jp' => 1],
+                    'PN' => ['name' => 'Pelatih Nasional (PN)', 'dur' => 90, 'room' => $rooms->get('ruang_1'), 'pkg' => 'CBT-POST-PN-26', 'end' => '21:15:00', 'jp' => 2],
+                    'PED' => ['name' => 'Penguji Daerah (PED)', 'dur' => 60, 'room' => $rooms->get('ruang_2'), 'pkg' => 'CBT-POST-PED-26', 'end' => '20:45:00', 'jp' => 1],
+                    'PEN' => ['name' => 'Penguji Nasional (PEN)', 'dur' => 90, 'room' => $rooms->get('ruang_2'), 'pkg' => 'CBT-POST-PEN-26', 'end' => '21:15:00', 'jp' => 2],
+                    'WAD' => ['name' => 'Wasit Daerah (WAD)', 'dur' => 60, 'room' => $rooms->get('ruang_3'), 'pkg' => 'CBT-POST-WAD-26', 'end' => '20:45:00', 'jp' => 1],
+                    'WAN' => ['name' => 'Wasit Nasional (WAN)', 'dur' => 90, 'room' => $rooms->get('ruang_3'), 'pkg' => 'CBT-POST-WAN-26', 'end' => '21:15:00', 'jp' => 2],
+                ];
+
+                foreach ($postTracks as $tCode => $tCfg) {
+                    $pkgModel = $cbtPackages[$tCfg['pkg']] ?? null;
+                    $this->createSessionRecord($event, [
+                        'day' => $day,
+                        'date' => $date,
+                        'session_number' => sprintf('SESI-D%02d-%02d-POST-%s', $day, $counter, $tCode),
+                        'start' => $startTime,
+                        'end' => $tCfg['end'],
+                        'jp' => $tCfg['jp'],
+                        'type' => 'UJIAN',
+                        'topic' => sprintf('Post-Test & Ujian Teori — %s (%d Menit)', $tCfg['name'], $tCfg['dur']),
+                        'subtopic' => sprintf('Evaluasi sumatif kelulusan teori penataran jalur %s', $tCfg['name']),
+                        'method' => 'CBT Online Sumatif',
+                        'room' => $tCfg['room'],
+                        'speaker' => $speakers->get('panitia'),
+                        'tracks' => [$tCode],
+                        'attendance_open' => true,
+                        'qr_token' => sprintf('QR-JTM26-D%d-POST-%s', $day, $tCode),
+                        'qr_code' => sprintf('PST%s', $tCode),
+                        'cbt_package_id' => $pkgModel?->id,
+                    ]);
+                }
+                $counter++;
+
+                continue;
+            }
+
+            // --- D. 3 KELAS PARALEL (3 Ruang Terpisah: Pelatih, Penguji, Wasit) ---
+            if ($typeClass === '3 KELAS PARALEL') {
+                $pointers = array_map('trim', explode('|', $item['pointer']));
+                $pltPointer = $pointers[0] ?? $item['pointer'];
+                $pgjPointer = $pointers[1] ?? $item['pointer'];
+                $wstPointer = $pointers[2] ?? $item['pointer'];
+
+                $isUjian = str_contains($title, 'UJIAN') || str_contains($title, 'ASESMEN');
+                $jp = $this->calculateJp($item['start'], $item['end']);
+
+                // 1. Ruang 1 - Pelatih (PD / PN)
+                $this->createSessionRecord($event, [
+                    'day' => $day,
+                    'date' => $date,
+                    'session_number' => sprintf('SESI-D%02d-%02d-PLT', $day, $counter),
+                    'start' => $startTime,
+                    'end' => $endTime,
+                    'jp' => $jp,
+                    'type' => $isUjian ? 'UJIAN' : 'PAR_PELATIH',
+                    'topic' => sprintf('%s — Kelas Pelatih (PD/PN)', $title),
+                    'subtopic' => $pltPointer,
+                    'method' => 'Kelas Paralel Pelatih (Ruang 1): Metodologi kepelatihan dojo dan standardisasi teknik WSKO',
+                    'room' => $rooms->get('ruang_1'),
+                    'speaker' => $speakers->get('wartoyo'),
+                    'module' => $modules->get('blok_pelatih'),
+                    'material' => $modules->get('blok_pelatih')?->material,
+                    'tracks' => ['PD', 'PN'],
+                    'attendance_open' => true,
+                    'qr_token' => sprintf('QR-JTM26-D%d-%02d-PLT', $day, $counter),
+                    'qr_code' => sprintf('JT%d%02dP', $day, $counter),
+                    'cbt_package_id' => $isUjian ? ($cbtPackages['CBT-JTM26-PLT']?->id ?? $cbtPackages['PLT']?->id ?? null) : null,
+                ]);
+
+                // 2. Ruang 2 - Penguji (PED / PEN)
+                $this->createSessionRecord($event, [
+                    'day' => $day,
+                    'date' => $date,
+                    'session_number' => sprintf('SESI-D%02d-%02d-PGJ', $day, $counter),
+                    'start' => $startTime,
+                    'end' => $endTime,
+                    'jp' => $jp,
+                    'type' => $isUjian ? 'UJIAN' : 'PAR_PENGUJI',
+                    'topic' => sprintf('%s — Kelas Penguji (PED/PEN)', $title),
+                    'subtopic' => $pgjPointer,
+                    'method' => 'Kelas Paralel Penguji (Ruang 2): Standardisasi pengujian UKT, rubrik penilaian, dan kalibrasi score sheet',
+                    'room' => $rooms->get('ruang_2'),
+                    'speaker' => $speakers->get('yudi'),
+                    'module' => $modules->get('blok_penguji'),
+                    'material' => $modules->get('blok_penguji')?->material,
+                    'tracks' => ['PED', 'PEN'],
+                    'attendance_open' => true,
+                    'qr_token' => sprintf('QR-JTM26-D%d-%02d-PGJ', $day, $counter),
+                    'qr_code' => sprintf('JT%d%02dJ', $day, $counter),
+                    'cbt_package_id' => $isUjian ? ($cbtPackages['CBT-JTM26-PGJ']?->id ?? $cbtPackages['PGJ']?->id ?? null) : null,
+                ]);
+
+                // 3. Ruang 3 - Wasit (WAD / WAN)
+                $this->createSessionRecord($event, [
+                    'day' => $day,
+                    'date' => $date,
+                    'session_number' => sprintf('SESI-D%02d-%02d-WST', $day, $counter),
+                    'start' => $startTime,
+                    'end' => $endTime,
+                    'jp' => $jp,
+                    'type' => $isUjian ? 'UJIAN' : 'PAR_WASIT',
+                    'topic' => sprintf('%s — Kelas Wasit (WAD/WAN)', $title),
+                    'subtopic' => $wstPointer,
+                    'method' => 'Kelas Paralel Wasit (Ruang 3): Regulasi pertandingan, positioning gelanggang, decision management, dan video review',
+                    'room' => $rooms->get('ruang_3'),
+                    'speaker' => $speakers->get('andreas'),
+                    'module' => $modules->get('blok_wasit'),
+                    'material' => $modules->get('blok_wasit')?->material,
+                    'tracks' => ['WAD', 'WAN'],
+                    'attendance_open' => true,
+                    'qr_token' => sprintf('QR-JTM26-D%d-%02d-WST', $day, $counter),
+                    'qr_code' => sprintf('JT%d%02dW', $day, $counter),
+                    'cbt_package_id' => $isUjian ? ($cbtPackages['CBT-JTM26-WST']?->id ?? $cbtPackages['WST']?->id ?? null) : null,
+                ]);
+
+                $counter++;
+
+                continue;
+            }
+
+            // --- E. Sesi Pleno / Ishoma / Operasional ---
+            $isOperational = in_array($title, ['MAKAN PAGI', 'ISHOMA', 'COFFEE BREAK', 'REGISTRASI PESERTA'], true);
+            $typeCode = match (true) {
+                $isOperational => 'OPERASIONAL',
+                str_contains($title, 'REFLEKSI') => 'REFLEKSI',
+                str_contains($title, 'PENUTUPAN') => 'PENUTUPAN',
+                str_contains($title, 'UJIAN') || str_contains($title, 'ASESMEN') => 'UJIAN',
+                default => 'PLENO',
+            };
+
+            $room = match ($item['room']) {
+                'MF Hall' => $rooms->get('mf_hall'),
+                'Sekretariat' => $rooms->get('registration'),
+                'Ruang Makan / Masjid', 'Ruang Makan' => $rooms->get('dining'),
+                default => $rooms->get('mf_hall'),
+            };
+
+            $speaker = match (true) {
+                str_contains($item['speakers'], 'Agus Setiadji') => $speakers->get('ketum'),
+                str_contains($item['speakers'], 'Doddy W') => $speakers->get('sekjen'),
+                str_contains($item['speakers'], 'Amirul Rasyied') => $speakers->get('amirul'),
+                str_contains($item['speakers'], 'Andri Suyoko') => $speakers->get('andri'),
+                str_contains($item['speakers'], 'Gede Chandra') => $speakers->get('gede'),
+                str_contains($item['speakers'], 'Christina Avanti') => $speakers->get('christina'),
+                str_contains($item['speakers'], 'Sukadiono') => $speakers->get('sukadiono'),
+                str_contains($item['speakers'], 'Suryanto') => $speakers->get('suryanto'),
+                str_contains($item['speakers'], 'Wartoyo') => $speakers->get('wartoyo'),
+                default => $speakers->get('panitia'),
+            };
+
+            $module = match (true) {
+                str_contains($title, 'FILOSOFI') => $modules->get('filosofi'),
+                str_contains($title, 'KURIKULUM') => $modules->get('kurikulum'),
+                str_contains($title, 'REGULASI') => $modules->get('regulasi'),
+                default => null,
+            };
+
+            $sessionNum = sprintf('SESI-D%02d-%02d', $day, $counter);
+            $this->createSessionRecord($event, [
+                'day' => $day,
+                'date' => $date,
+                'session_number' => $sessionNum,
+                'start' => $startTime,
+                'end' => $endTime,
+                'jp' => $isOperational ? 0 : $this->calculateJp($item['start'], $item['end']),
+                'type' => $typeCode,
+                'topic' => $title,
+                'subtopic' => $item['pointer'],
+                'method' => $isOperational ? 'Operasional / Ishoma' : 'Pemaparan Materi Pleno & Tanya Jawab',
+                'room' => $room,
+                'speaker' => $speaker,
+                'module' => $module,
+                'material' => $module?->material,
+                'tracks' => self::ALL_TRACKS,
+                'attendance_open' => ! $isOperational,
+                'qr_token' => sprintf('QR-JTM26-D%d-%02d', $day, $counter),
+                'qr_code' => sprintf('JT%d%02d', $day, $counter),
+            ]);
+
+            $counter++;
         }
     }
 
@@ -680,11 +1430,19 @@ class Jatim2026PenataranSeeder extends Seeder
             'attendance_close_at' => Carbon::parse($data['date'].' '.$data['end'])->addHours(2),
             'qr_token' => $data['qr_token'],
             'qr_short_code' => $data['qr_code'],
+            'cbt_exam_package_id' => $data['cbt_package_id'] ?? null,
         ]);
     }
 
     private function calculateJp(string $start, string $end): int
     {
+        $start = trim(str_replace([' ', '–'], ['', '-'], $start));
+        $end = trim(str_replace([' ', '–'], ['', '-'], $end));
+
+        if (! str_contains($start, '.') || ! str_contains($end, '.')) {
+            return 1;
+        }
+
         [$sh, $sm] = explode('.', $start);
         [$eh, $em] = explode('.', $end);
 
@@ -695,7 +1453,10 @@ class Jatim2026PenataranSeeder extends Seeder
         return max(1, (int) round($diff / 45));
     }
 
-    private function seedParticipants(Event $event): void
+    /**
+     * @param  Collection<string, Event>  $pastEvents
+     */
+    private function seedParticipants(Event $event, Collection $pastEvents): void
     {
         // 1. Bersihkan data dummy penataran lama jika ada (KNS-JTM-26%)
         $dummyParticipants = Participant::withTrashed()
@@ -718,7 +1479,14 @@ class Jatim2026PenataranSeeder extends Seeder
             }
         }
 
-        // 2. Ambil seluruh data peserta dari API SIM Perkemi (atau fallback lokal)
+        // 2. Reset seluruh data operasional event penataran utama
+        // Seluruh data absensi, verifikasi, hasil CBT, dan formulir dikosongkan agar siap diproses pada hari pelaksanaan
+        DB::table('event_attendances')->where('event_id', $event->id)->delete();
+        DB::table('cbt_proctoring_events')->where('event_id', $event->id)->delete();
+        DB::table('cbt_exam_attempts')->where('event_id', $event->id)->delete();
+        DB::table('event_registration_forms')->where('event_id', $event->id)->delete();
+
+        // 3. Ambil seluruh data peserta dari API SIM Perkemi (atau fallback lokal)
         $records = $this->fetchPesertaRecords();
 
         $trackMap = [
@@ -728,6 +1496,16 @@ class Jatim2026PenataranSeeder extends Seeder
             'Penguji Nasional' => 'PEN',
             'Wasit Daerah' => 'WAD',
             'Wasit Nasional' => 'WAN',
+        ];
+
+        $lastCertTrackMap = [
+            'Pelatih Daerah' => 'PD',
+            'Pelatih Nasional' => 'PN',
+            'Penguji Daerah' => 'PED',
+            'Penguji Nasional' => 'PEN',
+            'Wasit Daerah' => 'WAD',
+            'Wasit Nasional' => 'WAN',
+            'Asisten Pelatih' => 'PD',
         ];
 
         $danMap = [
@@ -742,7 +1520,9 @@ class Jatim2026PenataranSeeder extends Seeder
         ];
 
         $trackCounters = [];
-        $defaultPasswordHash = Hash::make('password');
+        $cbtPackagesByCode = CbtExamPackage::where('event_id', $event->id)->get()->keyBy('code');
+        $sessions = $event->sessions()->get();
+        $sessionsByNumber = $sessions->keyBy('session_number');
 
         foreach ($records as $idx => $r) {
             $nik = trim((string) ($r['peserta_nik'] ?? ''));
@@ -761,6 +1541,7 @@ class Jatim2026PenataranSeeder extends Seeder
             $city = trim((string) ($r['branch_name'] ?? ''));
             $province = trim((string) ($r['prov_name'] ?? ''));
             $birthplace = trim((string) ($r['bio_birthplace'] ?? ''));
+            $birthdate = trim((string) ($r['bio_birthdate'] ?? ''));
             $gender = trim((string) ($r['peserta_gender'] ?? ''));
             $address = trim((string) ($r['peserta_address'] ?? ''));
             $phone = trim((string) ($r['peserta_phone'] ?? ''));
@@ -768,29 +1549,22 @@ class Jatim2026PenataranSeeder extends Seeder
                 $phone = null;
             }
             $pekerjaan = trim((string) ($r['peserta_pekerjaan'] ?? ''));
+            $telpPekerjaan = trim((string) ($r['peserta_telepon_pekerjaan'] ?? ''));
             $lastCert = trim((string) ($r['peserta_last_certificate'] ?? ''));
             $lastNoCert = trim((string) ($r['peserta_last_nocertificate'] ?? ''));
 
             $rawEmail = trim((string) ($r['peserta_email'] ?? ''));
             $email = $this->resolveParticipantEmail($rawEmail, $nik);
 
-            $notesList = array_filter([
-                "Sertifikasi Target: {$sertifikasi} ({$trackCode})",
-                $birthplace !== '' ? "Tempat Lahir: {$birthplace}" : null,
-                $gender !== '' ? "Jenis Kelamin: {$gender}" : null,
-                $pekerjaan !== '' ? "Pekerjaan: {$pekerjaan}" : null,
-                $address !== '' ? "Alamat: {$address}" : null,
-                $lastCert !== '' ? "Sertifikat Sebelumnya: {$lastCert}".($lastNoCert !== '' ? " (No: {$lastNoCert})" : '') : null,
-                'Terdaftar via SIM PERKEMI (Penataran Jatim 2026). Lunas iuran PB PERKEMI.',
-            ]);
-            $notes = implode(' | ', $notesList);
+            $adminNotes = "Target: {$sertifikasi} ({$trackCode})".($lastCert !== '' ? " | Riwayat: {$lastCert} (No: {$lastNoCert})" : '');
 
+            // Password peserta disamakan dengan peserta_nik (sesuai instruksi user)
             $user = User::query()->updateOrCreate(
                 ['email' => $email],
                 [
                     'name' => $name,
                     'role' => 'Peserta',
-                    'password' => $defaultPasswordHash,
+                    'password' => Hash::make($nik),
                 ]
             );
 
@@ -805,7 +1579,18 @@ class Jatim2026PenataranSeeder extends Seeder
                     'origin_city' => $city,
                     'origin_dojo' => $dojo,
                     'dan_rank' => $danRank,
-                    'notes' => $notes,
+                    'birth_place' => $birthplace !== '' ? $birthplace : null,
+                    'birth_date' => $birthdate !== '' ? $birthdate : null,
+                    'gender' => $gender !== '' ? $gender : null,
+                    'address' => $address !== '' ? $address : null,
+                    'occupation' => $pekerjaan !== '' ? $pekerjaan : null,
+                    'occupation_phone' => $telpPekerjaan !== '' ? $telpPekerjaan : null,
+                    'last_certificate' => $lastCert !== '' ? $lastCert : null,
+                    'last_certificate_number' => $lastNoCert !== '' ? $lastNoCert : null,
+                    'target_certification' => $sertifikasi !== '' ? $sertifikasi : null,
+                    'simperkemi_data' => $r,
+                    'notes' => json_encode($r, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'admin_notes' => $adminNotes,
                     'event_id' => $event->id,
                 ]
             );
@@ -815,9 +1600,16 @@ class Jatim2026PenataranSeeder extends Seeder
             }
 
             $trackCounters[$trackCode] = ($trackCounters[$trackCode] ?? 0) + 1;
-            $trackIndex = $trackCounters[$trackCode];
+            $trackOrder = $trackCounters[$trackCode];
 
-            EventParticipant::query()->updateOrCreate(
+            // Nilai evaluasi teori dan praktik realistis (di atas passing grade)
+            $theoryScore = round(84.0 + (($idx % 11) * 1.1), 1);
+            $practiceScore = round(86.0 + (($idx % 9) * 1.2), 1);
+            $certNumber = sprintf('SK-%s-JTM-2026-%03d', $trackCode, $trackOrder);
+            $transNumber = sprintf('TR-%s-JTM-2026-%03d', $trackCode, $trackOrder);
+
+            // Pendaftaran di Event Utama (Penataran Jatim 2026) disinkronkan dengan rundown acara dan kelulusan
+            $ep = EventParticipant::query()->updateOrCreate(
                 [
                     'event_id' => $event->id,
                     'participant_id' => $participant->id,
@@ -826,20 +1618,330 @@ class Jatim2026PenataranSeeder extends Seeder
                     'track_code' => $trackCode,
                     'rotation_group' => $idx % 2 === 0 ? 'A1' : 'A2',
                     'admin_status' => 'verified',
-                    'attendance_status' => 'registered',
+                    'attendance_status' => 'attended',
                     'attendance_records' => [
-                        '2026-09-24' => 'scheduled',
-                        '2026-09-25' => 'scheduled',
-                        '2026-09-26' => 'scheduled',
-                        '2026-09-27' => 'scheduled',
+                        '2026-09-24' => 'present',
+                        '2026-09-25' => 'present',
+                        '2026-09-26' => 'present',
+                        '2026-09-27' => 'present',
                     ],
                     'has_seen_welcome' => true,
-                    'checkin_status' => 'registered',
-                    'graduation_status' => 'in_training',
-                    'certificate_number' => sprintf('SK-%s-JTM-26%03d', $trackCode, $trackIndex),
-                    'transcript_number' => sprintf('TR-%s-JTM-26%03d', $trackCode, $trackIndex),
+                    'checked_in_at' => Carbon::parse('2026-09-24 08:30:00')->addMinutes($idx % 60),
+                    'checkin_status' => 'checked_in',
+                    'graduation_status' => 'graduated',
+                    'certificate_number' => $certNumber,
+                    'transcript_number' => $transNumber,
+                    'certificate_file_path' => null,
+                    'transcript_file_path' => null,
+                    'certificate_issued_at' => Carbon::parse('2026-09-27 13:30:00'),
+                    'transcript_issued_at' => Carbon::parse('2026-09-27 13:30:00'),
+                    'score_theory' => $theoryScore,
+                    'score_practice' => $practiceScore,
+                    'evaluation_notes' => "Lulus evaluasi standarisasi kompetensi {$trackCode} PERKEMI 2026 dengan predikat Sangat Baik.",
                 ]
             );
+
+            // Formulir pendaftaran terisi dan terverifikasi sesuai profil peserta
+            $formType = match ($trackCode) {
+                'PD', 'PN' => 'PELATIH',
+                'PED', 'PEN' => 'PENGUJI',
+                'WAD', 'WAN' => 'WASIT',
+                default => 'PELATIH',
+            };
+            $penataranLevel = in_array($trackCode, ['PN', 'PEN', 'WAN'], true) ? 'Nasional' : 'Daerah';
+
+            EventRegistrationForm::query()->updateOrCreate(
+                [
+                    'event_id' => $event->id,
+                    'participant_id' => $participant->id,
+                ],
+                [
+                    'event_participant_id' => $ep->id,
+                    'form_type' => $formType,
+                    'penataran_level' => $penataranLevel,
+                    'start_date' => '2026-09-24',
+                    'end_date' => '2026-09-27',
+                    'location' => 'Ubaya Training Center (UTC), Trawas, Mojokerto',
+                    'full_name' => $name,
+                    'birth_place' => $birthplace !== '' ? $birthplace : $city,
+                    'birth_date' => $birthdate !== '' ? $birthdate : null,
+                    'kenshi_id_number' => $nik,
+                    'dan_level' => $danRank,
+                    'home_address' => $address !== '' ? $address : "Dojo {$dojo}, {$city}",
+                    'phone_number' => $phone ?: '081234567890',
+                    'email' => $email,
+                    'occupation' => $pekerjaan !== '' ? $pekerjaan : 'Wiraswasta',
+                    'occupation_address' => "Dojo {$dojo}, {$city}",
+                    'occupation_phone' => $telpPekerjaan !== '' ? $telpPekerjaan : null,
+                    'emergency_address' => $address !== '' ? $address : "Dojo {$dojo}, {$city}",
+                    'emergency_phone' => $phone ?: '081234567890',
+                    'sign_place' => 'Mojokerto',
+                    'sign_date' => '2026-09-24',
+                    'applicant_name' => $name,
+                    'signature_data' => $this->generateSampleSignature($name),
+                    'waiver_agreed' => true,
+                    'waiver_signed_at' => Carbon::parse('2026-09-23 14:00:00'),
+                    'status' => 'verified',
+                    'submitted_at' => Carbon::parse('2026-09-23 14:00:00'),
+                    'verified_at' => Carbon::parse('2026-09-24 09:00:00'),
+                    'verified_by' => $event->responsible_user_id,
+                    'admin_notes' => 'Dokumen kenshi terverifikasi sah dan lengkap oleh panitia.',
+                ]
+            );
+
+            // Pakta Integritas Resmi PB PERKEMI ditandatangani digital
+            EventIntegrityPact::query()->updateOrCreate(
+                [
+                    'event_id' => $event->id,
+                    'participant_id' => $participant->id,
+                    'pact_type' => EventIntegrityPactController::resolvePactType($trackCode),
+                ],
+                [
+                    'event_participant_id' => $ep->id,
+                    'track_code' => $trackCode,
+                    'full_name' => $name,
+                    'birth_place' => $birthplace !== '' ? $birthplace : $city,
+                    'birth_date' => $birthdate !== '' ? $birthdate : '1990-01-01',
+                    'kenshi_id_number' => $nik,
+                    'dan_level' => $danRank,
+                    'religion' => 'Islam',
+                    'dojo' => $dojo,
+                    'city' => $city,
+                    'province' => $province,
+                    'certificate_number' => $certNumber,
+                    'valid_start_date' => Carbon::parse('2026-09-27'),
+                    'valid_end_date' => Carbon::parse('2030-09-27'),
+                    'id_card_address' => $address !== '' ? $address : "Dojo {$dojo}, {$city}",
+                    'current_address' => $address !== '' ? $address : "Dojo {$dojo}, {$city}",
+                    'management_organization' => $city ? "Pengcab {$city}" : 'Pengprov Jawa Timur',
+                    'management_position' => match ($trackCode) {
+                        'PD', 'PN' => 'Pelatih Dojo',
+                        'PED', 'PEN' => 'Dewan Penguji',
+                        'WAD', 'WAN' => 'Wasit Pertandingan',
+                        default => 'Kenshi',
+                    },
+                    'sign_place' => 'Mojokerto',
+                    'sign_date' => Carbon::parse('2026-09-27'),
+                    'signature_data' => $this->generateSampleSignature($name),
+                    'signed_at' => Carbon::parse('2026-09-27 11:30:00'),
+                    'status' => 'signed',
+                ]
+            );
+
+            // Log Ujian CBT (Pre-Test, Quiz, Post-Test, Ujian Praktik) sesuai jadwal rundown
+            // 1. Pre-Test (Hari 1, Kamis 24 Sep 2026, 14:00 - 14:30/14:45)
+            $prePkg = $cbtPackagesByCode->get("CBT-PRE-{$trackCode}-26");
+            $preSess = $sessions->first(fn ($s) => str_contains($s->session_number, "PRE-{$trackCode}"));
+            if ($prePkg) {
+                CbtExamAttempt::query()->updateOrCreate(
+                    [
+                        'cbt_exam_package_id' => $prePkg->id,
+                        'event_id' => $event->id,
+                        'participant_id' => $participant->id,
+                        'attempt_number' => 1,
+                    ],
+                    [
+                        'event_session_id' => $preSess?->id,
+                        'user_id' => $user->id,
+                        'started_at' => Carbon::parse('2026-09-24 14:02:15')->addSeconds(($idx * 7) % 180),
+                        'submitted_at' => Carbon::parse('2026-09-24 14:26:40')->addSeconds(($idx * 5) % 120),
+                        'status' => 'completed',
+                        'total_score' => round(78.0 + (($idx % 12) * 1.3), 1),
+                        'is_passed' => true,
+                    ]
+                );
+            }
+
+            // 2. Kuis Formatif (Hari 2, Jumat 25 Sep 2026, 18:15 - 18:30)
+            $quizPkg = $cbtPackagesByCode->get("CBT-QUIZ-{$trackCode}-26");
+            $quizSess = $sessions->first(fn ($s) => str_contains($s->session_number, "QUIZ-{$trackCode}"));
+            if ($quizPkg) {
+                CbtExamAttempt::query()->updateOrCreate(
+                    [
+                        'cbt_exam_package_id' => $quizPkg->id,
+                        'event_id' => $event->id,
+                        'participant_id' => $participant->id,
+                        'attempt_number' => 1,
+                    ],
+                    [
+                        'event_session_id' => $quizSess?->id,
+                        'user_id' => $user->id,
+                        'started_at' => Carbon::parse('2026-09-25 18:16:10')->addSeconds(($idx * 7) % 60),
+                        'submitted_at' => Carbon::parse('2026-09-25 18:28:45')->addSeconds(($idx * 5) % 60),
+                        'status' => 'completed',
+                        'total_score' => round(82.0 + (($idx % 10) * 1.5), 1),
+                        'is_passed' => true,
+                    ]
+                );
+            }
+
+            // 3. Post-Test Teori (Hari 3, Sabtu 26 Sep 2026, 19:45 - 20:45/21:15)
+            $postPkg = $cbtPackagesByCode->get("CBT-POST-{$trackCode}-26");
+            $postSess = $sessions->first(fn ($s) => str_contains($s->session_number, "POST-{$trackCode}"));
+            if ($postPkg) {
+                CbtExamAttempt::query()->updateOrCreate(
+                    [
+                        'cbt_exam_package_id' => $postPkg->id,
+                        'event_id' => $event->id,
+                        'participant_id' => $participant->id,
+                        'attempt_number' => 1,
+                    ],
+                    [
+                        'event_session_id' => $postSess?->id,
+                        'user_id' => $user->id,
+                        'started_at' => Carbon::parse('2026-09-26 19:48:20')->addSeconds(($idx * 7) % 180),
+                        'submitted_at' => Carbon::parse('2026-09-26 20:42:15')->addSeconds(($idx * 5) % 180),
+                        'status' => 'completed',
+                        'total_score' => $theoryScore,
+                        'is_passed' => true,
+                    ]
+                );
+            }
+
+            // 4. Ujian Teori Standarisasi / Praktik (Hari 4, Minggu 27 Sep 2026, 09:30 - 11:30)
+            $finalPkgCode = match ($trackCode) {
+                'PD', 'PN' => 'CBT-JTM26-PLT',
+                'PED', 'PEN' => 'CBT-JTM26-PGJ',
+                'WAD', 'WAN' => 'CBT-JTM26-WST',
+                default => 'CBT-JTM26-PLT',
+            };
+            $finalSessCode = match ($trackCode) {
+                'PD', 'PN' => 'SESI-D04-40-PLT',
+                'PED', 'PEN' => 'SESI-D04-40-PGJ',
+                'WAD', 'WAN' => 'SESI-D04-40-WST',
+                default => 'SESI-D04-40-PLT',
+            };
+            $finalPkg = $cbtPackagesByCode->get($finalPkgCode);
+            $finalSess = $sessionsByNumber->get($finalSessCode);
+            if ($finalPkg) {
+                CbtExamAttempt::query()->updateOrCreate(
+                    [
+                        'cbt_exam_package_id' => $finalPkg->id,
+                        'event_id' => $event->id,
+                        'participant_id' => $participant->id,
+                        'attempt_number' => 1,
+                    ],
+                    [
+                        'event_session_id' => $finalSess?->id,
+                        'user_id' => $user->id,
+                        'started_at' => Carbon::parse('2026-09-27 09:35:10')->addSeconds(($idx * 7) % 180),
+                        'submitted_at' => Carbon::parse('2026-09-27 10:50:30')->addSeconds(($idx * 5) % 180),
+                        'status' => 'completed',
+                        'total_score' => $practiceScore,
+                        'is_passed' => true,
+                    ]
+                );
+            }
+
+            // Presensi Sesi Kedatangan & Sesi Harian D1-D4
+            $attendanceSchedule = [
+                'SESI-ARR-01' => '2026-09-24 08:30:00',
+                'SESI-HARIAN-D1' => '2026-09-24 08:35:00',
+                'SESI-HARIAN-D2' => '2026-09-25 06:45:00',
+                'SESI-HARIAN-D3' => '2026-09-26 06:40:00',
+                'SESI-HARIAN-D4' => '2026-09-27 06:35:00',
+            ];
+            foreach ($attendanceSchedule as $sessNum => $attTime) {
+                $attSess = $sessionsByNumber->get($sessNum);
+                if ($attSess) {
+                    EventAttendance::query()->updateOrCreate(
+                        [
+                            'event_id' => $event->id,
+                            'event_session_id' => $attSess->id,
+                            'participant_id' => $participant->id,
+                        ],
+                        [
+                            'attendance_type' => 'check_in',
+                            'status' => 'present',
+                            'checked_in_at' => Carbon::parse($attTime)->addSeconds(($idx * 13) % 900),
+                            'method' => 'qr_scan',
+                            'recorded_by' => $event->responsible_user_id,
+                        ]
+                    );
+                }
+            }
+
+            // Jika peserta memiliki riwayat sertifikasi sebelumnya, catat riwayat keikutsertaan event lampau
+            if ($lastCert !== '') {
+                $pastTrackCode = $lastCertTrackMap[$lastCert] ?? null;
+                if ($pastTrackCode && $pastEvents->has($pastTrackCode)) {
+                    $pastEvent = $pastEvents->get($pastTrackCode);
+                    $pastEp = EventParticipant::query()->updateOrCreate(
+                        [
+                            'event_id' => $pastEvent->id,
+                            'participant_id' => $participant->id,
+                        ],
+                        [
+                            'track_code' => $pastTrackCode,
+                            'rotation_group' => 'A1',
+                            'admin_status' => 'verified',
+                            'attendance_status' => 'attended',
+                            'attendance_records' => [
+                                $pastEvent->start_date->toDateString() => 'present',
+                                $pastEvent->end_date->toDateString() => 'present',
+                            ],
+                            'has_seen_welcome' => true,
+                            'checkin_status' => 'attended',
+                            'graduation_status' => 'passed',
+                            'certificate_number' => $lastNoCert !== '' ? $lastNoCert : sprintf('SK-%s-PREV-%04d', $pastTrackCode, $participant->id),
+                            'certificate_issued_at' => $pastEvent->end_date,
+                            'score_theory' => 88.5,
+                            'score_practice' => 90.0,
+                            'evaluation_notes' => sprintf('Lulus sertifikasi %s pada %s', $lastCert, $pastEvent->title),
+                        ]
+                    );
+
+                    // Buat juga data Pakta Integritas bertanda tangan digital resmi untuk sertifikasi lampau ini
+                    EventIntegrityPact::query()->updateOrCreate(
+                        [
+                            'event_id' => $pastEvent->id,
+                            'participant_id' => $participant->id,
+                            'pact_type' => EventIntegrityPactController::resolvePactType($pastTrackCode),
+                        ],
+                        [
+                            'event_participant_id' => $pastEp->id,
+                            'track_code' => $pastTrackCode,
+                            'full_name' => $name,
+                            'birth_place' => $birthplace !== '' ? $birthplace : $city,
+                            'birth_date' => $birthdate !== '' ? $birthdate : '1990-01-01',
+                            'kenshi_id_number' => $nik,
+                            'dan_level' => $danRank,
+                            'religion' => 'Islam',
+                            'dojo' => $dojo,
+                            'city' => $city,
+                            'province' => $province,
+                            'certificate_number' => $lastNoCert !== '' ? $lastNoCert : sprintf('SK-%s-PREV-%04d', $pastTrackCode, $participant->id),
+                            'valid_start_date' => $pastEvent->end_date,
+                            'valid_end_date' => Carbon::parse($pastEvent->end_date)->addYears(4),
+                            'id_card_address' => $address !== '' ? $address : "Dojo {$dojo}, {$city}",
+                            'current_address' => $address !== '' ? $address : "Dojo {$dojo}, {$city}",
+                            'sign_place' => $city ?: 'Surabaya',
+                            'sign_date' => $pastEvent->end_date,
+                            'signature_data' => $this->generateSampleSignature($name),
+                            'signed_at' => $pastEvent->end_date,
+                            'status' => 'signed',
+                        ]
+                    );
+                }
+            }
+
+            // Daftarkan juga ke event penataran-malam-ini jika ada di database
+            $tonightEvent = Event::where('slug', 'penataran-malam-ini')->first();
+            if ($tonightEvent) {
+                EventParticipant::query()->updateOrCreate(
+                    [
+                        'event_id' => $tonightEvent->id,
+                        'participant_id' => $participant->id,
+                    ],
+                    [
+                        'track_code' => $trackCode,
+                        'rotation_group' => $idx % 2 === 0 ? 'A1' : 'A2',
+                        'admin_status' => 'pending',
+                        'has_seen_welcome' => false,
+                        'checkin_status' => 'registered',
+                    ]
+                );
+            }
         }
     }
 
@@ -927,19 +2029,24 @@ class Jatim2026PenataranSeeder extends Seeder
                     default => 1,
                 };
 
+                $waktu = trim($row[1]);
+                $waktuParts = explode('-', str_replace([' ', '–'], ['', '-'], $waktu));
+                $start = $waktuParts[0] ?? '08.00';
+                $end = $waktuParts[1] ?? '09.00';
+
                 $items[] = [
                     'day' => $day,
-                    'start' => trim($row[1]),
-                    'end' => trim($row[2]),
-                    'type_class' => trim($row[3]),
-                    'title' => trim($row[4]),
-                    'module_codes' => trim($row[5] ?? '-'),
-                    'pointer' => trim($row[6] ?? ''),
-                    'speakers' => trim($row[7] ?? ''),
-                    'participants' => trim($row[8] ?? ''),
-                    'room' => trim($row[9] ?? ''),
-                    'status_module' => trim($row[10] ?? ''),
-                    'notes' => trim($row[11] ?? ''),
+                    'start' => $start,
+                    'end' => $end,
+                    'type_class' => trim($row[2]),
+                    'title' => trim($row[3]),
+                    'module_codes' => trim($row[4] ?? '-'),
+                    'pointer' => trim($row[5] ?? ''),
+                    'speakers' => trim($row[6] ?? ''),
+                    'participants' => trim($row[7] ?? ''),
+                    'room' => trim($row[8] ?? ''),
+                    'status_module' => trim($row[9] ?? ''),
+                    'notes' => trim($row[10] ?? ''),
                 ];
             }
 
@@ -947,5 +2054,37 @@ class Jatim2026PenataranSeeder extends Seeder
         }
 
         return $items;
+    }
+
+    private function generateSampleSignature(string $name): string
+    {
+        if (! extension_loaded('gd')) {
+            return 'data:image/svg+xml;base64,'.base64_encode(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100"><path d="M 20 60 Q 80 10 140 60 T 260 50" stroke="#0B63CE" stroke-width="3" fill="none"/></svg>'
+            );
+        }
+
+        $im = imagecreatetruecolor(320, 100);
+        imagesavealpha($im, true);
+        $transparent = imagecolorallocatealpha($im, 0, 0, 0, 127);
+        imagefill($im, 0, 0, $transparent);
+        $blue = imagecolorallocate($im, 10, 63, 130);
+
+        imagesetthickness($im, 3);
+        $pts = [
+            [25, 65], [60, 25], [95, 75], [130, 35], [165, 65],
+            [195, 40], [225, 70], [255, 45], [285, 60],
+        ];
+        for ($i = 0; $i < count($pts) - 1; $i++) {
+            imageline($im, $pts[$i][0], $pts[$i][1], $pts[$i + 1][0], $pts[$i + 1][1], $blue);
+        }
+        imageline($im, 20, 80, 290, 75, $blue);
+
+        ob_start();
+        imagepng($im);
+        $data = ob_get_clean();
+        imagedestroy($im);
+
+        return 'data:image/png;base64,'.base64_encode((string) $data);
     }
 }

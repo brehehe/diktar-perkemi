@@ -56,7 +56,7 @@ export default function Schedule({
             }
         });
 
-        router.get(route('speaker.schedule'), merged, {
+        router.get('/pemateri/jadwal', merged, {
             preserveState: true,
             preserveScroll: true,
         });
@@ -82,7 +82,7 @@ export default function Schedule({
         setSearch('');
         setSelectedEvent('');
         setSelectedDay('');
-        router.get(route('speaker.schedule'), {}, {
+        router.get('/pemateri/jadwal', {}, {
             preserveState: true,
             preserveScroll: true,
         });

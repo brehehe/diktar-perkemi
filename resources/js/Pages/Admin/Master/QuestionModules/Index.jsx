@@ -5,6 +5,7 @@ import PageHeader from '../../../../Components/admin/PageHeader';
 import Button from '../../../../Components/ui/Button';
 import Badge from '../../../../Components/ui/Badge';
 import Modal from '../../../../Components/ui/Modal';
+import AlertDialog from '../../../../Components/ui/AlertDialog';
 import FormField from '../../../../Components/ui/FormField';
 import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
@@ -57,6 +58,8 @@ export default function Index({
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [activeModule, setActiveModule] = useState(null);
+    const [moduleToDelete, setModuleToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const importForm = useForm({
         file: null,
@@ -163,9 +166,7 @@ export default function Index({
     };
 
     const handleDelete = (mod) => {
-        if (confirm(`Hapus Modul Soal "${mod.title}"? Tindakan ini hanya diizinkan jika belum memiliki butir soal aktif atau dipakai Paket CBT.`)) {
-            router.delete(`/admin/master/modul-soal/${mod.id}`);
-        }
+        setModuleToDelete(mod);
     };
 
     const toggleTrackCode = (code) => {
@@ -728,6 +729,27 @@ export default function Index({
                     />
                 </form>
             </Modal>
+
+            {/* Modal Konfirmasi Hapus Modul Soal */}
+            <AlertDialog
+                isOpen={Boolean(moduleToDelete)}
+                onClose={() => !isDeleting && setModuleToDelete(null)}
+                title="Hapus Modul Soal?"
+                description={`Apakah Anda yakin ingin menghapus modul soal "${moduleToDelete?.title}"? Butir-butir soal yang terkait dengan modul ini akan tetap tersimpan di Bank Soal namun dilepaskan dari modul ini.`}
+                confirmText={isDeleting ? 'Menghapus...' : 'Hapus Modul'}
+                variant="danger"
+                loading={isDeleting}
+                onConfirm={() => {
+                    setIsDeleting(true);
+                    router.delete(`/admin/master/modul-soal/${moduleToDelete.id}`, {
+                        preserveScroll: true,
+                        onFinish: () => {
+                            setIsDeleting(false);
+                            setModuleToDelete(null);
+                        },
+                    });
+                }}
+            />
         </AdminLayout>
     );
 }

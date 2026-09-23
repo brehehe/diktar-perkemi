@@ -4,6 +4,7 @@ import AdminLayout from '../../../../Layouts/AdminLayout';
 import PageHeader from '../../../../Components/admin/PageHeader';
 import Button from '../../../../Components/ui/Button';
 import Badge from '../../../../Components/ui/Badge';
+import AlertDialog from '../../../../Components/ui/AlertDialog';
 import Tabs from '../../../../Components/admin/Tabs';
 import TableSurface from '../../../../Components/admin/TableSurface';
 import {
@@ -21,6 +22,7 @@ import {
     ChevronRight,
     ExternalLink,
     Plus,
+    Trash2,
     Clock,
     AlertCircle,
     Shield,
@@ -35,6 +37,8 @@ export default function Show({
 }) {
     // 5 Exact Tabs
     const [activeTab, setActiveTab] = useState('ringkasan');
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const tabs = [
         { id: 'ringkasan', label: '1. Ringkasan', count: null },
@@ -57,7 +61,21 @@ export default function Show({
                     { label: module.title },
                 ]}
                 action={
-                    <Button as={Link} href={`/admin/master/bank-soal?module_id=${module.id}`} size="sm" icon={Plus}>Tambah Butir Soal</Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            icon={Trash2}
+                            className="text-rose-600 hover:bg-rose-50 hover:border-rose-300"
+                            onClick={() => setIsDeleteDialogOpen(true)}
+                        >
+                            Hapus Modul
+                        </Button>
+                        <Button as={Link} href={`/admin/master/bank-soal?module_id=${module.id}`} size="sm" icon={Plus}>
+                            Tambah Butir Soal
+                        </Button>
+                    </div>
                 }
             />
 
@@ -459,6 +477,26 @@ export default function Show({
                     </div>
                 </div>
             )}
+
+            {/* Modal Konfirmasi Hapus Modul Soal */}
+            <AlertDialog
+                isOpen={isDeleteDialogOpen}
+                onClose={() => !isDeleting && setIsDeleteDialogOpen(false)}
+                title="Hapus Modul Soal?"
+                description={`Apakah Anda yakin ingin menghapus modul soal "${module.title}"? Butir-butir soal yang terkait dengan modul ini akan tetap tersimpan di Bank Soal namun dilepaskan dari modul ini.`}
+                confirmText={isDeleting ? 'Menghapus...' : 'Hapus Modul'}
+                variant="danger"
+                loading={isDeleting}
+                onConfirm={() => {
+                    setIsDeleting(true);
+                    router.delete(`/admin/master/modul-soal/${module.id}`, {
+                        onFinish: () => {
+                            setIsDeleting(false);
+                            setIsDeleteDialogOpen(false);
+                        },
+                    });
+                }}
+            />
         </AdminLayout>
     );
 }

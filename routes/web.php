@@ -25,7 +25,9 @@ use App\Http\Controllers\Admin\SpeakerController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\EventIntegrityPactController;
 use App\Http\Controllers\EventPortalController;
+use App\Http\Controllers\EventRegistrationFormController;
 use App\Http\Controllers\PortalController;
 use App\Http\Controllers\ReaderController;
 use App\Http\Controllers\SpeakerPortalController;
@@ -167,6 +169,10 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::put('/event/{event}/peserta/{eventParticipant}', [EventController::class, 'updateParticipant'])->name('event.participant.update');
         Route::delete('/event/{event}/peserta/{eventParticipant}/hasil', [AttendanceController::class, 'destroyParticipantResults'])->name('event.participant-results.destroy');
         Route::delete('/event/{event}/peserta/{eventParticipant}', [EventController::class, 'removeParticipant'])->name('event.participant.destroy');
+        Route::post('/event/{event}/formulir/{form}/verifikasi', [EventRegistrationFormController::class, 'verify'])->name('event.registration-form.verify');
+        Route::post('/event/{event}/formulir/upload', [EventRegistrationFormController::class, 'upload'])->name('event.registration-form.admin-upload');
+        Route::get('/event/{event}/formulir/{participant}/cetak', [EventRegistrationFormController::class, 'print'])->name('event.registration-form.admin-print');
+        Route::get('/event/{event}/pakta-integritas/{participant}/cetak', [EventIntegrityPactController::class, 'print'])->name('event.integrity-pact.admin-print');
         Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat/generate', [EventCertificateController::class, 'generateCertificate'])->name('event.certificate.generate');
         Route::post('/event/{event}/dokumen/generate', [EventCertificateController::class, 'generateMissingDocuments'])->name('event.documents.generate');
         Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'store'])->name('event.certificate.store');
@@ -259,6 +265,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/master/bank-soal', [QuestionBankController::class, 'store'])->name('master.bank-soal.store');
         Route::put('/master/bank-soal/{question}', [QuestionBankController::class, 'update'])->name('master.bank-soal.update');
         Route::delete('/master/bank-soal/{question}', [QuestionBankController::class, 'destroy'])->name('master.bank-soal.destroy');
+        Route::post('/master/bank-soal/hapus-massal', [QuestionBankController::class, 'bulkDestroy'])->name('master.bank-soal.bulk-destroy');
 
         // Master CBT: Paket Ujian
         Route::get('/cbt/paket-ujian', [CbtPackageController::class, 'index'])->name('cbt.paket-ujian.index');
@@ -282,6 +289,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/event/{slug}/welcome', [EventPortalController::class, 'welcome'])->name('event.welcome');
     Route::post('/event/{slug}/welcome/seen', [EventPortalController::class, 'markSeen'])->name('event.welcome.seen');
     Route::post('/event/{slug}/check-in', [EventPortalController::class, 'checkIn'])->name('event.check-in');
+    Route::get('/event/{slug}/formulir-pendaftaran', [EventRegistrationFormController::class, 'show'])->name('event.registration-form');
+    Route::post('/event/{slug}/formulir-pendaftaran', [EventRegistrationFormController::class, 'store'])->name('event.registration-form.store');
+    Route::post('/event/{slug}/formulir-pendaftaran/upload', [EventRegistrationFormController::class, 'upload'])->name('event.registration-form.upload');
+    Route::get('/event/{slug}/formulir-pendaftaran/cetak/{participantId?}', [EventRegistrationFormController::class, 'print'])->name('event.registration-form.print');
+    Route::get('/event/{slug}/pakta-integritas', [EventIntegrityPactController::class, 'show'])->name('event.integrity-pact');
+    Route::post('/event/{slug}/pakta-integritas', [EventIntegrityPactController::class, 'store'])->name('event.integrity-pact.store');
+    Route::get('/event/{slug}/pakta-integritas/cetak', [EventIntegrityPactController::class, 'print'])->name('event.integrity-pact.print');
     Route::get('/event/{slug}/ruang-belajar', [EventPortalController::class, 'learningRoom'])->name('event.learning-room');
     Route::get('/event/{slug}/scan', [EventPortalController::class, 'scan'])->name('event.scan');
     Route::get('/event/{slug}/sertifikat', [EventPortalController::class, 'downloadCertificate'])->name('event.certificate.mine');

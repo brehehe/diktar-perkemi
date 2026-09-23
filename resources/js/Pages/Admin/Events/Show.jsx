@@ -60,6 +60,8 @@ import {
     Save,
     FileSpreadsheet,
     Download,
+    Upload,
+    FileEdit,
 } from 'lucide-react';
 
 export default function Show({
@@ -88,13 +90,14 @@ export default function Show({
     documentNumberLabels = {},
     documentNumberDefaults = {},
     documentNumberOverrides = {},
+    registrationForms = [],
 }) {
     const isPortalAdmin = usePage().props.auth?.user?.is_admin;
     // Active tab state (Exact 10 Tabs)
     const [activeTab, setActiveTab] = useState(() => {
         if (typeof window === 'undefined') return 'ringkasan';
         const requested = new URLSearchParams(window.location.search).get('tab');
-        return ['ringkasan', 'rundown', 'peserta', 'absensi', 'pemateri', 'sertifikat', 'revisi', 'pengawasan', 'legenda', 'dokumen', 'pengaturan', 'ruang', 'modul_cbt', 'materi', 'cbt'].includes(requested) ? requested : 'ringkasan';
+        return ['ringkasan', 'rundown', 'peserta', 'formulir', 'absensi', 'pemateri', 'sertifikat', 'revisi', 'pengawasan', 'legenda', 'dokumen', 'pengaturan', 'ruang', 'modul_cbt', 'materi', 'cbt'].includes(requested) ? requested : 'ringkasan';
     });
     useEffect(() => {
         const url = new URL(window.location.href);
@@ -102,6 +105,7 @@ export default function Show({
         window.history.replaceState(window.history.state, '', url);
     }, [activeTab]);
     const [selectedDay, setSelectedDay] = useState(1);
+    const [rundownTrackFilter, setRundownTrackFilter] = useState('all');
     const [attendanceSessionFilter, setAttendanceSessionFilter] = useState('all');
     const [credentialSearch, setCredentialSearch] = useState('');
     const [participantSearch, setParticipantSearch] = useState('');
@@ -113,6 +117,90 @@ export default function Show({
         const pageParam = parseInt(new URLSearchParams(window.location.search).get('page'), 10);
         return !isNaN(pageParam) && pageParam > 0 ? pageParam : 1;
     });
+
+    // Formulir Pendaftaran states
+    const [formSearch, setFormSearch] = useState('');
+    const [formTrackFilter, setFormTrackFilter] = useState('all');
+    const [formStatusFilter, setFormStatusFilter] = useState('all');
+    const [formPage, setFormPage] = useState(1);
+    const [formPerPage, setFormPerPage] = useState(25);
+    const [selectedFormForModal, setSelectedFormForModal] = useState(null);
+    const [isVerifyingForm, setIsVerifyingForm] = useState(false);
+    const [uploadModalParticipant, setUploadModalParticipant] = useState(null);
+    const [adminUploadFile, setAdminUploadFile] = useState(null);
+    const [adminUploadFormType, setAdminUploadFormType] = useState('PELATIH');
+    const [adminUploadPenataranLevel, setAdminUploadPenataranLevel] = useState('Daerah');
+    const [adminUploadAutoVerify, setAdminUploadAutoVerify] = useState(true);
+    const [adminUploadNotes, setAdminUploadNotes] = useState('');
+    const [isAdminUploading, setIsAdminUploading] = useState(false);
+
+    const handleAdminUploadSubmit = (e) => {
+        e.preventDefault();
+        if (!adminUploadFile) {
+            alert('Silakan pilih file formulir terlebih dahulu.');
+            return;
+        }
+        setIsAdminUploading(true);
+        const formData = new FormData();
+        formData.append('file', adminUploadFile);
+        formData.append('participant_id', uploadModalParticipant.participant_id);
+        formData.append('form_type', adminUploadFormType);
+        formData.append('penataran_level', adminUploadPenataranLevel);
+        if (adminUploadAutoVerify) formData.append('verified', '1');
+        if (adminUploadNotes) formData.append('notes', adminUploadNotes);
+
+        router.post(route('event.registration-form.admin-upload', event.id), formData, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsAdminUploading(false);
+                setUploadModalParticipant(null);
+                setAdminUploadFile(null);
+                setAdminUploadNotes('');
+            },
+            onError: () => {
+                setIsAdminUploading(false);
+            },
+        });
+    };
+
+    const filteredRegistrationForms = useMemo(() => {
+        return registrationForms.filter((rf) => {
+            const matchesSearch = !formSearch ||
+                rf.participant_name?.toLowerCase().includes(formSearch.toLowerCase()) ||
+                rf.kenshi_id_number?.toLowerCase().includes(formSearch.toLowerCase()) ||
+                rf.dan_level?.toLowerCase().includes(formSearch.toLowerCase()) ||
+                rf.origin_dojo?.toLowerCase().includes(formSearch.toLowerCase());
+
+            const matchesTrack = formTrackFilter === 'all' ||
+                rf.track_code?.toLowerCase().includes(formTrackFilter.toLowerCase()) ||
+                rf.form_type?.toLowerCase() === formTrackFilter.toLowerCase();
+
+            const matchesStatus = formStatusFilter === 'all' || rf.status === formStatusFilter;
+
+            return matchesSearch && matchesTrack && matchesStatus;
+        });
+    }, [registrationForms, formSearch, formTrackFilter, formStatusFilter]);
+
+    const totalFormPages = Math.max(1, Math.ceil(filteredRegistrationForms.length / formPerPage));
+    const paginatedRegistrationForms = useMemo(() => {
+        const start = (formPage - 1) * formPerPage;
+        return filteredRegistrationForms.slice(start, start + formPerPage);
+    }, [filteredRegistrationForms, formPage, formPerPage]);
+
+    const handleVerifyForm = (formId) => {
+        if (!formId) return;
+        setIsVerifyingForm(true);
+        router.post(`/admin/event/${event.id}/formulir/${formId}/verifikasi`, {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsVerifyingForm(false);
+                if (selectedFormForModal) {
+                    setSelectedFormForModal((prev) => prev ? { ...prev, status: 'verified', verified_at: new Date().toLocaleDateString('id-ID') } : null);
+                }
+            },
+            onError: () => setIsVerifyingForm(false),
+        });
+    };
 
     useEffect(() => {
         if (activeTab === 'peserta') {
@@ -512,7 +600,7 @@ export default function Show({
             subtopic: session.subtopic || '',
             method: session.method || '',
             room: session.room || '',
-            target_tracks: session.target_tracks || [],
+            target_tracks: session.target_tracks || session.track_codes || [],
             module_code: session.module_code || '',
             status: validStatus,
             attendance_setting: validAttendance,
@@ -582,6 +670,7 @@ export default function Show({
         { id: 'ringkasan', label: 'Informasi', count: null },
         { id: 'rundown', label: 'Rundown & Sesi', count: stats.total_sessions },
         { id: 'peserta', label: 'Peserta', count: stats.total_participants },
+        { id: 'formulir', label: 'Formulir Pendaftaran', count: stats.total_registration_forms ?? registrationForms.length },
         { id: 'absensi', label: 'Absensi', count: stats.total_attendances || attendances.length },
         { id: 'pemateri', label: 'Pemateri', count: stats.total_speakers },
         { id: 'sertifikat', label: 'E-Sertifikat & Transkrip', count: (stats.certificate_files_count || 0) + (stats.transcript_files_count || 0) },
@@ -1190,52 +1279,105 @@ export default function Show({
                         </div>
 
                         {/* Sessions Table */}
-                        <div className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs overflow-hidden">
-                            <div className="px-6 py-4 border-b border-[#DCE7F3] bg-[#F8FBFF] flex items-center justify-between">
-                                <h3 className="font-display font-bold text-sm text-[#0E2747]">
-                                    Jadwal & Rundown Hari {selectedDay}
-                                </h3>
-                                <span className="text-xs font-medium text-[#6B7C93]">
-                                    Total Sesi: {activeDayData.sessions.length} • Total JP:{' '}
-                                    <strong className="text-[#0B63CE]">
-                                        {activeDayData.sessions.reduce((acc, s) => acc + s.duration_jp, 0)} JP
-                                    </strong>
-                                </span>
-                            </div>
+                        {(() => {
+                            const filteredDaySessions = (activeDayData.sessions || []).filter((s) => {
+                                if (rundownTrackFilter === 'all') return true;
+                                const sTracks = s.target_tracks || s.track_codes || [];
+                                if (!sTracks || sTracks.length === 0 || sTracks.length >= 6) return true;
+                                return sTracks.includes(rundownTrackFilter);
+                            });
 
-                            <TableSurface className="shadow-none">
-                                <table className="w-full text-left text-xs border-collapse">
-                                    <thead>
-                                        <tr className="border-b border-[#DCE7F3] bg-slate-50 text-[#0E2747] font-semibold text-[11px] uppercase tracking-wider">
-                                            <th className="px-4 py-3">Waktu & Sesi</th>
-                                            <th className="px-4 py-3">Jenis Sesi</th>
-                                            <th className="px-4 py-3">Topik & Integrasi</th>
-                                            <th className="px-4 py-3">Pemateri / Pengawas</th>
-                                            <th className="px-4 py-3">Ruang</th>
-                                            <th className="px-4 py-3">Status Absensi</th>
-                                            <th className="px-4 py-3 text-right">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[#DCE7F3]/60">
-                                        {activeDayData.sessions.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={7} className="text-center py-10 text-xs text-[#6B7C93]">
-                                                    Belum ada jadwal sesi untuk Hari {selectedDay}. Klik tombol di atas untuk menambahkan.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            activeDayData.sessions.map((s) => (
-                                                <tr key={s.id} className="hover:bg-[#F8FBFF] transition-colors">
-                                                    <td className="px-4 py-3 whitespace-nowrap">
-                                                        <div className="font-mono font-bold text-[#0B63CE]">{s.time_slot}</div>
-                                                        <div className="text-[11px] text-[#6B7C93]">{s.session_number} ({s.duration_jp} JP)</div>
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap">
-                                                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${s.session_type?.badge_color || 'bg-slate-100 text-slate-700'}`}>
-                                                            {s.session_type?.name || 'Sesi'}
-                                                        </span>
-                                                        <div className="text-[10px] text-[#6B7C93] mt-0.5">{s.method}</div>
-                                                    </td>
+                            return (
+                                <div className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-[#DCE7F3] bg-[#F8FBFF] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div>
+                                            <h3 className="font-display font-bold text-sm text-[#0E2747]">
+                                                Jadwal & Rundown Hari {selectedDay}
+                                            </h3>
+                                            <span className="text-xs font-medium text-[#6B7C93]">
+                                                Total Sesi: {activeDayData.sessions.length} • Total JP:{' '}
+                                                <strong className="text-[#0B63CE]">
+                                                    {activeDayData.sessions.reduce((acc, s) => acc + s.duration_jp, 0)} JP
+                                                </strong>
+                                                {rundownTrackFilter !== 'all' && (
+                                                    <span className="ml-2 text-amber-700 font-medium">
+                                                        (Menampilkan {filteredDaySessions.length} sesi untuk jalur {rundownTrackFilter})
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-semibold text-[#0E2747] whitespace-nowrap">Filter Jalur Peserta:</span>
+                                            <select
+                                                value={rundownTrackFilter}
+                                                onChange={(e) => setRundownTrackFilter(e.target.value)}
+                                                className="text-xs font-medium border border-[#DCE7F3] rounded-lg px-2.5 py-1.5 bg-white text-[#112743] focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
+                                            >
+                                                <option value="all">Semua Jalur (Tampilkan Semua)</option>
+                                                {tracks.map((t) => (
+                                                    <option key={t.id || t.code} value={t.code}>
+                                                        {t.code} — {t.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <TableSurface className="shadow-none">
+                                        <table className="w-full text-left text-xs border-collapse">
+                                            <thead>
+                                                <tr className="border-b border-[#DCE7F3] bg-slate-50 text-[#0E2747] font-semibold text-[11px] uppercase tracking-wider">
+                                                    <th className="px-4 py-3">Waktu & Sesi</th>
+                                                    <th className="px-4 py-3">Jenis Sesi & Jalur</th>
+                                                    <th className="px-4 py-3">Topik & Integrasi</th>
+                                                    <th className="px-4 py-3">Pemateri / Pengawas</th>
+                                                    <th className="px-4 py-3">Ruang</th>
+                                                    <th className="px-4 py-3">Status Absensi</th>
+                                                    <th className="px-4 py-3 text-right">Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[#DCE7F3]/60">
+                                                {filteredDaySessions.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={7} className="text-center py-10 text-xs text-[#6B7C93]">
+                                                            {rundownTrackFilter !== 'all'
+                                                                ? `Tidak ada sesi rundown untuk jalur ${rundownTrackFilter} pada Hari ${selectedDay}.`
+                                                                : `Belum ada jadwal sesi untuk Hari ${selectedDay}. Klik tombol di atas untuk menambahkan.`}
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    filteredDaySessions.map((s) => (
+                                                        <tr key={s.id} className="hover:bg-[#F8FBFF] transition-colors">
+                                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                                <div className="font-mono font-bold text-[#0B63CE]">{s.time_slot}</div>
+                                                                <div className="text-[11px] text-[#6B7C93]">{s.session_number} ({s.duration_jp} JP)</div>
+                                                            </td>
+                                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                                <div className="flex flex-wrap items-center gap-1">
+                                                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${s.session_type?.badge_color || 'bg-slate-100 text-slate-700'}`}>
+                                                                        {s.session_type?.name || 'Sesi'}
+                                                                    </span>
+                                                                    {(() => {
+                                                                        const sTracks = s.target_tracks || s.track_codes || [];
+                                                                        if (!sTracks || sTracks.length === 0 || sTracks.length >= 6) {
+                                                                            return (
+                                                                                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold bg-sky-50 text-sky-800 border border-sky-200">
+                                                                                    Semua Jalur
+                                                                                </span>
+                                                                            );
+                                                                        }
+                                                                        return sTracks.map((tc) => (
+                                                                            <span
+                                                                                key={tc}
+                                                                                className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200"
+                                                                            >
+                                                                                {tc}
+                                                                            </span>
+                                                                        ));
+                                                                    })()}
+                                                                </div>
+                                                                <div className="text-[10px] text-[#6B7C93] mt-0.5">{s.method}</div>
+                                                            </td>
                                                     <td className="px-4 py-3 min-w-[220px]">
                                                         <div className="font-semibold text-[#0E2747]">{s.topic}</div>
                                                         {s.subtopic && <div className="text-[11px] text-[#6B7C93] mt-0.5 line-clamp-1">{s.subtopic}</div>}
@@ -1342,6 +1484,8 @@ export default function Show({
                                 </table>
                             </TableSurface>
                         </div>
+                            );
+                        })()}
                     </div>
                 )}
 
@@ -2080,6 +2224,326 @@ export default function Show({
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* TAB: FORMULIR PENDAFTARAN PENATARAN */}
+                {activeTab === 'formulir' && (
+                    <div className="space-y-6">
+                        {/* Summary / Stats Cards */}
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                            <div className="rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
+                                <p className="text-xs font-medium text-[#6B7C93]">Total Peserta</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-[#0E2747]">
+                                    {stats.total_registration_forms ?? registrationForms.length}
+                                </p>
+                                <p className="mt-1 text-[11px] text-[#6B7C93]">Peserta terdaftar di event</p>
+                            </div>
+                            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-blue-700">Formulir Masuk</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-blue-900">
+                                    {stats.submitted_registration_forms ?? registrationForms.filter(f => f.status === 'submitted' || f.status === 'verified').length}
+                                </p>
+                                <p className="mt-1 text-[11px] text-blue-600">Sudah mengisi formulir</p>
+                            </div>
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-emerald-700">Terverifikasi</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-emerald-900">
+                                    {stats.verified_registration_forms ?? registrationForms.filter(f => f.status === 'verified').length}
+                                </p>
+                                <p className="mt-1 text-[11px] text-emerald-600">Disetujui oleh admin</p>
+                            </div>
+                            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-amber-700">Belum Mengisi</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-amber-900">
+                                    {stats.unfilled_registration_forms ?? registrationForms.filter(f => f.status === 'unfilled').length}
+                                </p>
+                                <p className="mt-1 text-[11px] text-amber-600">Menunggu pengisian peserta</p>
+                            </div>
+                        </div>
+
+                        {/* Notice if all forms are fresh / unfilled */}
+                        {(stats.submitted_registration_forms ?? 0) === 0 && (stats.verified_registration_forms ?? 0) === 0 && (
+                            <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="rounded-lg bg-blue-100 p-2 text-blue-700">
+                                        <FileCheck className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-blue-950">
+                                            Status Formulir Penataran: Bersih (Menunggu Pengisian Mandiri)
+                                        </p>
+                                        <p className="text-[11px] text-blue-800">
+                                            Data formulir telah dikosongkan. Seluruh peserta ({stats.total_registration_forms ?? registrationForms.length} kenshi) berstatus "Belum Mengisi". Begitu kenshi mengirimkan formulir pendaftaran secara mandiri di portal, berkas akan muncul di tabel ini untuk diverifikasi admin PB PERKEMI.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Filter and Search Bar */}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6B7C93]" />
+                                <input
+                                    type="text"
+                                    value={formSearch}
+                                    onChange={(e) => {
+                                        setFormSearch(e.target.value);
+                                        setFormPage(1);
+                                    }}
+                                    placeholder="Cari nama kenshi, NIK, DAN, atau dojo..."
+                                    className="w-full rounded-lg border border-[#DCE7F3] py-2 pl-9 pr-3 text-xs text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                />
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <select
+                                    value={formTrackFilter}
+                                    onChange={(e) => {
+                                        setFormTrackFilter(e.target.value);
+                                        setFormPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value="all">Semua Jalur / Profesi</option>
+                                    <option value="pelatih">Pelatih (Daerah / Nasional)</option>
+                                    <option value="penguji">Penguji (Daerah / Nasional)</option>
+                                    <option value="wasit">Wasit (Daerah / Nasional)</option>
+                                </select>
+
+                                <select
+                                    value={formStatusFilter}
+                                    onChange={(e) => {
+                                        setFormStatusFilter(e.target.value);
+                                        setFormPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value="all">Semua Status Formulir</option>
+                                    <option value="verified">Terverifikasi</option>
+                                    <option value="submitted">Menunggu Verifikasi (Terkirim)</option>
+                                    <option value="unfilled">Belum Mengisi</option>
+                                </select>
+
+                                <select
+                                    value={formPerPage}
+                                    onChange={(e) => {
+                                        setFormPerPage(Number(e.target.value));
+                                        setFormPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value={10}>10 per hal</option>
+                                    <option value={25}>25 per hal</option>
+                                    <option value={50}>50 per hal</option>
+                                    <option value={100}>100 per hal</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Table of Participant Forms */}
+                        <div className="rounded-xl border border-[#DCE7F3] bg-white shadow-xs overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="border-b border-[#DCE7F3] bg-[#F8FBFF] font-semibold text-[#112743]">
+                                        <tr>
+                                            <th className="py-3 px-4 w-12 text-center">No</th>
+                                            <th className="py-3 px-4">Nama Kenshi & NIK</th>
+                                            <th className="py-3 px-4">Tingkatan DAN & Asal</th>
+                                            <th className="py-3 px-4">Jalur & Tingkat</th>
+                                            <th className="py-3 px-4">Status Formulir</th>
+                                            <th className="py-3 px-4">Tanggal Pengisian</th>
+                                            <th className="py-3 px-4 text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#DCE7F3]">
+                                        {paginatedRegistrationForms.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={7} className="py-8 text-center text-sm text-[#6B7C93]">
+                                                    Tidak ditemukan formulir yang sesuai filter.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            paginatedRegistrationForms.map((rf, idx) => {
+                                                const globalIdx = (formPage - 1) * formPerPage + idx + 1;
+                                                const hasForm = rf.status !== 'unfilled';
+
+                                                return (
+                                                    <tr key={rf.event_participant_id || rf.participant_id} className="hover:bg-[#F8FBFF] transition-colors">
+                                                        <td className="py-3 px-4 text-center font-mono text-[#6B7C93]">{globalIdx}</td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="font-semibold text-[#0E2747]">{rf.participant_name}</div>
+                                                            <div className="font-mono text-[11px] text-[#6B7C93]">{rf.kenshi_id_number}</div>
+                                                            {rf.file_url && (
+                                                                <div className="mt-1">
+                                                                    <a
+                                                                        href={rf.file_url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                                                        title="Lihat / Unduh Berkas Scan"
+                                                                    >
+                                                                        <FileText className="h-3 w-3" />
+                                                                        Scan: {rf.file_name || 'Dokumen'} ({rf.file_size_formatted || 'File'})
+                                                                    </a>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <span className="inline-block rounded bg-[#EAF5FF] px-2 py-0.5 text-[11px] font-bold text-[#0B63CE]">
+                                                                {rf.dan_level}
+                                                            </span>
+                                                            <div className="text-[11px] text-[#6B7C93] mt-0.5">
+                                                                {rf.origin_dojo}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="font-semibold text-[#112743]">
+                                                                {rf.form_type} ({rf.penataran_level})
+                                                            </div>
+                                                            <div className="text-[11px] text-[#6B7C93]">{rf.track_name}</div>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            {rf.status === 'verified' ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 border border-emerald-200">
+                                                                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                                                    Terverifikasi {rf.submission_mode === 'upload' ? '• Berkas' : ''}
+                                                                </span>
+                                                            ) : rf.status === 'submitted' ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 border border-blue-200">
+                                                                    <FileCheck className="h-3 w-3 text-blue-600" />
+                                                                    Menunggu Verifikasi {rf.submission_mode === 'upload' ? '• Berkas' : ''}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600 border border-gray-200">
+                                                                    Belum Mengisi
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-[#6B7C93]">
+                                                            {rf.submitted_at || '-'}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center">
+                                                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                                                {hasForm && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setSelectedFormForModal(rf)}
+                                                                        className="inline-flex items-center gap-1 rounded-md bg-[#0B63CE] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0A3F82] transition-colors"
+                                                                        title="Lihat formulir Word resmi"
+                                                                    >
+                                                                        <Eye className="h-3.5 w-3.5" />
+                                                                        Lihat
+                                                                    </button>
+                                                                )}
+
+                                                                {/* Tombol Upload Berkas (Bisa upload berkas scan/PDF langsung) */}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setUploadModalParticipant(rf);
+                                                                        setAdminUploadFormType(rf.form_type || 'PELATIH');
+                                                                        setAdminUploadPenataranLevel(rf.penataran_level || 'Daerah');
+                                                                        setAdminUploadFile(null);
+                                                                        setAdminUploadNotes('');
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 transition-colors"
+                                                                    title="Upload berkas scan formulir PDF/DOCX/JPG untuk kenshi ini"
+                                                                >
+                                                                    <Upload className="h-3.5 w-3.5" />
+                                                                    Upload
+                                                                </button>
+
+                                                                {/* Tombol Isi / Edit Data Formulir */}
+                                                                <a
+                                                                    href={`/event/${event.slug}/formulir-pendaftaran?participant_id=${rf.participant_id}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 rounded-md border border-[#DCE7F3] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#112743] hover:bg-[#F8FBFF] hover:text-[#0B63CE] transition-colors"
+                                                                    title="Isi formulir secara digital atau sesuaikan data-datanya"
+                                                                >
+                                                                    <FileEdit className="h-3.5 w-3.5 text-[#0B63CE]" />
+                                                                    {hasForm ? 'Edit Data' : 'Isi Data'}
+                                                                </a>
+
+                                                                {rf.file_url && (
+                                                                    <a
+                                                                        href={rf.file_url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200 px-2 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                                                        title="Lihat / unduh berkas scan dokumen terunggah"
+                                                                    >
+                                                                        <Download className="h-3.5 w-3.5" />
+                                                                        Berkas
+                                                                    </a>
+                                                                )}
+
+                                                                {rf.print_url && (
+                                                                    <a
+                                                                        href={rf.print_url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1 rounded-md border border-[#DCE7F3] bg-white px-2 py-1.5 text-xs font-medium text-[#112743] hover:bg-[#F8FBFF] hover:text-[#0B63CE] transition-colors"
+                                                                        title="Cetak formulir PB PERKEMI"
+                                                                    >
+                                                                        <Printer className="h-3.5 w-3.5" />
+                                                                    </a>
+                                                                )}
+
+                                                                {hasForm && rf.status !== 'verified' && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleVerifyForm(rf.id)}
+                                                                        disabled={isVerifyingForm}
+                                                                        className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                                                                        title="Verifikasi formulir ini"
+                                                                    >
+                                                                        <Check className="h-3.5 w-3.5" />
+                                                                        Verifikasi
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            {totalFormPages > 1 && (
+                                <div className="flex items-center justify-between border-t border-[#DCE7F3] px-4 py-3 bg-[#F8FBFF]">
+                                    <div className="text-xs text-[#6B7C93]">
+                                        Menampilkan <span className="font-semibold text-[#112743]">{(formPage - 1) * formPerPage + 1}</span> - <span className="font-semibold text-[#112743]">{Math.min(formPage * formPerPage, filteredRegistrationForms.length)}</span> dari <span className="font-semibold text-[#112743]">{filteredRegistrationForms.length}</span> peserta
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormPage((p) => Math.max(1, p - 1))}
+                                            disabled={formPage === 1}
+                                            className="rounded border border-[#DCE7F3] bg-white p-1 text-[#112743] disabled:opacity-40 hover:bg-gray-50"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </button>
+                                        <span className="px-2 text-xs font-medium text-[#112743]">
+                                            {formPage} / {totalFormPages}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormPage((p) => Math.min(totalFormPages, p + 1))}
+                                            disabled={formPage === totalFormPages}
+                                            className="rounded border border-[#DCE7F3] bg-white p-1 text-[#112743] disabled:opacity-40 hover:bg-gray-50"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -3479,6 +3943,65 @@ export default function Show({
                             <datalist id="event-room-options">{rooms.map((room) => <option key={room.id} value={room.name} />)}</datalist>
                         </FormField>
                     </div>
+
+                    <FormField label="Jalur Peserta yang Mengikuti Sesi" error={sessionForm.errors.target_tracks}>
+                        <div className="space-y-2 p-3.5 bg-slate-50 border border-[#DCE7F3] rounded-xl">
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="text-[#6B7C93]">Pilih jalur peserta yang diwajibkan mengikuti sesi ini:</span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => sessionForm.setData('target_tracks', tracks.map((t) => t.code))}
+                                        className="text-[#0B63CE] hover:underline font-semibold text-[11px]"
+                                    >
+                                        Pilih Semua Jalur
+                                    </button>
+                                    <span className="text-[#DCE7F3]">•</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => sessionForm.setData('target_tracks', [])}
+                                        className="text-[#6B7C93] hover:underline text-[11px]"
+                                    >
+                                        Kosongkan
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                                {tracks.map((t) => {
+                                    const selectedTracks = sessionForm.data.target_tracks || [];
+                                    const isChecked = selectedTracks.includes(t.code);
+                                    return (
+                                        <label
+                                            key={t.id || t.code}
+                                            className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                                                isChecked
+                                                    ? 'bg-[#EAF5FF] border-[#0B63CE] text-[#0A3F82] font-semibold'
+                                                    : 'bg-white border-[#DCE7F3] text-slate-700 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={(e) => {
+                                                    const cur = sessionForm.data.target_tracks || [];
+                                                    if (e.target.checked) {
+                                                        sessionForm.setData('target_tracks', [...cur, t.code]);
+                                                    } else {
+                                                        sessionForm.setData('target_tracks', cur.filter((c) => c !== t.code));
+                                                    }
+                                                }}
+                                                className="rounded border-[#DCE7F3] text-[#0B63CE] focus:ring-[#0B63CE] w-3.5 h-3.5"
+                                            />
+                                            <span>{t.code} · {t.name}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[11px] text-[#6B7C93]">
+                                Jika semua jalur dipilih atau dikosongkan, sesi akan berlaku untuk seluruh peserta (Pleno/Umum).
+                            </p>
+                        </div>
+                    </FormField>
                 </form>
             </Modal>
 
@@ -4318,6 +4841,577 @@ export default function Show({
                             />
                         </FormField>
                     </div>
+                </form>
+            </Modal>
+
+            {/* MODAL: Pratinjau Formulir Word PB PERKEMI */}
+            {selectedFormForModal && (
+                <Modal
+                    isOpen={!!selectedFormForModal}
+                    onClose={() => setSelectedFormForModal(null)}
+                    title={`Formulir Penataran ${selectedFormForModal.form_type} — ${selectedFormForModal.participant_name}`}
+                    size="4xl"
+                    footer={
+                        <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+                            <div className="flex items-center gap-2">
+                                {selectedFormForModal.status === 'verified' ? (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                        Terverifikasi {selectedFormForModal.verified_at ? `(${selectedFormForModal.verified_at})` : ''}
+                                    </span>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        disabled={isVerifyingForm}
+                                        onClick={() => handleVerifyForm(selectedFormForModal.id)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50"
+                                    >
+                                        <Check className="h-4 w-4" />
+                                        {isVerifyingForm ? 'Memverifikasi...' : 'Verifikasi & Setujui Formulir'}
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                {selectedFormForModal.print_url && (
+                                    <a
+                                        href={selectedFormForModal.print_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B63CE] bg-[#EAF5FF] px-4 py-2 text-xs font-semibold text-[#0B63CE] hover:bg-[#D5EBFF] transition-colors"
+                                    >
+                                        <Printer className="h-4 w-4" />
+                                        Cetak / Unduh Format PB PERKEMI
+                                    </a>
+                                )}
+                                <Button variant="secondary" onClick={() => setSelectedFormForModal(null)}>
+                                    Tutup
+                                </Button>
+                            </div>
+                        </div>
+                    }
+                >
+                    <div className="max-h-[78vh] overflow-y-auto bg-slate-100 p-2 sm:p-5 rounded-lg">
+                        {/* Banner Berkas Terunggah (jika ada) */}
+                        {selectedFormForModal.file_url && (
+                            <div className="mx-auto max-w-[210mm] mb-4 p-4 rounded-xl border border-indigo-200 bg-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-200">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                                Berkas Fisik / Scan
+                                            </span>
+                                            {selectedFormForModal.file_size_formatted && (
+                                                <span className="text-xs text-slate-500">
+                                                    ({selectedFormForModal.file_size_formatted})
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-900 mt-0.5">
+                                            {selectedFormForModal.original_file_name || selectedFormForModal.file_name || 'Berkas Formulir Pendaftaran'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <a
+                                        href={selectedFormForModal.file_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors"
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                        Unduh / Buka Dokumen
+                                    </a>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Word Sheet Look */}
+                        <div className="mx-auto max-w-[210mm] bg-white p-6 sm:p-12 shadow-sm border border-slate-300 text-black font-serif leading-normal text-xs sm:text-sm space-y-5">
+                            {/* Kop Surat Resmi PB PERKEMI dengan Logo */}
+                            <div className="border-b-2 border-black pb-3 text-center">
+                                <div className="flex items-center justify-center gap-3 mb-1">
+                                    <img
+                                        src="/images/perkemi-logo.png"
+                                        alt="Logo PB PERKEMI"
+                                        className="h-16 w-16 object-contain"
+                                    />
+                                    <div className="text-center font-sans">
+                                        <div className="text-[12pt] font-black uppercase tracking-wider text-slate-900">
+                                            PENGURUS BESAR
+                                        </div>
+                                        <div className="text-[13.5pt] font-black uppercase tracking-wide text-slate-950">
+                                            PERSAUDARAAN SHORINJI KEMPO INDONESIA (PERKEMI)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Lampiran Tag & Form Title */}
+                            <div className="text-center space-y-0.5">
+                                <div className="font-bold text-[11pt] tracking-widest uppercase">
+                                    {selectedFormForModal.lampiran_label || (
+                                        selectedFormForModal.form_type === 'PELATIH'
+                                            ? (selectedFormForModal.penataran_level === 'Nasional' ? 'LAMPIRAN-B' : 'LAMPIRAN-A')
+                                            : selectedFormForModal.form_type === 'PENGUJI'
+                                            ? (selectedFormForModal.penataran_level === 'Nasional' ? 'LAMPIRAN-D' : 'LAMPIRAN-C')
+                                            : (selectedFormForModal.penataran_level === 'Nasional' ? 'LAMPIRAN-B' : 'LAMPIRAN-A')
+                                    )}
+                                </div>
+                                <h1 className="font-bold uppercase tracking-wide text-sm sm:text-base">
+                                    PERMOHONAN PENATARAN {selectedFormForModal.form_type} {selectedFormForModal.penataran_level?.toUpperCase()}
+                                </h1>
+                                <p className="text-[9.5pt] italic text-slate-700">
+                                    Diisi rangkap 4 (empat) yaitu untuk PB; Pengprov; Pengkab/Pengkot*; Pengdo.
+                                </p>
+                                <p className="text-[9.5pt] italic text-slate-700">
+                                    Harap diketik atau ditulis tangan dengan huruf cetak.
+                                </p>
+                            </div>
+
+                            {/* Recipient */}
+                            <div className="pt-1 text-[11pt]">
+                                <div>Kepada Yth.</div>
+                                <div className="font-bold">PB PERKEMI</div>
+                                <div>di Jakarta.</div>
+                            </div>
+
+                            {/* Salutation & Opening */}
+                            <div>
+                                <p className="font-semibold mb-1">Salam Persaudaraan,</p>
+                                <p className="text-justify leading-relaxed">
+                                    Dengan ini saya sampaikan permohonan untuk dapat mengikuti ujian{' '}
+                                    <strong>Penataran {selectedFormForModal.form_type === 'PELATIH' ? 'Pelatih' : selectedFormForModal.form_type === 'PENGUJI' ? 'Penguji' : 'Wasit'} {selectedFormForModal.penataran_level}</strong>{' '}
+                                    yang diselenggarakan oleh PB pada tanggal{' '}
+                                    <strong>{selectedFormForModal.start_date || '24 September 2026'}</strong> sampai dengan{' '}
+                                    <strong>{selectedFormForModal.end_date || '27 September 2026'}</strong>, di{' '}
+                                    <strong>{selectedFormForModal.location || event.place || 'Mojokerto'}</strong>.
+                                </p>
+                            </div>
+
+                            {/* Biodata List Format DOCX */}
+                            <div className="space-y-1 text-xs sm:text-[10.5pt]">
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>N a m a Lengkap</span>
+                                    <span>:</span>
+                                    <span className="font-bold uppercase border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.full_name}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>Tempat / Tanggal Lahir</span>
+                                    <span>:</span>
+                                    <span className="border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.birth_place || '-'}, {selectedFormForModal.birth_date || '-'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>Nomor Induk Kenshi (NIK)</span>
+                                    <span>:</span>
+                                    <span className="font-mono font-bold border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.kenshi_id_number}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>Tingkatan</span>
+                                    <span>:</span>
+                                    <span className="font-bold border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.dan_level || '1 DAN'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>Alamat rumah / telepon</span>
+                                    <span>:</span>
+                                    <span className="border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.home_address || '-'} / Telp: {selectedFormForModal.phone_number || '-'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>Pekerjaan / sekolah*</span>
+                                    <span>:</span>
+                                    <span className="border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.occupation || '-'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>Alamat pekerjaan / sekolah*</span>
+                                    <span>:</span>
+                                    <span className="border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.occupation_address || '-'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>Telepon pekerjaan / sekolah*</span>
+                                    <span>:</span>
+                                    <span className="border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.occupation_phone || '-'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>Alamat Darurat & Telepon</span>
+                                    <span>:</span>
+                                    <span className="font-semibold border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.emergency_address || '-'} / Telp: {selectedFormForModal.emergency_phone || '-'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[210px_10px_1fr] items-baseline">
+                                    <span>e-mail</span>
+                                    <span>:</span>
+                                    <span className="border-b border-dotted border-black pb-0.5">
+                                        {selectedFormForModal.email || '-'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Riwayat Piagam Gasnas 1-7 */}
+                            <div className="pt-1 text-xs sm:text-[10.5pt]">
+                                <div className="font-semibold mb-1">
+                                    Piagam Gasnas, Gasnaswil atau Gasprov yang dimiliki:
+                                </div>
+                                <div className="space-y-0.5 pl-4 font-mono text-[10pt]">
+                                    {Array.from({ length: 7 }, (_, i) => {
+                                        const r = selectedFormForModal.gasnas_records?.[i] || { nomor: '', tanggal: '' };
+                                        return (
+                                            <div key={i} className="grid grid-cols-[20px_55px_1fr_55px_1fr] items-baseline gap-1">
+                                                <span>{i + 1}.</span>
+                                                <span className="font-sans">Nomor:</span>
+                                                <span className="border-b border-dotted border-black min-h-[1.2rem] px-1 font-semibold">
+                                                    {r.nomor || '-----------------------------'}
+                                                </span>
+                                                <span className="font-sans text-right">tanggal:</span>
+                                                <span className="border-b border-dotted border-black min-h-[1.2rem] px-1 font-sans">
+                                                    {r.tanggal || '------------------'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Bagian Sertifikat Berdasarkan Jalur & Level */}
+                            {selectedFormForModal.form_type === 'PELATIH' && selectedFormForModal.penataran_level === 'Nasional' && (
+                                <div className="pt-1 text-xs sm:text-[10.5pt] space-y-1">
+                                    <div className="font-semibold">Sertifikat Kualifikasi yang dimiliki:</div>
+                                    <div className="pl-4 space-y-0.5">
+                                        <div className="grid grid-cols-[180px_10px_1fr] items-baseline">
+                                            <span>Sertifikat Pelatih Daerah</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black">
+                                                {selectedFormForModal.certificate_records?.find(c => c.jenis?.toLowerCase().includes('pelatih'))?.nomor
+                                                    ? `Nomor: ${selectedFormForModal.certificate_records.find(c => c.jenis?.toLowerCase().includes('pelatih')).nomor}, Tanggal: ${selectedFormForModal.certificate_records.find(c => c.jenis?.toLowerCase().includes('pelatih')).tanggal}`
+                                                    : 'Nomor: ---------------------, Tanggal ----------'}
+                                            </span>
+                                        </div>
+                                        <div className="italic text-xs pl-8 text-slate-600">atau</div>
+                                        <div className="grid grid-cols-[180px_10px_1fr] items-baseline">
+                                            <span>Sertifikat Penguji Daerah</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black">
+                                                {selectedFormForModal.certificate_records?.find(c => c.jenis?.toLowerCase().includes('penguji'))?.nomor
+                                                    ? `Nomor: ${selectedFormForModal.certificate_records.find(c => c.jenis?.toLowerCase().includes('penguji')).nomor}, Tanggal: ${selectedFormForModal.certificate_records.find(c => c.jenis?.toLowerCase().includes('penguji')).tanggal}`
+                                                    : 'Nomor: ---------------------, Tanggal ----------'}
+                                            </span>
+                                        </div>
+                                        <div className="italic text-xs pl-8 text-slate-600">atau</div>
+                                        <div className="grid grid-cols-[180px_10px_1fr] items-baseline">
+                                            <span>Sertifikat Wasit Daerah</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black">
+                                                {selectedFormForModal.certificate_records?.find(c => c.jenis?.toLowerCase().includes('wasit'))?.nomor
+                                                    ? `Nomor: ${selectedFormForModal.certificate_records.find(c => c.jenis?.toLowerCase().includes('wasit')).nomor}, Tanggal: ${selectedFormForModal.certificate_records.find(c => c.jenis?.toLowerCase().includes('wasit')).tanggal}`
+                                                    : 'Nomor: ---------------------, Tanggal ----------'}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs italic pl-2 pt-0.5">yang dimiliki.</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedFormForModal.form_type === 'PENGUJI' && (
+                                <div className="pt-1 text-xs sm:text-[10.5pt] space-y-1">
+                                    <div className="font-semibold">Sertifikat Kualifikasi yang dimiliki:</div>
+                                    <div className="pl-4 space-y-0.5">
+                                        <div className="grid grid-cols-[180px_10px_1fr] items-baseline">
+                                            <span>{selectedFormForModal.penataran_level === 'Nasional' ? 'Sertifikat Penguji Daerah' : 'Sertifikat Pelatih Daerah'}</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black">
+                                                {selectedFormForModal.certificate_records?.[0]?.nomor
+                                                    ? `Nomor: ${selectedFormForModal.certificate_records[0].nomor}, Tanggal: ${selectedFormForModal.certificate_records[0].tanggal}`
+                                                    : 'Nomor: ---------------------, Tanggal ----------'}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs pl-8 font-semibold text-slate-700">
+                                            {selectedFormForModal.penataran_level === 'Nasional' ? 'dan' : 'atau'}
+                                        </div>
+                                        <div className="grid grid-cols-[180px_10px_1fr] items-baseline">
+                                            <span>Sertifikat Pelatih Nasional</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black">
+                                                {selectedFormForModal.certificate_records?.[1]?.nomor
+                                                    ? `Nomor: ${selectedFormForModal.certificate_records[1].nomor}, Tanggal: ${selectedFormForModal.certificate_records[1].tanggal}`
+                                                    : 'Nomor: ---------------------, Tanggal ----------'}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs italic pl-2 pt-0.5">yang dimiliki.</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedFormForModal.form_type === 'WASIT' && (
+                                <div className="pt-1 text-xs sm:text-[10.5pt] space-y-1">
+                                    <div className="font-semibold">Sertifikat Kualifikasi yang dimiliki:</div>
+                                    <div className="pl-4 space-y-0.5">
+                                        <div className="grid grid-cols-[180px_10px_1fr] items-baseline">
+                                            <span>{selectedFormForModal.penataran_level === 'Nasional' ? 'Sertifikat Wasit Daerah' : 'Sertifikat Penguji Daerah'}</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black">
+                                                {selectedFormForModal.certificate_records?.[0]?.nomor
+                                                    ? `Nomor: ${selectedFormForModal.certificate_records[0].nomor}, Tanggal: ${selectedFormForModal.certificate_records[0].tanggal}`
+                                                    : 'Nomor: ---------------------, Tanggal ----------'}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs pl-8 font-semibold text-slate-700">
+                                            {selectedFormForModal.penataran_level === 'Nasional' ? 'dan' : 'atau'}
+                                        </div>
+                                        <div className="grid grid-cols-[180px_10px_1fr] items-baseline">
+                                            <span>Sertifikat Penguji Nasional</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black">
+                                                {selectedFormForModal.certificate_records?.[1]?.nomor
+                                                    ? `Nomor: ${selectedFormForModal.certificate_records[1].nomor}, Tanggal: ${selectedFormForModal.certificate_records[1].tanggal}`
+                                                    : 'Nomor: ---------------------, Tanggal ----------'}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs italic pl-2 pt-0.5">yang dimiliki.</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Motto */}
+                            <div className="pt-2 text-center font-bold italic tracking-wide text-xs sm:text-[11pt]">
+                                "Demi Tanah Air, Demi Persaudaraan, Demi Kemanusiaan."
+                            </div>
+
+                            {/* Blok Tanda Tangan & Verifikasi (Identik foto referensi) */}
+                            <div className="pt-2 grid grid-cols-2 gap-4 items-end">
+                                {/* PB PERKEMI Verifikasi (Stempel Box Sesuai Foto User) */}
+                                <div className="flex flex-col items-center justify-center text-center p-2 min-h-[130px]">
+                                    <div className="text-[12pt] font-sans font-medium text-[#5B6B82] tracking-wide">
+                                        PB PERKEMI Verifikasi
+                                    </div>
+                                    <div className="text-[14pt] font-sans font-bold text-[#0F172A] mt-3 tracking-tight">
+                                        {selectedFormForModal.verified_by_name || 'Budi Santoso'}
+                                    </div>
+                                    {selectedFormForModal.verified_at && (
+                                        <div className="text-[9pt] font-sans text-slate-500 mt-1">
+                                            Terverifikasi: {selectedFormForModal.verified_at}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Pemohon Signature */}
+                                <div className="text-center">
+                                    <div>{selectedFormForModal.sign_place || 'Mojokerto'}, {selectedFormForModal.sign_date || '-'}</div>
+                                    <div className="font-bold mt-0.5">Pemohon,</div>
+                                    <div className="h-16 flex items-center justify-center my-0.5">
+                                        {selectedFormForModal.signature_data ? (
+                                            <img
+                                                src={selectedFormForModal.signature_data}
+                                                alt="Tanda Tangan Pemohon"
+                                                className="max-h-14 object-contain"
+                                            />
+                                        ) : (
+                                            <span className="text-slate-400 italic text-[11px]">(Tanda Tangan Pemohon)</span>
+                                        )}
+                                    </div>
+                                    <div className="font-bold underline uppercase">
+                                        {selectedFormForModal.applicant_name || selectedFormForModal.full_name}
+                                    </div>
+                                    <div className="text-[10pt] text-slate-700 font-mono">
+                                        NIK: {selectedFormForModal.kenshi_id_number}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Footnotes */}
+                            <div className="pt-2 border-t border-slate-300 text-[9.5pt] space-y-0.5 text-slate-800">
+                                <div>Lampiran : {selectedFormForModal.photo_requirements || '1. 2 Helai Pas Foto(3 x 4)'}</div>
+                                <div className="pl-16">2. Uang Penataran Rp. ------------------------------------.</div>
+                                <div className="italic text-[9pt] pt-0.5">* Coret yang tidak perlu.</div>
+                            </div>
+
+                            {/* Surat Pernyataan dan Pembebasan (Waiver Sesuai DOCX) */}
+                            <div className="mt-6 pt-6 border-t-2 border-dashed border-slate-300 space-y-3">
+                                <div className="text-center space-y-0.5 mb-3">
+                                    <div className="font-bold text-[11pt] tracking-widest uppercase">
+                                        {selectedFormForModal.waiver_lampiran_label || (selectedFormForModal.form_type === 'WASIT' ? 'LAMPIRAN-C' : 'LAMPIRAN-E')}
+                                    </div>
+                                    <h2 className="font-bold text-[12.5pt] uppercase tracking-wide underline underline-offset-4">
+                                        SURAT PERNYATAAN DAN PEMBEBASAN
+                                    </h2>
+                                </div>
+                                <p className="font-semibold text-xs">Saya, yang bertanda tangan di bawah ini:</p>
+                                <div className="space-y-1 pl-4 text-xs">
+                                    <div className="grid grid-cols-[120px_10px_1fr]">
+                                        <span>Nama</span>
+                                        <span>:</span>
+                                        <span className="font-bold uppercase border-b border-dotted border-black">{selectedFormForModal.full_name}</span>
+                                    </div>
+                                    <div className="grid grid-cols-[120px_10px_1fr]">
+                                        <span>Alamat / Telp</span>
+                                        <span>:</span>
+                                        <span className="border-b border-dotted border-black">{selectedFormForModal.home_address || '-'}, Telp: {selectedFormForModal.phone_number || '-'}</span>
+                                    </div>
+                                    <div className="grid grid-cols-[120px_10px_1fr]">
+                                        <span>NIK / Tingkatan</span>
+                                        <span>:</span>
+                                        <span className="border-b border-dotted border-black">{selectedFormForModal.kenshi_id_number} / {selectedFormForModal.dan_level || '1 DAN'}</span>
+                                    </div>
+                                </div>
+                                <p className="text-justify text-xs leading-relaxed indent-6">
+                                    Dengan ini Saya menyatakan dan menjamin dalam kondisi kesehatan jasmani dan rohani yang baik untuk mengikuti seluruh rangkaian kegiatan Penataran {selectedFormForModal.form_type} di [{selectedFormForModal.location || 'Mojokerto'}], dan sepenuhnya membebaskan PB PERKEMI dan segenap panitia dari segala tuntutan atas cedera yang mungkin terjadi selama kegiatan berlangsung.
+                                </p>
+                                <div className="flex items-center gap-2 text-emerald-800 bg-emerald-50 border border-emerald-200 p-2.5 rounded font-medium text-xs">
+                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                                    <span>Pernyataan dan pembebasan telah disetujui & ditandatangani oleh pemohon secara digital.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* MODAL: Upload Berkas Formulir Pendaftaran Peserta (Admin) */}
+            <Modal
+                isOpen={Boolean(uploadModalParticipant)}
+                onClose={() => {
+                    if (!isAdminUploading) {
+                        setUploadModalParticipant(null);
+                        setAdminUploadFile(null);
+                        setAdminUploadNotes('');
+                    }
+                }}
+                title="Unggah Berkas Formulir Pendaftaran Peserta"
+                size="md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => {
+                                setUploadModalParticipant(null);
+                                setAdminUploadFile(null);
+                                setAdminUploadNotes('');
+                            }}
+                            disabled={isAdminUploading}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="submit"
+                            form="admin-upload-form"
+                            variant="primary"
+                            loading={isAdminUploading}
+                            disabled={!adminUploadFile || isAdminUploading}
+                        >
+                            Unggah & Simpan Berkas
+                        </Button>
+                    </>
+                }
+            >
+                <form id="admin-upload-form" onSubmit={handleAdminUploadSubmit} className="space-y-4">
+                    {/* Ringkasan Peserta */}
+                    <div className="rounded-xl border border-[#DCE7F3] bg-[#F8FBFF] p-3 text-xs">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7C93] mb-1">
+                            Target Kenshi
+                        </div>
+                        <div className="font-bold text-sm text-[#0E2747]">
+                            {uploadModalParticipant?.participant_name}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[#6B7C93] mt-1">
+                            <span>No. Kenshi: <strong className="font-mono text-[#0E2747]">{uploadModalParticipant?.kenshi_id_number || '-'}</strong></span>
+                            <span>Tingkatan: <strong className="text-[#0E2747]">{uploadModalParticipant?.dan_level || '-'}</strong></span>
+                            <span>Dojo: <strong className="text-[#0E2747]">{uploadModalParticipant?.origin_dojo || uploadModalParticipant?.dojo || '-'}</strong></span>
+                        </div>
+                    </div>
+
+                    {uploadModalParticipant?.file_url && (
+                        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 text-xs text-indigo-900 flex items-center justify-between">
+                            <div>
+                                <span className="font-semibold">Sudah ada berkas terunggah:</span> {uploadModalParticipant.file_name || uploadModalParticipant.original_file_name || 'Berkas scan'}
+                            </div>
+                            <a
+                                href={uploadModalParticipant.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-semibold text-indigo-700 underline text-[11px] hover:text-indigo-900"
+                            >
+                                Lihat File
+                            </a>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <FormField label="Kategori Formulir" required>
+                            <Select
+                                value={adminUploadFormType}
+                                onChange={(e) => setAdminUploadFormType(e.target.value)}
+                            >
+                                <option value="PELATIH">Pelatih</option>
+                                <option value="PENGUJI">Penguji</option>
+                                <option value="WASIT">Wasit</option>
+                            </Select>
+                        </FormField>
+
+                        <FormField label="Tingkatan Penataran" required>
+                            <Select
+                                value={adminUploadPenataranLevel}
+                                onChange={(e) => setAdminUploadPenataranLevel(e.target.value)}
+                            >
+                                <option value="Daerah">Daerah</option>
+                                <option value="Nasional">Nasional</option>
+                            </Select>
+                        </FormField>
+                    </div>
+
+                    <FormField
+                        label="Pilih File Berkas Formulir (Scan / PDF / Word / Gambar)"
+                        helperText="Format yang didukung: PDF, DOC, DOCX, JPG, PNG (Maks. 10MB)"
+                        required
+                    >
+                        <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            onChange={(e) => setAdminUploadFile(e.target.files?.[0] || null)}
+                            className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-[#0B63CE] hover:file:bg-blue-100 cursor-pointer border border-[#DCE7F3] rounded-lg p-1.5 bg-white"
+                        />
+                        {adminUploadFile && (
+                            <p className="mt-1 text-xs text-emerald-600 font-medium">
+                                File terpilih: {adminUploadFile.name} ({(adminUploadFile.size / 1024).toFixed(1)} KB)
+                            </p>
+                        )}
+                    </FormField>
+
+                    <div className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] p-3">
+                        <Checkbox
+                            id="admin_auto_verify_form"
+                            checked={adminUploadAutoVerify}
+                            onChange={(e) => setAdminUploadAutoVerify(e.target.checked)}
+                            label="Langsung tandai status Terverifikasi (Disetujui Admin)"
+                            helperText="Jika dicentang, status formulir kenshi langsung Terverifikasi tanpa perlu langkah persetujuan terpisah."
+                        />
+                    </div>
+
+                    <FormField label="Catatan / Keterangan (Opsional)">
+                        <Input
+                            type="text"
+                            value={adminUploadNotes}
+                            onChange={(e) => setAdminUploadNotes(e.target.value)}
+                            placeholder="Contoh: Berkas fisik diserahkan saat registrasi ulang atau verifikasi manual"
+                        />
+                    </FormField>
                 </form>
             </Modal>
 

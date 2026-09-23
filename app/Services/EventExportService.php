@@ -64,18 +64,19 @@ class EventExportService
             'K7' => 'Tipe Sesi',
             'L7' => 'Mode Absensi',
             'M7' => 'Kode QR Sesi',
+            'N7' => 'Paket Ujian CBT',
         ];
 
         foreach ($headers as $cell => $text) {
             $sheet->setCellValue($cell, $text);
         }
 
-        $this->applyHeaderStyle($sheet, 'A7:M7', '0E2747');
+        $this->applyHeaderStyle($sheet, 'A7:N7', '0E2747');
 
         // Sessions Query
         $sessions = EventSession::query()
             ->where('event_id', $event->id)
-            ->with(['speaker', 'sessionType'])
+            ->with(['speaker', 'sessionType', 'cbtPackage'])
             ->orderBy('day_number')
             ->orderBy('start_time')
             ->orderBy('session_number')
@@ -88,6 +89,7 @@ class EventExportService
             $targetTracks = ! empty($session->target_tracks) ? implode(', ', (array) $session->target_tracks) : 'Semua Jalur';
             $sessionDate = $session->session_date ? $session->session_date->format('d/m/Y') : '-';
             $timeSlot = $session->time_slot ?: ($session->start_time && $session->end_time ? "{$session->start_time} - {$session->end_time}" : '-');
+            $cbtInfo = $session->cbtPackage ? "{$session->cbtPackage->code} — {$session->cbtPackage->title}" : '-';
 
             $sheet->setCellValue("A{$row}", $no++);
             $sheet->setCellValue("B{$row}", "Hari ke-{$session->day_number}");
@@ -108,6 +110,7 @@ class EventExportService
                 default => $session->attendance_setting ?? '-'
             });
             $sheet->setCellValue("M{$row}", $session->qr_short_code ?: '-');
+            $sheet->setCellValue("N{$row}", $cbtInfo);
 
             // Alignment
             $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -121,20 +124,20 @@ class EventExportService
 
             // Alternating zebra stripe
             if ($row % 2 === 1) {
-                $sheet->getStyle("A{$row}:M{$row}")->getFill()
+                $sheet->getStyle("A{$row}:N{$row}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setRGB('F8FBFF');
             }
 
             // Grid borders
-            $sheet->getStyle("A{$row}:M{$row}")->getBorders()->getAllBorders()
+            $sheet->getStyle("A{$row}:N{$row}")->getBorders()->getAllBorders()
                 ->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('DCE7F3');
 
             $row++;
         }
 
         // Auto width for all columns
-        foreach (range('A', 'M') as $col) {
+        foreach (range('A', 'N') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -180,7 +183,7 @@ class EventExportService
         $sheet->setCellValue('A4', "Tanggal: {$event->date_formatted}   |   Tempat: {$event->place}   |   Penyelenggara: {$event->organizer}");
         $sheet->getStyle('A4')->getFont()->setSize(10)->getColor()->setRGB('4A6482');
 
-        $sheet->setCellValue('A5', 'PANDUAN LOGIN: Peserta membuka URL: https://diktar.smart-perkemi.id/login lalu masuk menggunakan Email ATAU NIK, dengan Password Default: password');
+        $sheet->setCellValue('A5', 'PANDUAN LOGIN: Akses URL: '.url('/login').' | ID Login: Email atau NIK | Password Default: NIK Kenshi masing-masing (format: XX.X.XX.XX.XX.XXX)');
         $sheet->getStyle('A5')->getFont()->setSize(9)->setBold(true)->getColor()->setRGB('0B63CE');
 
         // Table Headers (Row 7)
@@ -188,20 +191,29 @@ class EventExportService
             'A7' => 'No',
             'B7' => 'Nama Lengkap Kenshi',
             'C7' => 'Nomor Induk Kenshi (NIK)',
-            'D7' => 'Tingkatan (DAN)',
-            'E7' => 'Kode Jalur',
-            'F7' => 'Nama Jalur Sertifikasi',
-            'G7' => 'Asal Kota / Kabupaten',
-            'H7' => 'Asal Pengprov',
-            'I7' => 'Asal Dojo',
-            'J7' => 'No. Telepon / WhatsApp',
-            'K7' => 'Status Check-in',
-            'L7' => 'Status Kehadiran',
-            'M7' => 'Status Kelulusan',
-            'N7' => 'URL Login Portal',
-            'O7' => 'ID Login (Email / NIK)',
-            'P7' => 'Password Default',
-            'Q7' => 'Catatan Pendaftaran',
+            'D7' => 'Tempat Lahir',
+            'E7' => 'Tanggal Lahir',
+            'F7' => 'Jenis Kelamin',
+            'G7' => 'Tingkatan (DAN)',
+            'H7' => 'Kode Jalur',
+            'I7' => 'Nama Jalur Sertifikasi',
+            'J7' => 'Target Sertifikasi',
+            'K7' => 'Sertifikasi Terakhir',
+            'L7' => 'No. Sertifikasi Terakhir',
+            'M7' => 'Pekerjaan',
+            'N7' => 'Alamat Lengkap',
+            'O7' => 'Asal Kota / Kabupaten',
+            'P7' => 'Asal Pengprov',
+            'Q7' => 'Asal Dojo',
+            'R7' => 'No. Telepon / WhatsApp',
+            'S7' => 'Pakta Integritas',
+            'T7' => 'Status Check-in',
+            'U7' => 'Status Kehadiran',
+            'V7' => 'Status Kelulusan',
+            'W7' => 'URL Login Portal',
+            'X7' => 'ID Login (Email / NIK)',
+            'Y7' => 'Password Login (NIK)',
+            'Z7' => 'Catatan Pendaftaran',
         ];
 
         foreach ($headers as $cell => $text) {
@@ -209,15 +221,15 @@ class EventExportService
         }
 
         // Apply general header style
-        $this->applyHeaderStyle($sheet, 'A7:M7', '0E2747');
-        // Apply special highlighted header style for Login Credentials columns (N..P)
-        $this->applyHeaderStyle($sheet, 'N7:P7', '0B63CE');
-        $this->applyHeaderStyle($sheet, 'Q7:Q7', '0E2747');
+        $this->applyHeaderStyle($sheet, 'A7:V7', '0E2747');
+        // Apply special highlighted header style for Login Credentials columns (W..Y)
+        $this->applyHeaderStyle($sheet, 'W7:Y7', '0B63CE');
+        $this->applyHeaderStyle($sheet, 'Z7:Z7', '0E2747');
 
         // Participants Query
         $participants = EventParticipant::query()
             ->where('event_id', $event->id)
-            ->with(['participant.user'])
+            ->with(['participant.user', 'participant.latestIntegrityPact'])
             ->get();
 
         $row = 8;
@@ -230,63 +242,77 @@ class EventExportService
             $nik = $p?->kenshi_id_number ?: '-';
             $email = $user?->email ?: ($p?->email ?: '-');
             $trackName = $tracksMap[$ep->track_code] ?? $ep->track_code ?? '-';
+            $pact = $p?->latestIntegrityPact;
+            $pactStatus = $pact ? 'Sudah Ditandatangani' : 'Belum Ditandatangani';
 
             $sheet->setCellValue("A{$row}", $no++);
             $sheet->setCellValue("B{$row}", $p?->name ?: '-');
             $sheet->setCellValueExplicit("C{$row}", (string) $nik, DataType::TYPE_STRING);
-            $sheet->setCellValue("D{$row}", $p?->dan_rank ?: ($p?->dan_level ? "DAN {$p->dan_level}" : '-'));
-            $sheet->setCellValue("E{$row}", $ep->track_code ?: '-');
-            $sheet->setCellValue("F{$row}", $trackName);
-            $sheet->setCellValue("G{$row}", $p?->origin_city ?: '-');
-            $sheet->setCellValue("H{$row}", $p?->origin_province ?: '-');
-            $sheet->setCellValue("I{$row}", $p?->origin_dojo ?: '-');
-            $sheet->setCellValueExplicit("J{$row}", (string) ($p?->phone ?: '-'), DataType::TYPE_STRING);
-            $sheet->setCellValue("K{$row}", $ep->checkin_status === 'checked_in' ? 'Checked-In' : 'Terdaftar');
-            $sheet->setCellValue("L{$row}", $ep->attendance_status ?: '-');
-            $sheet->setCellValue("M{$row}", $ep->graduation_status ?: 'Dalam Proses');
+            $sheet->setCellValue("D{$row}", $p?->birth_place ?: '-');
+            $sheet->setCellValue("E{$row}", $p?->birth_date ? $p->birth_date->format('d/m/Y') : '-');
+            $sheet->setCellValue("F{$row}", $p?->gender ?: '-');
+            $sheet->setCellValue("G{$row}", $p?->dan_rank ?: ($p?->dan_level ? "DAN {$p->dan_level}" : '-'));
+            $sheet->setCellValue("H{$row}", $ep->track_code ?: '-');
+            $sheet->setCellValue("I{$row}", $trackName);
+            $sheet->setCellValue("J{$row}", $p?->target_certification ?: '-');
+            $sheet->setCellValue("K{$row}", $p?->last_certificate ?: '-');
+            $sheet->setCellValueExplicit("L{$row}", (string) ($p?->last_certificate_number ?: '-'), DataType::TYPE_STRING);
+            $sheet->setCellValue("M{$row}", $p?->occupation ?: '-');
+            $sheet->setCellValue("N{$row}", $p?->address ?: '-');
+            $sheet->setCellValue("O{$row}", $p?->origin_city ?: '-');
+            $sheet->setCellValue("P{$row}", $p?->origin_province ?: '-');
+            $sheet->setCellValue("Q{$row}", $p?->origin_dojo ?: '-');
+            $sheet->setCellValueExplicit("R{$row}", (string) ($p?->phone ?: '-'), DataType::TYPE_STRING);
+            $sheet->setCellValue("S{$row}", $pactStatus);
+            $sheet->setCellValue("T{$row}", $ep->checkin_status === 'checked_in' ? 'Checked-In' : 'Terdaftar');
+            $sheet->setCellValue("U{$row}", $ep->attendance_status ?: '-');
+            $sheet->setCellValue("V{$row}", $ep->graduation_status ?: 'Dalam Proses');
 
-            // Login Credential Columns (N, O, P)
-            $sheet->setCellValue("N{$row}", $loginUrl);
-            $sheet->setCellValue("O{$row}", $email !== '-' ? $email : $nik);
-            $sheet->setCellValue("P{$row}", 'password');
-            $sheet->setCellValue("Q{$row}", $p?->notes ?: '-');
+            // Login Credential Columns (W, X, Y)
+            $sheet->setCellValue("W{$row}", $loginUrl);
+            $sheet->setCellValue("X{$row}", $email !== '-' ? $email : $nik);
+            $sheet->setCellValueExplicit("Y{$row}", (string) $nik, DataType::TYPE_STRING);
+            $sheet->setCellValue("Z{$row}", $p?->notes ?: '-');
 
             // Alignment
             $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("C{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("D{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("E{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("J{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("K{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("L{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("M{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("N{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("P{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("F{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("G{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("H{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("R{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("S{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("T{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("U{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("V{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("W{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("Y{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
             // Highlight login credentials background subtly
-            $sheet->getStyle("N{$row}:P{$row}")->getFill()
+            $sheet->getStyle("W{$row}:Y{$row}")->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('EAF5FF');
 
             // Zebra stripe for other columns
             if ($row % 2 === 1) {
-                $sheet->getStyle("A{$row}:M{$row}")->getFill()
+                $sheet->getStyle("A{$row}:V{$row}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setRGB('F8FBFF');
-                $sheet->getStyle("Q{$row}")->getFill()
+                $sheet->getStyle("Z{$row}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setRGB('F8FBFF');
             }
 
             // Grid borders
-            $sheet->getStyle("A{$row}:Q{$row}")->getBorders()->getAllBorders()
+            $sheet->getStyle("A{$row}:Z{$row}")->getBorders()->getAllBorders()
                 ->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('DCE7F3');
 
             $row++;
         }
 
-        // Auto width for all columns
-        foreach (range('A', 'Q') as $col) {
+        // Auto width for all columns (A to Z)
+        foreach (range('A', 'Z') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 

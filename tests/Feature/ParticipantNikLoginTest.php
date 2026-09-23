@@ -27,7 +27,7 @@ test('linked participant can authenticate using their NIK', function () {
     ]);
 
     $this->assertAuthenticatedAs($user);
-    $response->assertRedirect('/');
+    $response->assertRedirect('/event-saya');
 });
 
 test('unlinked participant cannot authenticate using their NIK', function () {

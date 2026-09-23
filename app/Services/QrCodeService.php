@@ -375,7 +375,7 @@ class QrCodeService
         }
 
         return <<<SVG
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {$totalSize} {$totalSize}" width="{$size}" height="{$size}" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {$totalSize} {$totalSize}" width="{$size}" height="{$size}" style="display: block; width: 100%; height: 100%;" shape-rendering="crispEdges">
     <rect width="{$totalSize}" height="{$totalSize}" fill="{$lightColor}"/>
     {$rects}
 </svg>

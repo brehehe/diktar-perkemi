@@ -56,6 +56,21 @@ export default function PrintAllQr({ event, sessions = [] }) {
 
                 * { box-sizing: border-box; }
 
+                .qr-code-wrapper {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    margin: 0 auto !important;
+                }
+                .qr-code-wrapper svg {
+                    display: block !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                    max-width: 100% !important;
+                    max-height: 100% !important;
+                    margin: 0 auto !important;
+                }
+
                 @page {
                     size: A4 portrait;
                     margin: 0;
@@ -336,17 +351,29 @@ function QrPage({ session, event, compact, pageNum, totalPages }) {
 
                 {/* QR Code */}
                 <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    padding: 20, borderRadius: 16,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    padding: '22px 28px', borderRadius: 20,
                     border: '2px dashed #BFDBFE', background: '#F8FBFF',
                     marginBottom: 20,
+                    width: 'fit-content',
+                    maxWidth: '100%',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
                 }}>
                     <div
-                        style={{ width: 220, height: 220 }}
+                        style={{
+                            width: 220,
+                            height: 220,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto',
+                        }}
+                        className="qr-code-wrapper"
                         role="img" aria-label={`QR absensi ${session.topic}`}
                         dangerouslySetInnerHTML={{ __html: session.qrSvg }}
                     />
-                    <div style={{ marginTop: 10, fontSize: 11, fontWeight: 600, color: '#1D4ED8', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ marginTop: 12, fontSize: 11, fontWeight: 600, color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textAlign: 'center' }}>
                         <QrCodeIcon /> Pindai QR ini dengan smartphone peserta
                     </div>
                 </div>
@@ -476,15 +503,19 @@ function QrCardCompact({ session, event, isLast }) {
                 </div>
 
                 {/* Right: QR */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                    <div style={{ border: '1.5px dashed #BFDBFE', borderRadius: 12, padding: 12, background: '#F8FBFF' }}>
-                        <div style={{ width: 130, height: 130 }} dangerouslySetInnerHTML={{ __html: session.qrSvg }} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 0 }}>
+                    <div style={{ border: '1.5px dashed #BFDBFE', borderRadius: 12, padding: 8, background: '#F8FBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div
+                            style={{ width: 130, height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}
+                            className="qr-code-wrapper"
+                            dangerouslySetInnerHTML={{ __html: session.qrSvg }}
+                        />
                     </div>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 900, letterSpacing: '0.15em', color: '#0C1F3D' }}>
                             {session.qr_short_code}
                         </div>
-                        <div style={{ fontSize: 9, color: '#94A3B8', fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: 140 }}>
+                        <div style={{ fontSize: 9, color: '#94A3B8', fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: 140, textAlign: 'center' }}>
                             {session.scanUrl}
                         </div>
                     </div>

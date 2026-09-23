@@ -76,8 +76,34 @@ class AttendanceController extends Controller
     /**
      * Show official printable QR Code page for physical display at the venue/dojo.
      */
-    public function printQr(Event $event, EventSession $session): Response
+    public function printQr(Event $event, mixed $session): Response|RedirectResponse
     {
+        if (! ($session instanceof EventSession)) {
+            $eventSession = EventSession::where('event_id', $event->id)
+                ->where(function ($query) use ($session) {
+                    $query->where('id', $session)
+                        ->orWhere('session_number', $session)
+                        ->orWhere('qr_short_code', $session);
+                })
+                ->first();
+
+            if (! $eventSession) {
+                $fallback = EventSession::where('event_id', $event->id)
+                    ->where('is_attendance_open', true)
+                    ->first()
+                    ?? EventSession::where('event_id', $event->id)->where('session_type_code', 'KEHADIRAN_AWAL')->first()
+                    ?? EventSession::where('event_id', $event->id)->first();
+
+                if ($fallback) {
+                    return redirect()->route('admin.event.session.attendance.print', [$event->id, $fallback->id]);
+                }
+
+                abort(404, 'Sesi tidak ditemukan untuk event ini.');
+            }
+
+            $session = $eventSession;
+        }
+
         abort_unless($session->is_attendance_open && $session->qr_token && $session->qr_short_code, 403,
             'Buka absensi terlebih dahulu sebelum mencetak QR.');
         abort_unless($session->isAttendanceActive(), 403,

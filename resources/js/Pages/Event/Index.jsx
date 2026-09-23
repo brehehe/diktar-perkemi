@@ -27,14 +27,37 @@ export default function Index({ events = [] }) {
                                     <p className="mt-2 text-sm leading-6 text-[#6B7C93]">{event.date_formatted} · {event.place}</p>
                                     <p className="mt-1 text-sm text-[#112743]">Jalur: {event.track_name}</p>
                                     <p className="mt-1 text-sm text-[#6B7C93]">{event.is_checked_in ? 'Kehadiran awal tercatat' : 'Kehadiran awal belum tercatat'}</p>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                        {event.has_registration_form ? (
+                                            <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 border border-blue-200">
+                                                Formulir {event.registration_form_status === 'verified' ? 'Terverifikasi' : 'Sudah Terisi'}
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                                                Formulir Penataran Belum Diisi
+                                            </span>
+                                        )}
+                                    </div>
                                     {event.certificate_number && <p className="mt-1 text-sm text-[#112743]">Nomor sertifikat: {event.certificate_number}</p>}
                                     {event.certificate_download_url && <a href={event.certificate_download_url} className="mt-2 inline-block text-sm font-semibold text-[#0B63CE] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh sertifikat PDF</a>}
                                     {event.transcript_number && <p className="mt-1 text-sm text-[#112743]">Nomor transkrip: {event.transcript_number}</p>}
                                     {event.transcript_download_url && <a href={event.transcript_download_url} className="ml-4 mt-2 inline-block text-sm font-semibold text-[#0B63CE] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh transkrip PDF</a>}
                                 </div>
-                                <Link href={`/event/${event.slug}/ruang-belajar`} className="inline-flex min-h-11 items-center justify-center bg-[#0B63CE] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">
-                                    Buka ruang belajar
-                                </Link>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <Link
+                                        href={event.registration_form_url}
+                                        className={`inline-flex min-h-11 items-center justify-center px-4 py-2 text-sm font-semibold border ${
+                                            event.has_registration_form
+                                                ? 'border-[#0B63CE] text-[#0B63CE] bg-white hover:bg-[#EAF5FF]'
+                                                : 'border-amber-500 bg-amber-50 text-amber-900 hover:bg-amber-100 font-bold'
+                                        }`}
+                                    >
+                                        {event.has_registration_form ? 'Formulir Penataran' : 'Isi Formulir Penataran'}
+                                    </Link>
+                                    <Link href={`/event/${event.slug}/ruang-belajar`} className="inline-flex min-h-11 items-center justify-center bg-[#0B63CE] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">
+                                        Buka ruang belajar
+                                    </Link>
+                                </div>
                             </li>
                         ))}
                     </ul>

@@ -350,20 +350,42 @@ class CbtPackageController extends Controller
     /**
      * Delete a CBT package.
      */
-    public function destroy(CbtExamPackage $package): RedirectResponse
+    public function destroy(Request $request, CbtExamPackage $package): RedirectResponse
     {
-        if ($package->attempts()->exists() || $package->sessions()->exists()) {
-            return back()->with('error', 'Paket Ujian tidak dapat dihapus karena sudah memiliki rekaman pengerjaan atau terhubung ke sesi rundown.');
+        $attemptsCount = $package->attempts()->count();
+        $sessionsCount = $package->sessions()->count();
+
+        if (($attemptsCount > 0 || $sessionsCount > 0) && ! $request->boolean('force')) {
+            $reason = $attemptsCount > 0
+                ? "sudah memiliki {$attemptsCount} rekaman pengerjaan ujian peserta"
+                : "terhubung ke {$sessionsCount} sesi rundown acara";
+
+            return back()->with('error', "Paket Ujian '{$package->title}' tidak dapat dihapus karena {$reason}.");
         }
 
         $title = $package->title;
-        DB::transaction(function () use ($package): void {
+
+        DB::transaction(function () use ($package, $attemptsCount): void {
+            if ($attemptsCount > 0) {
+                foreach ($package->attempts as $attempt) {
+                    $attempt->answers()->delete();
+                    $attempt->proctoringEvents()->delete();
+                    $attempt->delete();
+                }
+            }
+
             $package->bankQuestions()->detach();
+            $package->events()->detach();
+            $package->questions()->delete();
             $package->delete();
         });
 
-        return redirect()->route('admin.cbt.paket-ujian.index')
-            ->with('success', "Paket Ujian '{$title}' berhasil dihapus.");
+        if ($request->header('Referer') && str_contains($request->header('Referer'), "/admin/cbt/paket-ujian/{$package->id}")) {
+            return redirect()->route('cbt.paket-ujian.index')
+                ->with('success', "Paket Ujian CBT '{$title}' berhasil dihapus.");
+        }
+
+        return back()->with('success', "Paket Ujian CBT '{$title}' berhasil dihapus.");
     }
 
     /**

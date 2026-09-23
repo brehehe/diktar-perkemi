@@ -5,6 +5,7 @@ import PageHeader from '../../../../Components/admin/PageHeader';
 import Button from '../../../../Components/ui/Button';
 import Badge from '../../../../Components/ui/Badge';
 import Modal from '../../../../Components/ui/Modal';
+import AlertDialog from '../../../../Components/ui/AlertDialog';
 import FormField from '../../../../Components/ui/FormField';
 import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
@@ -56,6 +57,8 @@ export default function Index({
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [packageToDelete, setPackageToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const importForm = useForm({
         file: null,
@@ -456,6 +459,15 @@ export default function Index({
                                                 >
                                                     Kelola
                                                 </Link>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPackageToDelete(pkg)}
+                                                    className="p-1.5 text-[#6B7C93] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                                                    title="Hapus Paket CBT"
+                                                    aria-label={`Hapus paket ujian ${pkg.title}`}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -854,6 +866,35 @@ export default function Index({
                     />
                 </form>
             </Modal>
+
+            {/* Modal Konfirmasi Hapus Paket CBT */}
+            <AlertDialog
+                isOpen={Boolean(packageToDelete)}
+                onClose={() => !isDeleting && setPackageToDelete(null)}
+                title="Hapus Paket Ujian CBT?"
+                description={
+                    packageToDelete?.attempts_count > 0
+                        ? `Paket "${packageToDelete?.title}" sudah memiliki ${packageToDelete.attempts_count} rekaman ujian peserta. Paket tidak dapat dihapus demi integritas data peserta.`
+                        : `Apakah Anda yakin ingin menghapus paket ujian "${packageToDelete?.title}"? Seluruh butir soal yang diikutsertakan di dalam paket ini akan dihapus.`
+                }
+                confirmText={isDeleting ? 'Menghapus...' : 'Hapus Paket'}
+                variant="danger"
+                loading={isDeleting}
+                onConfirm={() => {
+                    if (packageToDelete?.attempts_count > 0) {
+                        setPackageToDelete(null);
+                        return;
+                    }
+                    setIsDeleting(true);
+                    router.delete(`/admin/cbt/paket-ujian/${packageToDelete.id}`, {
+                        preserveScroll: true,
+                        onFinish: () => {
+                            setIsDeleting(false);
+                            setPackageToDelete(null);
+                        },
+                    });
+                }}
+            />
         </AdminLayout>
     );
 }

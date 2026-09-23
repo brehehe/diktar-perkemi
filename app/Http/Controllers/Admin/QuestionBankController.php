@@ -315,12 +315,12 @@ class QuestionBankController extends Controller
     /**
      * Delete a question if not in active attempts.
      */
-    public function destroy(QuestionBank $question): RedirectResponse
+    public function destroy(Request $request, QuestionBank $question): RedirectResponse
     {
         $usedInAttempts = $question->cbtPackages()->whereHas('attempts')->exists();
 
-        if ($usedInAttempts) {
-            return back()->with('error', 'Soal tidak dapat dihapus karena sudah memiliki rekaman ujian peserta.');
+        if ($usedInAttempts && ! $request->boolean('force')) {
+            return back()->with('error', "Soal '{$question->code}' tidak dapat dihapus karena sudah memiliki rekaman ujian peserta.");
         }
 
         $code = $question->code;
@@ -331,5 +331,44 @@ class QuestionBankController extends Controller
         });
 
         return back()->with('success', "Soal '{$code}' berhasil dihapus dari Bank Soal.");
+    }
+
+    /**
+     * Delete multiple questions from Question Bank.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:question_bank,id'],
+        ]);
+
+        $deletedCount = 0;
+        $blockedCount = 0;
+
+        DB::transaction(function () use ($validated, &$deletedCount, &$blockedCount, $request): void {
+            $questions = QuestionBank::whereIn('id', $validated['ids'])->get();
+
+            foreach ($questions as $question) {
+                $usedInAttempts = $question->cbtPackages()->whereHas('attempts')->exists();
+                if ($usedInAttempts && ! $request->boolean('force')) {
+                    $blockedCount++;
+
+                    continue;
+                }
+
+                $question->questionModules()->detach();
+                $question->cbtPackages()->detach();
+                $question->delete();
+                $deletedCount++;
+            }
+        });
+
+        $message = "{$deletedCount} butir soal berhasil dihapus dari Bank Soal.";
+        if ($blockedCount > 0) {
+            $message .= " ({$blockedCount} butir soal dilewati karena memiliki rekaman ujian peserta).";
+        }
+
+        return back()->with('success', $message);
     }
 }

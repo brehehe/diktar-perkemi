@@ -5,6 +5,7 @@ import PageHeader from '../../../../Components/admin/PageHeader';
 import Button from '../../../../Components/ui/Button';
 import Badge from '../../../../Components/ui/Badge';
 import Modal from '../../../../Components/ui/Modal';
+import AlertDialog from '../../../../Components/ui/AlertDialog';
 import FormField from '../../../../Components/ui/FormField';
 import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
@@ -61,6 +62,8 @@ export default function Show({
     const [searchQuery, setSearchQuery] = useState('');
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const editForm = useForm({
         title: pkg.title || '',
         code: pkg.code || '',
@@ -282,9 +285,7 @@ export default function Show({
     };
 
     const handleDelete = () => {
-        if (confirm(`Hapus paket ujian "${pkg.title}"?`)) {
-            router.delete(`/admin/cbt/paket-ujian/${pkg.id}`);
-        }
+        setIsDeleteDialogOpen(true);
     };
 
     return (
@@ -1223,6 +1224,26 @@ export default function Show({
                     </div>
                 </form>
             </Modal>
+
+            {/* Modal Konfirmasi Hapus Paket CBT */}
+            <AlertDialog
+                isOpen={isDeleteDialogOpen}
+                onClose={() => !isDeleting && setIsDeleteDialogOpen(false)}
+                title="Hapus Paket Ujian CBT?"
+                description={`Apakah Anda yakin ingin menghapus paket ujian "${pkg.title}"? Seluruh butir soal yang diikutsertakan di dalam paket ini akan dihapus.`}
+                confirmText={isDeleting ? 'Menghapus...' : 'Hapus Paket'}
+                variant="danger"
+                loading={isDeleting}
+                onConfirm={() => {
+                    setIsDeleting(true);
+                    router.delete(`/admin/cbt/paket-ujian/${pkg.id}`, {
+                        onFinish: () => {
+                            setIsDeleting(false);
+                            setIsDeleteDialogOpen(false);
+                        },
+                    });
+                }}
+            />
         </AdminLayout>
     );
 }

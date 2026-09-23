@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class EventParticipant extends Model
 {
@@ -75,6 +76,18 @@ class EventParticipant extends Model
     public function track(): BelongsTo
     {
         return $this->belongsTo(ParticipantTrack::class, 'track_code', 'code');
+    }
+
+    public function registrationForm(): HasOne
+    {
+        return $this->hasOne(EventRegistrationForm::class, 'participant_id', 'participant_id')
+            ->where('event_id', $this->event_id);
+    }
+
+    public function integrityPact(): HasOne
+    {
+        return $this->hasOne(EventIntegrityPact::class, 'participant_id', 'participant_id')
+            ->where('event_id', $this->event_id);
     }
 
     public function getTheoryScoreAttribute(): ?float

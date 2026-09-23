@@ -92,13 +92,15 @@ class TonightEventSeeder extends Seeder
             $pdfPath = "events/{$event->id}/petunjuk-teknis-malam.pdf";
             Storage::disk('local')->put($pdfPath, $dummyPdfContent);
 
+            $allTracks = ['PD', 'PN', 'PED', 'PEN', 'WAD', 'WAN'];
+
             $module1 = EventModule::updateOrCreate(
                 ['event_id' => $event->id, 'code' => 'MODUL-MLM-01'],
                 [
                     'title' => 'Diktat Kurikulum & Standarisasi Teknik Malam Ini',
                     'description' => 'Materi pokok kurikulum pelatihan teknik Shorinji Kempo sesi malam ini.',
                     'jp' => 2,
-                    'track_codes' => ['PD', 'PN', 'WAD', 'PWAN'],
+                    'track_codes' => $allTracks,
                     'speaker_id' => $speaker->id,
                     'material_id' => $publishedMaterial?->id,
                     'fulfillment_method' => 'Menghadiri sesi dan membaca modul.',
@@ -115,7 +117,7 @@ class TonightEventSeeder extends Seeder
                     'title' => 'Petunjuk Teknis & Tata Tertib Sesi Malam',
                     'description' => 'Panduan operasional kehadiran dan tata tertib sesi malam ini.',
                     'jp' => 1,
-                    'track_codes' => ['PD', 'PN', 'WAD', 'PWAN'],
+                    'track_codes' => $allTracks,
                     'is_published' => true,
                     'learning_indicators' => 'Peserta mematuhi tata tertib dan prosedur presensi.',
                     'publication_status' => 'published',
@@ -139,7 +141,7 @@ class TonightEventSeeder extends Seeder
                     'method' => 'Presensi Mandiri / Scan QR',
                     'room' => $room->name,
                     'event_room_id' => $room->id,
-                    'track_codes' => ['PD', 'PN', 'WAD', 'PWAN'],
+                    'track_codes' => $allTracks,
                     'status' => 'ongoing',
                     'attendance_setting' => 'check_in',
                     'is_attendance_open' => true,
@@ -167,7 +169,7 @@ class TonightEventSeeder extends Seeder
                     'material_id' => $publishedMaterial?->id,
                     'room' => $room->name,
                     'event_room_id' => $room->id,
-                    'track_codes' => ['PD', 'PN', 'WAD', 'PWAN'],
+                    'track_codes' => $allTracks,
                     'status' => 'ongoing',
                     'attendance_setting' => 'check_in',
                     'is_attendance_open' => true,
@@ -192,7 +194,7 @@ class TonightEventSeeder extends Seeder
                     'method' => 'Diskusi & Evaluasi',
                     'room' => $room->name,
                     'event_room_id' => $room->id,
-                    'track_codes' => ['PD', 'PN', 'WAD', 'PWAN'],
+                    'track_codes' => $allTracks,
                     'status' => 'scheduled',
                     'attendance_setting' => 'check_in',
                     'is_attendance_open' => true,
@@ -324,6 +326,36 @@ class TonightEventSeeder extends Seeder
                         'recorded_by' => $organizer->id,
                         'notes' => 'Presensi harian otomatis oleh sistem seeder.',
                     ],
+                );
+            }
+
+            // 9. Daftarkan seluruh peserta (termasuk SIM PERKEMI / Master Peserta) ke event penataran-malam-ini
+            $participants = Participant::all();
+            foreach ($participants as $p) {
+                $trackCode = 'PD';
+                if (str_contains($p->notes ?? '', '(PN)') || str_contains($p->admin_notes ?? '', '(PN)')) {
+                    $trackCode = 'PN';
+                } elseif (str_contains($p->notes ?? '', '(PED)') || str_contains($p->admin_notes ?? '', '(PED)')) {
+                    $trackCode = 'PED';
+                } elseif (str_contains($p->notes ?? '', '(PEN)') || str_contains($p->admin_notes ?? '', '(PEN)')) {
+                    $trackCode = 'PEN';
+                } elseif (str_contains($p->notes ?? '', '(WAD)') || str_contains($p->admin_notes ?? '', '(WAD)')) {
+                    $trackCode = 'WAD';
+                } elseif (str_contains($p->notes ?? '', '(WAN)') || str_contains($p->admin_notes ?? '', '(WAN)')) {
+                    $trackCode = 'WAN';
+                }
+
+                EventParticipant::updateOrCreate(
+                    [
+                        'event_id' => $event->id,
+                        'participant_id' => $p->id,
+                    ],
+                    [
+                        'track_code' => $trackCode,
+                        'admin_status' => 'verified',
+                        'has_seen_welcome' => true,
+                        'checkin_status' => 'registered',
+                    ]
                 );
             }
         });

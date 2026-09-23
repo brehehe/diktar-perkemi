@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Http\Controllers\EventIntegrityPactController;
 use App\Models\CbtExamAttempt;
 use App\Models\Event;
 use App\Models\EventAttendance;
+use App\Models\EventIntegrityPact;
 use App\Models\EventModule;
+use App\Models\EventRegistrationForm;
 use App\Models\EventSession;
 use App\Models\LearningModule;
 use App\Models\User;
@@ -47,10 +50,23 @@ class EventLearningRoomService
             'date_label' => $event->start_date?->copy()->addDays($offset)->locale('id')->translatedFormat('D, d M'),
         ]);
 
+        $isAdminOrOrganizer = $user->isAdmin() || in_array($user->role, ['Admin', 'Diktar', 'Penyelenggara'], true);
+
         // The event date range is authoritative. Stale sessions outside that range are not exposed.
-        $sessions = $event->sessions
+        $allEventSessions = $event->sessions
             ->filter(fn (EventSession $session) => $session->day_number >= 1 && $session->day_number <= $totalDays)
             ->values();
+
+        // For participants, filter sessions matching their track or plenary sessions
+        $sessions = $isAdminOrOrganizer
+            ? $allEventSessions
+            : $allEventSessions->filter(function (EventSession $session) use ($trackCode) {
+                if (empty($session->track_codes) || ! is_array($session->track_codes)) {
+                    return true;
+                }
+
+                return in_array($trackCode, $session->track_codes, true);
+            })->values();
 
         // Determine active or next upcoming session
         $activeSession = $sessions->first(fn (EventSession $session) => $session->isAttendanceActive())
@@ -84,7 +100,6 @@ class EventLearningRoomService
             ->pluck('session_id')->unique()->all();
         $dailySessions = $sessions->where('session_type_code', 'KEHADIRAN_HARIAN')->keyBy('day_number');
         $todayDailySession = $dailySessions->first(fn (EventSession $session) => $session->date?->isToday());
-        $isAdminOrOrganizer = $user->isAdmin() || in_array($user->role, ['Admin', 'Diktar', 'Penyelenggara'], true);
         $hasArrivalAttendance = $isAdminOrOrganizer || $this->attendanceService->hasArrivalAttendance($event, $eventParticipant);
         $canAccessLearning = $isAdminOrOrganizer || ($hasArrivalAttendance
             && (! $todayDailySession || in_array($todayDailySession->id, $attendedSessionIds, true)));
@@ -291,6 +306,23 @@ class EventLearningRoomService
                     $examState = 'ditutup';
                 }
 
+                // Build per-attempt history (all terminal/completed attempts)
+                $attemptHistory = $userAttempts
+                    ->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)
+                    ->sortByDesc('id')
+                    ->values()
+                    ->map(fn (CbtExamAttempt $a, int $idx) => [
+                        'attempt_number' => $userAttempts->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)->count() - $idx,
+                        'score' => $pkg->result_display === 'hidden' ? null : $a->total_score,
+                        'is_passed' => $pkg->result_display === 'hidden' ? null : $a->is_passed,
+                        'status' => $a->status,
+                        'finished_at' => $a->finished_at?->format('d M Y, H:i'),
+                        'duration_seconds' => $a->finished_at && $a->started_at
+                            ? $a->started_at->diffInSeconds($a->finished_at)
+                            : null,
+                    ])
+                    ->values();
+
                 return [
                     'id' => $pkg->id,
                     'title' => $pkg->title,
@@ -309,6 +341,8 @@ class EventLearningRoomService
                     'last_score' => $pkg->result_display === 'hidden' ? null : $lastAttempt?->total_score,
                     'is_passed' => $pkg->result_display === 'hidden' ? null : $lastAttempt?->is_passed,
                     'attempt_status' => $lastAttempt?->status,
+                    'attempt_history' => $attemptHistory,
+                    'is_session_exam' => (bool) ($attendanceReqSessionId || in_array($pkg->exam_type, ['module_eval', 'kuis', 'sesi'], true) || $event->sessions->contains('cbt_exam_package_id', $pkg->id)),
                     'revision_method' => $pkg->revision_method,
                     'revision_deadline' => $pkg->revision_deadline?->format('d M Y, H:i'),
                     'revision_open' => ! $pkg->revision_deadline || now()->lte($pkg->revision_deadline),
@@ -325,7 +359,7 @@ class EventLearningRoomService
 
         // Calculate attendance stats
         $totalSessions = $sessions->count();
-        $attendedSessions = count($attendedSessionIds);
+        $attendedSessions = count(array_intersect($attendedSessionIds, $sessions->pluck('id')->all()));
         $attendancePercentage = $totalSessions > 0 ? round(($attendedSessions / $totalSessions) * 100) : 0;
 
         return [
@@ -356,6 +390,14 @@ class EventLearningRoomService
                 'checked_in_at' => $eventParticipant->checked_in_at?->format('d M Y, H:i'),
                 'attendance_percentage' => $attendancePercentage,
                 'attended_sessions_count' => $attendedSessions,
+                'has_registration_form' => EventRegistrationForm::where('event_id', $event->id)->where('participant_id', $participant->id)->exists(),
+                'registration_form_status' => EventRegistrationForm::where('event_id', $event->id)->where('participant_id', $participant->id)->value('status') ?? 'unfilled',
+                'registration_form_url' => route('event.registration-form', $event->slug),
+                'registration_form_print_url' => route('event.registration-form.print', $event->slug),
+                'has_integrity_pact' => EventIntegrityPact::where('event_id', $event->id)->where('participant_id', $participant->id)->where('status', 'signed')->exists(),
+                'integrity_pact_status' => EventIntegrityPact::where('event_id', $event->id)->where('participant_id', $participant->id)->value('status') ?? 'unfilled',
+                'integrity_pact_url' => route('event.integrity-pact', $event->slug),
+                'integrity_pact_print_url' => route('event.integrity-pact.print', $event->slug),
             ],
             'activeSession' => $activeSession ? [
                 'id' => $activeSession->id,
@@ -449,6 +491,14 @@ class EventLearningRoomService
                 'issued_at' => $eventParticipant->transcript_issued_at?->format('d M Y'),
                 'download_url' => $eventParticipant->transcript_file_path
                     ? route('event.transcript.mine', $event->slug) : null,
+            ],
+            'integrityPact' => [
+                'has_signed' => EventIntegrityPact::where('event_id', $event->id)->where('participant_id', $participant->id)->where('status', 'signed')->exists(),
+                'status' => EventIntegrityPact::where('event_id', $event->id)->where('participant_id', $participant->id)->value('status') ?? 'unfilled',
+                'title' => (EventIntegrityPact::where('event_id', $event->id)->where('participant_id', $participant->id)->first())?->pact_title ?? 'Pakta Integritas PB PERKEMI',
+                'pact_type' => (EventIntegrityPact::where('event_id', $event->id)->where('participant_id', $participant->id)->value('pact_type')) ?? EventIntegrityPactController::resolvePactType($eventParticipant->track_code),
+                'sign_url' => route('event.integrity-pact', $event->slug),
+                'print_url' => route('event.integrity-pact.print', $event->slug),
             ],
         ];
 

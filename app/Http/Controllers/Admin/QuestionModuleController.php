@@ -7,9 +7,12 @@ use App\Http\Requests\Admin\ImportQuestionModuleRequest;
 use App\Http\Requests\Admin\StoreQuestionModuleRequest;
 use App\Http\Requests\Admin\UpdateQuestionModuleRequest;
 use App\Models\ActivityLog;
+use App\Models\CbtExamAttempt;
+use App\Models\CbtExamPackage;
 use App\Models\Event;
 use App\Models\LearningModule;
 use App\Models\ParticipantTrack;
+use App\Models\QuestionBank;
 use App\Models\QuestionModule;
 use App\Services\QuestionModuleExportService;
 use App\Services\QuestionModuleImportService;
@@ -288,21 +291,45 @@ class QuestionModuleController extends Controller
     }
 
     /**
-     * Delete question module (protected).
+     * Delete question module.
      */
-    public function destroy(QuestionModule $module): RedirectResponse
+    public function destroy(Request $request, QuestionModule $module): RedirectResponse
     {
-        $hasActiveQuestions = $module->questions()->where('status', 'active')->exists();
-        $hasCbtPackages = $module->cbtPackages()->exists();
+        $hasAttempts = CbtExamAttempt::whereHas('package', function ($q) use ($module) {
+            $q->where('question_module_id', $module->id)
+                ->orWhereJsonContains('question_module_ids', $module->id);
+        })->exists();
 
-        if ($hasActiveQuestions || $hasCbtPackages) {
-            return back()->with('error', 'Modul Soal tidak dapat dihapus karena masih memiliki soal aktif atau digunakan dalam Paket CBT. Silakan gunakan opsi arsipkan.');
+        if ($hasAttempts && ! $request->boolean('force')) {
+            return back()->with('error', "Modul Soal '{$module->title}' tidak dapat dihapus karena paket CBT terkait sudah memiliki rekaman pengerjaan ujian peserta. Silakan gunakan opsi arsipkan.");
         }
 
         $title = $module->title;
-        $module->delete();
 
-        return redirect()->route('admin.master.modul-soal.index')
-            ->with('success', "Modul Soal '{$title}' berhasil dihapus.");
+        DB::transaction(function () use ($module, $title): void {
+            // Detach questions from module
+            $module->questions()->detach();
+
+            // Clear legacy question_module_id on question_bank if any points to this module
+            QuestionBank::where('question_module_id', $module->id)->update(['question_module_id' => null]);
+
+            // Nullify or detach from CBT packages
+            CbtExamPackage::where('question_module_id', $module->id)->update(['question_module_id' => null]);
+
+            // Delete module
+            $module->delete();
+
+            ActivityLog::record('question_module.deleted', $module, [
+                'code' => $module->code,
+                'title' => $title,
+            ]);
+        });
+
+        if ($request->header('Referer') && str_contains($request->header('Referer'), "/admin/master/modul-soal/{$module->id}")) {
+            return redirect()->route('master.modul-soal.index')
+                ->with('success', "Modul Soal '{$title}' berhasil dihapus.");
+        }
+
+        return back()->with('success', "Modul Soal '{$title}' berhasil dihapus.");
     }
 }

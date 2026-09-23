@@ -38,11 +38,19 @@ class LoginController extends Controller
     {
         $identifier = $request->string('email')->trim()->toString();
         $userId = $this->resolveUserId($identifier);
+        $password = $request->string('password')->toString();
+        $remember = $request->boolean('remember');
 
-        if ($userId !== null && Auth::attempt([
-            'id' => $userId,
-            'password' => $request->string('password')->toString(),
-        ], $request->boolean('remember'))) {
+        $authenticated = false;
+        if ($userId !== null) {
+            if (Auth::attempt(['id' => $userId, 'password' => $password], $remember)) {
+                $authenticated = true;
+            } elseif ($this->checkParticipantNikPasswordFallback($userId, $password, $remember)) {
+                $authenticated = true;
+            }
+        }
+
+        if ($authenticated) {
             $request->session()->regenerate();
 
             $user = Auth::user();
@@ -54,6 +62,8 @@ class LoginController extends Controller
                     $redirectUrl = route('speaker.schedule');
                 } elseif ($user?->isAdmin() || in_array($user?->role, ['Diktar', 'Penyelenggara'], true)) {
                     $redirectUrl = route('admin.dashboard');
+                } elseif ($user?->role === 'Peserta') {
+                    $redirectUrl = route('event.mine');
                 } else {
                     $redirectUrl = '/';
                 }
@@ -84,15 +94,60 @@ class LoginController extends Controller
     private function resolveUserId(string $identifier): ?int
     {
         if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
-            return User::query()
+            $userId = User::query()
                 ->where('email', $identifier)
                 ->value('id');
+            if ($userId) {
+                return $userId;
+            }
         }
 
-        return Participant::query()
+        $userId = Participant::query()
             ->whereNotNull('user_id')
             ->where('kenshi_id_number', Str::upper($identifier))
             ->value('user_id');
+
+        if ($userId) {
+            return $userId;
+        }
+
+        $clean = preg_replace('/[^a-zA-Z0-9]/', '', $identifier);
+        if ($clean !== '') {
+            $userIdByClean = Participant::query()
+                ->whereNotNull('user_id')
+                ->whereRaw("REPLACE(REPLACE(REPLACE(kenshi_id_number, '.', ''), '-', ''), ' ', '') = ?", [$clean])
+                ->value('user_id');
+
+            if ($userIdByClean) {
+                return $userIdByClean;
+            }
+        }
+
+        return User::query()
+            ->where('email', $identifier)
+            ->value('id');
+    }
+
+    private function checkParticipantNikPasswordFallback(int $userId, string $password, bool $remember): bool
+    {
+        $participant = Participant::where('user_id', $userId)->first();
+        if (! $participant || empty($participant->kenshi_id_number)) {
+            return false;
+        }
+
+        $cleanPassword = preg_replace('/[^a-zA-Z0-9]/', '', $password);
+        $cleanNik = preg_replace('/[^a-zA-Z0-9]/', '', $participant->kenshi_id_number);
+
+        if ($cleanPassword !== '' && ($password === $participant->kenshi_id_number || $cleanPassword === $cleanNik)) {
+            $user = User::find($userId);
+            if ($user) {
+                Auth::login($user, $remember);
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

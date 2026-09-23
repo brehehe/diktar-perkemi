@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Http\Controllers\EventRegistrationFormController;
 use App\Models\CbtExamAttempt;
 use App\Models\CbtExamPackage;
 use App\Models\CbtProctoringEvent;
@@ -10,6 +11,7 @@ use App\Models\EventAttendance;
 use App\Models\EventLegend;
 use App\Models\EventModule;
 use App\Models\EventParticipant;
+use App\Models\EventRegistrationForm;
 use App\Models\EventRoom;
 use App\Models\EventSession;
 use App\Models\EventSessionType;
@@ -42,7 +44,7 @@ class AdminEventDetailService
                     ->orderBy('start_time');
             },
             'eventParticipants' => function ($q) {
-                $q->with(['participant.user', 'track'])->orderBy('id');
+                $q->with(['participant.user', 'track', 'registrationForm.verifier'])->orderBy('id');
             },
         ]);
 
@@ -85,7 +87,8 @@ class AdminEventDetailService
                     'method' => $s->method,
                     'room' => $s->room,
                     'event_room_id' => $s->event_room_id,
-                    'target_tracks' => $s->target_tracks ?? [],
+                    'target_tracks' => $s->target_tracks ?? $s->track_codes ?? [],
+                    'track_codes' => $s->track_codes ?? $s->target_tracks ?? [],
                     'module_code' => $s->module_code,
                     'status' => $s->status,
                     'status_label' => $s->status_label,
@@ -194,6 +197,17 @@ class AdminEventDetailService
             'checkin_status' => $ep->checkin_status ?? ($ep->checked_in_at ? 'checked_in' : 'registered'),
             'checkin_method' => $ep->checkin_method,
             'notes' => $ep->notes,
+            'has_registration_form' => (bool) $ep->registrationForm,
+            'registration_form_id' => $ep->registrationForm?->id,
+            'registration_form_status' => $ep->registrationForm?->status ?? 'unfilled',
+            'registration_form_type' => $ep->registrationForm?->form_type,
+            'registration_form_level' => $ep->registrationForm?->penataran_level,
+            'registration_form_submitted_at' => $ep->registrationForm?->submitted_at?->format('d M Y, H:i'),
+            'registration_form_verified_at' => $ep->registrationForm?->verified_at?->format('d M Y, H:i'),
+            'registration_form_verified_by' => $ep->registrationForm?->verifier?->name,
+            'registration_form_print_url' => $ep->registrationForm
+                ? route('event.registration-form.print', [$event->slug, $ep->participant_id])
+                : null,
         ]);
 
         // Load attendances for event
@@ -397,11 +411,76 @@ class AdminEventDetailService
             ->select('id', 'title', 'code', 'slug', 'type')
             ->get();
 
+        // Registration forms for participants
+        $registrationFormsByParticipant = EventRegistrationForm::with(['participant', 'verifier'])
+            ->where('event_id', $event->id)
+            ->get()
+            ->keyBy('participant_id');
+
+        $registrationFormsPayload = $event->eventParticipants->map(function (EventParticipant $ep) use ($registrationFormsByParticipant, $event) {
+            /** @var EventRegistrationForm|null $rf */
+            $rf = $registrationFormsByParticipant->get($ep->participant_id);
+            $resolvedForm = EventRegistrationFormController::resolveFormType($rf?->form_type ?? $ep->track?->code);
+
+            return [
+                'id' => $rf?->id,
+                'participant_id' => $ep->participant_id,
+                'event_participant_id' => $ep->id,
+                'participant_name' => $ep->participant?->name ?? '-',
+                'kenshi_id_number' => $ep->participant?->kenshi_id_number ?? $ep->participant?->kenshi_id ?? '-',
+                'dan_level' => $rf?->dan_level ?? $ep->participant?->dan_rank ?? $ep->participant?->dan_level ?? '-',
+                'origin_dojo' => $ep->participant?->origin_dojo ?? $ep->participant?->origin ?? '-',
+                'origin_province' => $ep->participant?->origin_province ?? '-',
+                'track_code' => $ep->track?->code ?? '-',
+                'track_name' => $ep->track?->name ?? '-',
+                'form_type' => $rf?->form_type ?? $resolvedForm['form_type'],
+                'penataran_level' => $rf?->penataran_level ?? $resolvedForm['penataran_level'],
+                'lampiran_label' => $resolvedForm['lampiran_label'],
+                'waiver_lampiran_label' => $resolvedForm['waiver_lampiran_label'],
+                'photo_requirements' => $resolvedForm['photo_requirements'],
+                'start_date' => $rf?->start_date?->format('d F Y') ?? $event->start_date?->format('d F Y'),
+                'end_date' => $rf?->end_date?->format('d F Y') ?? $event->end_date?->format('d F Y'),
+                'location' => $rf?->location ?? $event->place,
+                'full_name' => $rf?->full_name ?? $ep->participant?->name,
+                'birth_place' => $rf?->birth_place ?? $ep->participant?->origin_city,
+                'birth_date' => $rf?->birth_date?->format('d F Y'),
+                'home_address' => $rf?->home_address,
+                'phone_number' => $rf?->phone_number ?? $ep->participant?->phone,
+                'email' => $rf?->email ?? $ep->participant?->email,
+                'occupation' => $rf?->occupation,
+                'occupation_address' => $rf?->occupation_address,
+                'occupation_phone' => $rf?->occupation_phone,
+                'emergency_address' => $rf?->emergency_address,
+                'emergency_phone' => $rf?->emergency_phone,
+                'gasnas_records' => $rf?->gasnas_records ?? [],
+                'certificate_records' => $rf?->certificate_records ?? [],
+                'sign_place' => $rf?->sign_place ?? 'Mojokerto',
+                'sign_date' => $rf?->sign_date?->format('d F Y'),
+                'applicant_name' => $rf?->applicant_name ?? $ep->participant?->name,
+                'signature_data' => $rf?->signature_data,
+                'file_path' => $rf?->file_path,
+                'file_url' => $rf?->file_url,
+                'file_name' => $rf?->original_file_name ?? ($rf?->file_path ? basename($rf->file_path) : null),
+                'file_size_formatted' => $rf?->file_size_formatted,
+                'submission_mode' => $rf?->submission_mode ?? ($rf?->file_path ? 'upload' : 'online'),
+                'waiver_agreed' => (bool) ($rf?->waiver_agreed ?? false),
+                'status' => $rf?->status ?? 'unfilled',
+                'submitted_at' => $rf?->submitted_at?->format('d M Y, H:i'),
+                'verified_at' => $rf?->verified_at?->format('d M Y, H:i'),
+                'verified_by_name' => $rf?->verifier?->name ?? ($rf?->status === 'verified' ? 'Budi Santoso' : null),
+                'print_url' => $rf ? route('event.registration-form.print', [$event->slug, $ep->participant_id]) : null,
+            ];
+        });
+
         // Calculate stats
         $stats = [
             'total_participants' => $event->eventParticipants->count(),
             'verified_participants' => $event->eventParticipants->where('admin_status', 'verified')->count(),
             'checked_in_participants' => $event->eventParticipants->whereNotNull('checked_in_at')->count(),
+            'total_registration_forms' => $event->eventParticipants->count(),
+            'submitted_registration_forms' => $registrationFormsPayload->where('status', 'submitted')->count(),
+            'verified_registration_forms' => $registrationFormsPayload->where('status', 'verified')->count(),
+            'unfilled_registration_forms' => $registrationFormsPayload->where('status', 'unfilled')->count(),
             'dual_participants' => $event->eventParticipants->filter(fn ($p) => $p->track?->is_dual_track)->count(),
             'rotation_a1' => $event->eventParticipants->where('rotation_group', 'A1')->count(),
             'rotation_a2' => $event->eventParticipants->where('rotation_group', 'A2')->count(),
@@ -515,6 +594,7 @@ class AdminEventDetailService
                 'sessions_count' => $room->sessions_count,
             ]),
             'participants' => $participants,
+            'registrationForms' => $registrationFormsPayload,
             'availableParticipants' => Participant::query()
                 ->whereDoesntHave('eventParticipants', fn ($query) => $query->where('event_id', $event->id))
                 ->orderBy('name')

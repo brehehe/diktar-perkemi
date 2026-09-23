@@ -30,8 +30,23 @@ class Participant extends Model
         'dojo',
         'dan_rank',
         'dan_level',
+        'birth_date',
+        'birth_place',
+        'gender',
+        'address',
+        'occupation',
+        'occupation_phone',
+        'last_certificate',
+        'last_certificate_number',
+        'target_certification',
+        'simperkemi_data',
         'notes',
         'admin_notes',
+    ];
+
+    protected $casts = [
+        'birth_date' => 'date',
+        'simperkemi_data' => 'array',
     ];
 
     protected $appends = [
@@ -87,6 +102,21 @@ class Participant extends Model
                 'has_seen_welcome',
             ])
             ->withTimestamps();
+    }
+
+    public function registrationForms(): HasMany
+    {
+        return $this->hasMany(EventRegistrationForm::class);
+    }
+
+    public function integrityPacts(): HasMany
+    {
+        return $this->hasMany(EventIntegrityPact::class);
+    }
+
+    public function latestIntegrityPact(): HasOne
+    {
+        return $this->hasOne(EventIntegrityPact::class)->latestOfMany();
     }
 
     public function getKenshiIdAttribute(): ?string

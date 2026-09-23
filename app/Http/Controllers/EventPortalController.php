@@ -107,7 +107,7 @@ class EventPortalController extends Controller
         }
 
         $enrollments = $participant
-            ? EventParticipant::with(['event', 'track'])
+            ? EventParticipant::with(['event', 'track', 'registrationForm'])
                 ->where('participant_id', $participant->id)
                 ->where('admin_status', 'verified')
                 ->whereHas('event')
@@ -142,6 +142,12 @@ class EventPortalController extends Controller
                 'is_checked_in' => $arrivalSessions->has($enrollment->event_id)
                     ? $attendedArrivalEventIds->has($enrollment->event_id)
                     : (bool) $enrollment->checked_in_at,
+                'has_registration_form' => (bool) $enrollment->registrationForm,
+                'registration_form_status' => $enrollment->registrationForm?->status ?? 'unfilled',
+                'registration_form_url' => route('event.registration-form', $enrollment->event->slug),
+                'registration_form_print_url' => $enrollment->registrationForm
+                    ? route('event.registration-form.print', $enrollment->event->slug)
+                    : null,
                 'certificate_number' => $enrollment->certificate_number,
                 'certificate_download_url' => $enrollment->certificate_file_path
                     ? route('event.certificate.mine', $enrollment->event->slug) : null,

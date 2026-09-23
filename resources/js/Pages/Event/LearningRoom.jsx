@@ -24,6 +24,9 @@ import {
     Lock,
     Layers,
     Video,
+    Filter,
+    History,
+    TrendingUp,
 } from 'lucide-react';
 import Button from '../../Components/ui/Button';
 import Badge from '../../Components/ui/Badge';
@@ -42,6 +45,7 @@ export default function LearningRoom({
     attendanceRecords = [],
     certificate = null,
     transcript = null,
+    integrityPact = null,
 }) {
     usePoll(10000, {
         only: [
@@ -55,6 +59,7 @@ export default function LearningRoom({
             'attendanceRecords',
             'certificate',
             'transcript',
+            'integrityPact',
         ],
         preserveScroll: true,
         preserveState: true,
@@ -69,6 +74,9 @@ export default function LearningRoom({
     const [selectedDay, setSelectedDay] = useState(activeSession?.day_number || availableDays[0]?.day_number || 1);
     const [expandedSessionId, setExpandedSessionId] = useState(activeSession?.id || null);
     const [cbtFilter, setCbtFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all'); // all, sesi, ujian
+    const [ujianTypeFilter, setUjianTypeFilter] = useState('all');
+    const [expandedHistoryId, setExpandedHistoryId] = useState(null);
 
     // Filter sessions for currently selected day
     const daySessions = sessions.filter((s) => s.day_number === selectedDay);
@@ -97,6 +105,16 @@ export default function LearningRoom({
 
                     {/* Fast Navigation Quick Action */}
                     <div className="flex shrink-0 items-center gap-2">
+                        <Link
+                            href="/event-saya"
+                            aria-label="Kembali ke Event Saya"
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-[#DCE7F3] bg-white px-2.5 py-2 text-xs font-semibold text-[#6B7C93] shadow-xs transition-colors hover:border-[#0B63CE] hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
+                            title="Kembali ke Daftar Event Saya"
+                        >
+                            <ArrowLeft className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Event Saya</span>
+                        </Link>
+
                         <Link
                             href={`/event/${event.slug}/scan`}
                             aria-label="Pindai QR absensi"
@@ -183,6 +201,30 @@ export default function LearningRoom({
                         <button type="button" onClick={() => setActiveTab('sertifikat')} aria-pressed={activeTab === 'sertifikat'} className={`min-h-11 rounded-md px-3 py-1 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] ${activeTab === 'sertifikat' ? 'bg-[#0E2747] text-white' : 'text-[#6B7C93] hover:text-[#0E2747]'}`}>
                             Dokumen Kelulusan
                         </button>
+                        <Link
+                            href={`/event/${event.slug}/formulir-pendaftaran`}
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold text-[#0B63CE] hover:bg-[#EAF5FF] transition-colors"
+                        >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Formulir Penataran</span>
+                            {participant.has_registration_form ? (
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            ) : (
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            )}
+                        </Link>
+                        <Link
+                            href={`/event/${event.slug}/pakta-integritas`}
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold text-[#0B63CE] hover:bg-[#EAF5FF] transition-colors"
+                        >
+                            <Shield className="w-3.5 h-3.5" />
+                            <span>Pakta Integritas</span>
+                            {participant.has_integrity_pact ? (
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            ) : (
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            )}
+                        </Link>
                     </div>
                 </div>
             </header>
@@ -219,6 +261,56 @@ export default function LearningRoom({
                                 </div>
                             </div>
                             <Link href={`/event/${event.slug}/scan`} className="inline-flex min-h-11 shrink-0 items-center justify-center bg-[#0B63CE] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Scan kehadiran</Link>
+                        </div>
+                    )}
+                </section>
+
+                {/* 1.5. STATUS FORMULIR PENDAFTARAN BANNER */}
+                <section aria-label="Status Formulir Penataran">
+                    {!participant.has_registration_form ? (
+                        <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-xs">
+                            <div className="flex items-center gap-2.5 text-blue-950">
+                                <FileText className="w-5 h-5 text-[#0B63CE] shrink-0" />
+                                <div>
+                                    <span className="font-bold block text-sm">Formulir Pendaftaran Penataran Wajib Diisi</span>
+                                    <span className="text-blue-800 text-xs">
+                                        Lengkapi data pemohon, riwayat piagam Gasnas, sertifikat daerah, dan surat pernyataan pembebasan resmi PB PERKEMI.
+                                    </span>
+                                </div>
+                            </div>
+                            <Link
+                                href={`/event/${event.slug}/formulir-pendaftaran`}
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0B63CE] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#0A3F82] shrink-0"
+                            >
+                                <FileText className="w-3.5 h-3.5" />
+                                Isi Formulir Penataran
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2 text-slate-700">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>
+                                    Formulir Penataran: <strong className="text-slate-900">{participant.registration_form_status === 'verified' ? 'Terverifikasi PB PERKEMI' : 'Sudah Dikirim (Menunggu Verifikasi)'}</strong>
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Link
+                                    href={`/event/${event.slug}/formulir-pendaftaran`}
+                                    className="font-semibold text-[#0B63CE] hover:underline"
+                                >
+                                    Lihat Formulir
+                                </Link>
+                                <span className="text-slate-300">·</span>
+                                <a
+                                    href={`/event/${event.slug}/formulir-pendaftaran/cetak`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-semibold text-slate-600 hover:text-slate-900"
+                                >
+                                    Cetak PB PERKEMI
+                                </a>
+                            </div>
                         </div>
                     )}
                 </section>
@@ -822,38 +914,93 @@ export default function LearningRoom({
                 {/* 6. TAB CBT: UJIAN SAYA */}
                 {activeTab === 'ujian' && (
                     <div className="space-y-6">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div>
-                                <h3 className="font-display font-bold text-base text-[#0E2747] flex items-center gap-2">
-                                    <Award className="w-5 h-5 text-purple-600" />
-                                    Ujian Saya
-                                </h3>
-                                <p className="text-xs text-[#6B7C93]">
-                                    Daftar paket ujian CBT penataran resmi untuk jalur {participant.track_name} ({participant.track_code}).
-                                </p>
+                        <div className="flex flex-col gap-3">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                <div>
+                                    <h3 className="font-display font-bold text-base text-[#0E2747] flex items-center gap-2">
+                                        <Award className="w-5 h-5 text-purple-600" />
+                                        Ujian Saya
+                                    </h3>
+                                    <p className="text-xs text-[#6B7C93]">
+                                        Paket ujian CBT penataran untuk jalur {participant.track_name} ({participant.track_code}).
+                                    </p>
+                                </div>
+
+                                {/* Filter Status */}
+                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0">
+                                    {[
+                                        { id: 'all', label: 'Semua' },
+                                        { id: 'tersedia', label: 'Tersedia' },
+                                        { id: 'akan_datang', label: 'Akan Datang' },
+                                        { id: 'selesai', label: 'Selesai' },
+                                    ].map((tab) => (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            onClick={() => setCbtFilter(tab.id)}
+                                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                                                cbtFilter === tab.id
+                                                    ? 'bg-[#0E2747] text-white shadow-xs'
+                                                    : 'bg-white text-[#6B7C93] border border-[#DCE7F3] hover:bg-[#EAF5FF]'
+                                            }`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
-                            {/* Filter Chips */}
-                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                                {[
-                                    { id: 'all', label: 'Semua' },
-                                    { id: 'tersedia', label: 'Sedang Tersedia' },
-                                    { id: 'akan_datang', label: 'Akan Datang' },
-                                    { id: 'selesai', label: 'Selesai' },
-                                ].map((tab) => (
-                                    <button
-                                        key={tab.id}
-                                        type="button"
-                                        onClick={() => setCbtFilter(tab.id)}
-                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                                            cbtFilter === tab.id
-                                                ? 'bg-[#0E2747] text-white shadow-xs'
-                                                : 'bg-white text-[#6B7C93] border border-[#DCE7F3] hover:bg-[#EAF5FF]'
-                                        }`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
+                            {/* Filter Kategori: Sesi | Ujian */}
+                            <div className="flex items-center gap-2 border-b border-[#DCE7F3] pb-2">
+                                <Filter className="w-3.5 h-3.5 text-[#0B63CE] shrink-0" />
+                                <span className="text-[11px] font-bold text-[#0E2747] shrink-0">Kategori:</span>
+                                <div className="flex items-center gap-1.5 overflow-x-auto">
+                                    {[
+                                        { id: 'all', label: 'Semua' },
+                                        { id: 'sesi', label: 'Sesi' },
+                                        { id: 'ujian', label: 'Ujian' },
+                                    ].map((cat) => (
+                                        <button
+                                            key={cat.id}
+                                            type="button"
+                                            onClick={() => setCategoryFilter(cat.id)}
+                                            className={`px-3 py-1 rounded-md text-xs font-bold transition-all shrink-0 ${
+                                                categoryFilter === cat.id
+                                                    ? 'bg-[#0E2747] text-white shadow-2xs'
+                                                    : 'bg-white text-[#6B7C93] border border-[#DCE7F3] hover:bg-[#EAF5FF]'
+                                            }`}
+                                        >
+                                            {cat.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Filter Jenis Ujian */}
+                            <div className="flex items-center gap-2 border-b border-[#DCE7F3] pb-2">
+                                <span className="text-[11px] font-semibold text-[#6B7C93] shrink-0">Tipe:</span>
+                                <div className="flex items-center gap-1.5 overflow-x-auto">
+                                    {[
+                                        { id: 'all', label: 'Semua Tipe' },
+                                        { id: 'pre_test', label: 'Pre-Test' },
+                                        { id: 'module_eval', label: 'Kuis Formatif' },
+                                        { id: 'post_test', label: 'Post-Test' },
+                                        { id: 'theory', label: 'Ujian Teori' },
+                                    ].map((f) => (
+                                        <button
+                                            key={f.id}
+                                            type="button"
+                                            onClick={() => setUjianTypeFilter(f.id)}
+                                            className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold transition-all shrink-0 ${
+                                                ujianTypeFilter === f.id
+                                                    ? 'bg-purple-700 text-white'
+                                                    : 'bg-white text-[#6B7C93] border border-[#DCE7F3] hover:bg-purple-50 hover:text-purple-700'
+                                            }`}
+                                        >
+                                            {f.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
@@ -861,17 +1008,22 @@ export default function LearningRoom({
                         {(() => {
                             const examsToDisplay = (myCbtExams && myCbtExams.length > 0 ? myCbtExams : cbtPackages)
                                 .filter((pkg) => {
-                                    if (cbtFilter === 'tersedia') return pkg.exam_state === 'tersedia';
-                                    if (cbtFilter === 'akan_datang') return pkg.exam_state === 'akan_datang';
-                                    if (cbtFilter === 'selesai') return pkg.has_attempt || pkg.exam_state === 'selesai';
-                                    return true;
+                                    const stateOk = cbtFilter === 'all'
+                                        || (cbtFilter === 'tersedia' && pkg.exam_state === 'tersedia')
+                                        || (cbtFilter === 'akan_datang' && pkg.exam_state === 'akan_datang')
+                                        || (cbtFilter === 'selesai' && (pkg.has_attempt || pkg.exam_state === 'selesai'));
+                                    const categoryOk = categoryFilter === 'all'
+                                        || (categoryFilter === 'sesi' && (pkg.is_session_exam || pkg.exam_type === 'module_eval'))
+                                        || (categoryFilter === 'ujian' && (!pkg.is_session_exam && pkg.exam_type !== 'module_eval'));
+                                    const typeOk = ujianTypeFilter === 'all' || pkg.exam_type === ujianTypeFilter || (pkg.exam_type_label || '').toLowerCase().includes(ujianTypeFilter);
+                                    return stateOk && categoryOk && typeOk;
                                 });
 
                             if (examsToDisplay.length === 0) {
                                 return (
                                     <div className="p-10 text-center bg-white rounded-2xl border border-[#DCE7F3] space-y-2">
                                         <Award className="w-8 h-8 text-[#6B7C93] mx-auto opacity-50" />
-                                        <h5 className="font-bold text-sm text-[#0E2747]">Tidak Ada Ujian pada Kategori Ini</h5>
+                                        <h5 className="font-bold text-sm text-[#0E2747]">Tidak Ada Ujian pada Filter Ini</h5>
                                         <p className="text-xs text-[#6B7C93]">
                                             Belum ada paket ujian yang dijadwalkan atau memenuhi filter yang dipilih.
                                         </p>
@@ -1000,6 +1152,64 @@ export default function LearningRoom({
                                                 </div>
                                                 {pkg.revision_attempt_id && pkg.revision_method === 'paper' && <RevisionPaperForm package={pkg} />}
                                                 {pkg.revision_attempt_id && pkg.revision_method === 'retry' && <p className="border-t border-[#DCE7F3] pt-3 text-sm text-[#6B7C93]">Nilai di bawah KKM. Anda dapat mengulang ujian selama kesempatan masih tersedia.</p>}
+
+                                                {/* Riwayat Percobaan Ujian */}
+                                                {pkg.attempt_history && pkg.attempt_history.length > 0 && (
+                                                    <div className="border-t border-[#DCE7F3] pt-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setExpandedHistoryId(expandedHistoryId === pkg.id ? null : pkg.id)}
+                                                            className="flex items-center gap-1.5 text-xs font-semibold text-[#6B7C93] hover:text-[#0E2747] transition-colors"
+                                                        >
+                                                            <History className="w-3.5 h-3.5" />
+                                                            Riwayat Percobaan ({pkg.attempt_history.length})
+                                                            {expandedHistoryId === pkg.id
+                                                                ? <ChevronUp className="w-3.5 h-3.5" />
+                                                                : <ChevronDown className="w-3.5 h-3.5" />
+                                                            }
+                                                        </button>
+                                                        {expandedHistoryId === pkg.id && (
+                                                            <div className="mt-2 rounded-xl border border-[#DCE7F3] overflow-hidden">
+                                                                <table className="w-full text-[11px]">
+                                                                    <thead className="bg-[#F0F6FF]">
+                                                                        <tr>
+                                                                            <th className="px-3 py-2 text-left font-bold text-[#0E2747]">#</th>
+                                                                            <th className="px-3 py-2 text-left font-bold text-[#0E2747]">Nilai</th>
+                                                                            <th className="px-3 py-2 text-left font-bold text-[#0E2747]">Status</th>
+                                                                            <th className="px-3 py-2 text-left font-bold text-[#0E2747] hidden sm:table-cell">Selesai</th>
+                                                                            <th className="px-3 py-2 text-left font-bold text-[#0E2747] hidden sm:table-cell">Durasi</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-[#DCE7F3]/60">
+                                                                        {pkg.attempt_history.map((att) => (
+                                                                            <tr key={att.attempt_number} className="hover:bg-[#F8FBFF]">
+                                                                                <td className="px-3 py-2 font-mono font-bold text-[#6B7C93]">P-{att.attempt_number}</td>
+                                                                                <td className="px-3 py-2">
+                                                                                    {att.score !== null
+                                                                                        ? <span className="font-mono font-bold text-purple-700">{att.score}</span>
+                                                                                        : <span className="text-[#6B7C93]">—</span>
+                                                                                    }
+                                                                                </td>
+                                                                                <td className="px-3 py-2">
+                                                                                    {att.is_passed === true && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">Lulus</span>}
+                                                                                    {att.is_passed === false && <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">Belum</span>}
+                                                                                    {att.is_passed === null && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">Review</span>}
+                                                                                </td>
+                                                                                <td className="px-3 py-2 text-[#6B7C93] hidden sm:table-cell">{att.finished_at || '—'}</td>
+                                                                                <td className="px-3 py-2 text-[#6B7C93] hidden sm:table-cell">
+                                                                                    {att.duration_seconds
+                                                                                        ? `${Math.floor(att.duration_seconds / 60)}m ${att.duration_seconds % 60}s`
+                                                                                        : '—'
+                                                                                    }
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -1012,10 +1222,51 @@ export default function LearningRoom({
                 {activeTab === 'sertifikat' && (
                     <section aria-labelledby="certificate-title" className="border border-[#DCE7F3] bg-white p-6 sm:p-8">
                         <h2 id="certificate-title" className="font-display text-2xl font-semibold text-[#0A3F82]">Dokumen Kelulusan</h2>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7C93]">E-Sertifikat dan E-Transkrip diterbitkan setelah proses penilaian event selesai.</p>
-                        <div className="mt-5 grid gap-4 md:grid-cols-2">
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7C93]">E-Sertifikat, E-Transkrip, dan Pakta Integritas resmi PB PERKEMI setelah proses penataran selesai.</p>
+                        <div className="mt-5 grid gap-4 md:grid-cols-3">
                             <LearningDocument title="E-Sertifikat" document={certificate} />
                             <LearningDocument title="E-Transkrip" document={transcript} />
+                            <section aria-label="Pakta Integritas" className="flex min-h-44 flex-col justify-between border border-[#DCE7F3] bg-[#F8FBFF] p-5">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <Shield className="size-4 text-[#0B63CE]" aria-hidden="true" />
+                                        <h3 className="text-sm font-semibold text-[#0E2747]">Pakta Integritas</h3>
+                                    </div>
+                                    <div className="mt-3 space-y-1.5 text-sm leading-snug text-[#6B7C93]">
+                                        <p className="text-xs font-medium text-[#112743]">
+                                            {integrityPact?.title || 'Pakta Integritas PB PERKEMI'}
+                                        </p>
+                                        {integrityPact?.has_signed ? (
+                                            <p className="text-xs text-emerald-700 flex items-center gap-1 font-semibold">
+                                                <CheckCircle2 className="size-3.5 shrink-0" />
+                                                Ditandatangani Digital
+                                            </p>
+                                        ) : (
+                                            <p className="text-xs text-amber-700">
+                                                Wajib ditandatangani digital untuk kelengkapan administrasi dan legalitas lisensi.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="mt-4 flex flex-col gap-2">
+                                    <Link
+                                        href={`/event/${event.slug}/pakta-integritas`}
+                                        className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#0B63CE] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0A3F82] transition"
+                                    >
+                                        {integrityPact?.has_signed ? 'Perbarui Tanda Tangan' : 'Tandatangani Digital'}
+                                    </Link>
+                                    {integrityPact?.has_signed && (
+                                        <a
+                                            href={`/event/${event.slug}/pakta-integritas/cetak`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[#DCE7F3] bg-white px-4 py-2 text-xs font-semibold text-[#0E2747] hover:bg-slate-50 transition"
+                                        >
+                                            Lihat & Cetak Dokumen Resmi
+                                        </a>
+                                    )}
+                                </div>
+                            </section>
                         </div>
                     </section>
                 )}

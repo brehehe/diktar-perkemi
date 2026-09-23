@@ -1293,3 +1293,13 @@ test('admin can export event participants with login credentials to excel', func
     $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     expect($response->headers->get('content-disposition'))->toContain('.xlsx');
 });
+
+test('admin print qr redirects gracefully when session id is stale or non-existent', function () {
+    $event = Event::first();
+    $validSession = EventSession::where('event_id', $event->id)->first();
+
+    $response = $this->actingAs($this->admin)
+        ->get("/admin/event/{$event->id}/sesi/999999/cetak-qr");
+
+    $response->assertRedirect(route('admin.event.session.attendance.print', [$event->id, $validSession->id]));
+});

@@ -201,9 +201,15 @@ class EventLearningRoomService
             ]);
 
         // 2. My CBT Exams (filtered by participant track with accessibility rules)
+        $participantSessionPackageIds = $sessions
+            ->pluck('cbt_exam_package_id')
+            ->filter()
+            ->unique()
+            ->all();
+
         $allPackages = $event->cbtPackages
             ->concat($event->linkedCbtPackages)
-            ->concat($sessions->pluck('cbtPackage')->filter())
+            ->concat($allEventSessions->pluck('cbtPackage')->filter())
             ->unique('id')
             ->values();
         $attemptsByPackage = CbtExamAttempt::query()
@@ -222,25 +228,42 @@ class EventLearningRoomService
 
             return $pkg && ! $attempt->hasExpired($pkg);
         });
-        $activePackage = $activeAttempt ? $allPackages->firstWhere('id', $activeAttempt->cbt_exam_package_id) : null;
-        $activeExamRedirectUrl = $activePackage
-            ? route('event.cbt.exam', ['slug' => $event->slug, 'packageCode' => $activePackage->code])
-            : null;
+        $activeExamRedirectUrl = null;
+
+        $packageMatchesTrack = function ($pkg) use ($trackCode, $isAdminOrOrganizer): bool {
+            if ($isAdminOrOrganizer || empty($trackCode) || strtolower(trim((string) $trackCode)) === 'all') {
+                return true;
+            }
+
+            $currentTrack = strtolower(trim((string) $trackCode));
+
+            // 1. If package has pivot restriction in this event (event_cbt_packages)
+            if ($pkg->pivot && ! empty($pkg->pivot->participant_path_id)) {
+                $pivotPath = strtolower(trim((string) $pkg->pivot->participant_path_id));
+                if ($pivotPath !== 'all' && $pivotPath !== $currentTrack) {
+                    return false;
+                }
+            }
+
+            // 2. If package has target_tracks restriction
+            if (! empty($pkg->target_tracks) && is_array($pkg->target_tracks)) {
+                $targetTracks = array_map(fn ($t) => strtolower(trim((string) $t)), $pkg->target_tracks);
+                if (! in_array('all', $targetTracks, true) && ! in_array($currentTrack, $targetTracks, true)) {
+                    return false;
+                }
+            }
+
+            return true;
+        };
 
         $myCbtExams = $allPackages
-            ->filter(function ($pkg) use ($trackCode, $isAdminOrOrganizer) {
-                if ($isAdminOrOrganizer) {
+            ->filter(function ($pkg) use ($attemptsByPackage, $packageMatchesTrack) {
+                // If participant already took this exam in this event, always show it so they can see results and locked status
+                if ($attemptsByPackage->has($pkg->id)) {
                     return true;
                 }
 
-                if (! empty($pkg->target_tracks) && is_array($pkg->target_tracks)) {
-                    return in_array($trackCode, $pkg->target_tracks, true);
-                }
-                if ($pkg->pivot && ! empty($pkg->pivot->participant_path_id) && $pkg->pivot->participant_path_id !== 'all') {
-                    return $pkg->pivot->participant_path_id === $trackCode;
-                }
-
-                return true;
+                return $packageMatchesTrack($pkg);
             })
             ->values()
             ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $hasArrivalAttendance, $isAdminOrOrganizer) {
@@ -253,6 +276,7 @@ class EventLearningRoomService
                 // Check attendance prerequisite
                 $attendanceReqSessionId = $pkg->pivot?->requires_attendance_session_id;
                 $missingExamSession = $event->sessions->first(fn (EventSession $session) => $session->cbt_exam_package_id === $pkg->id
+                    && (bool) $session->requires_attendance_before_cbt
                     && ! in_array($session->attendance_setting, ['none', 'disabled'], true)
                     && $session->isAttendanceActive()
                     && ! in_array($session->id, $attendedSessionIds, true));
@@ -282,7 +306,9 @@ class EventLearningRoomService
                     $deniedReason = "Anda belum melakukan absensi pada {$sessionPrereqName}.";
                 } elseif ($attemptsCount >= $attemptsAllowed) {
                     $isAllowed = false;
-                    $deniedReason = 'Jumlah percobaan ujian telah habis.';
+                    $deniedReason = ($lastAttempt?->is_passed)
+                        ? 'Anda telah menyelesaikan ujian ini dan dinyatakan lulus.'
+                        : 'Anda telah menyelesaikan ujian ini (jumlah percobaan telah habis).';
                 } elseif ($pkg->revision_method === 'paper' && in_array($lastAttempt?->status, CbtExamAttempt::TERMINAL_STATUSES, true) && ! $lastAttempt->is_passed) {
                     $isAllowed = false;
                     $deniedReason = 'Revisi ujian ini menggunakan unggah makalah PDF.';
@@ -295,8 +321,15 @@ class EventLearningRoomService
                 }
 
                 if ($isAdminOrOrganizer) {
-                    $isAllowed = true;
-                    $deniedReason = null;
+                    if ($attemptsCount >= $attemptsAllowed) {
+                        $isAllowed = false;
+                        $deniedReason = ($lastAttempt?->is_passed)
+                            ? 'Anda telah menyelesaikan ujian ini dan dinyatakan lulus.'
+                            : 'Anda telah menyelesaikan ujian ini (jumlah percobaan telah habis).';
+                    } else {
+                        $isAllowed = true;
+                        $deniedReason = null;
+                    }
                 }
 
                 // Exam state for UI
@@ -314,16 +347,24 @@ class EventLearningRoomService
                     ->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)
                     ->sortByDesc('id')
                     ->values()
-                    ->map(fn (CbtExamAttempt $a, int $idx) => [
-                        'attempt_number' => $userAttempts->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)->count() - $idx,
-                        'score' => $pkg->result_display === 'hidden' ? null : $a->total_score,
-                        'is_passed' => $pkg->result_display === 'hidden' ? null : $a->is_passed,
-                        'status' => $a->status,
-                        'finished_at' => $a->finished_at?->format('d M Y, H:i'),
-                        'duration_seconds' => $a->finished_at && $a->started_at
-                            ? $a->started_at->diffInSeconds($a->finished_at)
-                            : null,
-                    ])
+                    ->map(function (CbtExamAttempt $a, int $idx) use ($userAttempts, $pkg) {
+                        $completedAt = $a->submitted_at ?? $a->updated_at;
+
+                        return [
+                            'attempt_id' => $a->id,
+                            'attempt_number' => $userAttempts->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)->count() - $idx,
+                            'score' => $pkg->result_display === 'hidden' ? null : (float) $a->total_score,
+                            'is_passed' => $pkg->result_display === 'hidden' ? null : (bool) $a->is_passed,
+                            'status' => $a->status,
+                            'started_at' => $a->started_at?->format('d M Y, H:i'),
+                            'finished_at' => $completedAt?->format('d M Y, H:i'),
+                            'duration_seconds' => $completedAt && $a->started_at
+                                ? $a->started_at->diffInSeconds($completedAt)
+                                : null,
+                            'revision_status' => $a->revision_status,
+                            'revision_file_path' => $a->revision_file_path,
+                        ];
+                    })
                     ->values();
 
                 return [
@@ -331,6 +372,7 @@ class EventLearningRoomService
                     'title' => $pkg->title,
                     'code' => $pkg->code,
                     'description' => $pkg->description,
+                    'exam_type' => $pkg->exam_type,
                     'exam_type_label' => $pkg->exam_type_label,
                     'duration_minutes' => $pkg->duration_minutes,
                     'passing_score' => (float) $pkg->passing_score,
@@ -355,10 +397,28 @@ class EventLearningRoomService
                         ? route('event.revision.mine.reader', [$event->slug, $lastAttempt->id]) : null,
                     'revision_upload_url' => $lastAttempt && in_array($lastAttempt->status, CbtExamAttempt::TERMINAL_STATUSES, true) && ! $lastAttempt->is_passed
                         ? route('event.revision.submit', [$event->slug, $lastAttempt->id]) : null,
+                    'last_attempt_at' => ($lastAttempt?->submitted_at ?? $lastAttempt?->updated_at)?->format('d M Y, H:i'),
                     'instructions' => $pkg->instructions,
                     'exam_url' => route('event.cbt.exam', ['slug' => $event->slug, 'packageCode' => $pkg->code]),
                 ];
             });
+
+        $myCbtExamsById = $myCbtExams->keyBy('id');
+        $activeSessionExam = $activeSession?->cbt_exam_package_id ? $myCbtExamsById->get($activeSession->cbt_exam_package_id) : null;
+
+        // Calculate exam grade summary for participant
+        $completedExams = $myCbtExams->filter(fn ($pkg) => ! empty($pkg['has_attempt']) && $pkg['exam_state'] === 'selesai');
+        $validScores = $completedExams->pluck('last_score')->filter(fn ($s) => $s !== null);
+        $avgScore = $validScores->isNotEmpty() ? round($validScores->avg(), 1) : null;
+        $passedCount = $completedExams->where('is_passed', true)->count();
+
+        $gradeSummary = [
+            'total_exams' => $myCbtExams->count(),
+            'completed_count' => $completedExams->count(),
+            'passed_count' => $passedCount,
+            'failed_count' => $completedExams->count() - $passedCount,
+            'average_score' => $avgScore,
+        ];
 
         // Calculate attendance stats
         $totalSessions = $sessions->count();
@@ -427,40 +487,61 @@ class EventLearningRoomService
                 'material_type' => $activeSession->material?->type ?? 'book',
                 'learning_module_id' => $activeSession->learning_module_id,
                 'learning_module_title' => $activeSession->learningModule?->title,
-                'cbt_package_code' => $canAccessSessionContent($activeSession) ? $activeSession->cbtPackage?->code : null,
-                'cbt_package_title' => $activeSession->cbtPackage?->title,
+                'cbt_package_code' => ($canAccessSessionContent($activeSession) && $activeSessionExam) ? $activeSessionExam['code'] : null,
+                'cbt_package_title' => ($canAccessSessionContent($activeSession) && $activeSessionExam) ? $activeSessionExam['title'] : null,
+                'cbt_is_accessible' => $activeSessionExam ? (bool) $activeSessionExam['is_accessible'] : true,
+                'cbt_has_attempt' => $activeSessionExam ? (bool) $activeSessionExam['has_attempt'] : false,
+                'cbt_exam_state' => $activeSessionExam['exam_state'] ?? null,
+                'cbt_last_score' => $activeSessionExam['last_score'] ?? null,
+                'cbt_is_passed' => $activeSessionExam['is_passed'] ?? null,
+                'cbt_attempts_count' => $activeSessionExam['attempts_count'] ?? 0,
+                'cbt_attempts_allowed' => $activeSessionExam['attempts_allowed'] ?? 1,
+                'cbt_access_denied_reason' => $activeSessionExam['access_denied_reason'] ?? null,
                 'has_attended' => in_array($activeSession->id, $attendedSessionIds),
                 'can_access_content' => $canAccessSessionContent($activeSession),
             ] : null,
             'scheduleDays' => $scheduleDays,
-            'sessions' => $sessions->map(fn ($s) => [
-                'id' => $s->id,
-                'day_number' => $s->day_number,
-                'session_number' => $s->session_number,
-                'time_slot' => $s->time_slot,
-                'topic' => $s->topic,
-                'subtopic' => $s->subtopic,
-                'room' => $s->room,
-                'session_type_code' => $s->session_type_code,
-                'session_type_name' => $s->sessionType?->name ?? 'Sesi',
-                'speaker_name' => $s->speaker?->name,
-                'is_attendance_open' => $s->isAttendanceActive(),
-                'learning_module_id' => $s->learning_module_id,
-                'learning_module_title' => $s->learningModule?->title,
-                'material_slug' => $canAccessSessionContent($s) ? ($s->material?->slug ?? $s->learningModule?->materials->first()?->slug ?? $s->module?->material?->slug) : null,
-                'material_reader_url' => $canAccessSessionContent($s) ? $eventReaderUrl($s->material?->slug ?? $s->learningModule?->materials->first()?->slug ?? $s->module?->material?->slug) : null,
-                'event_material_url' => $canAccessSessionContent($s) && $s->module?->publication_status === 'published'
-                    ? match ($s->module->source_type) {
-                        'uploaded_pdf' => route('event.module.file', [$event->slug, $s->module->id]),
-                        'external_link', 'video' => $s->module->source_url,
-                        default => null,
-                    } : null,
-                'material_title' => $canAccessSessionContent($s) ? ($s->material?->title ?? $s->learningModule?->title ?? $s->module?->material?->title ?? $s->module?->title) : null,
-                'material_type' => $s->material?->type ?? 'book',
-                'cbt_package_code' => $canAccessSessionContent($s) ? $s->cbtPackage?->code : null,
-                'has_attended' => in_array($s->id, $attendedSessionIds),
-                'can_access_content' => $canAccessSessionContent($s),
-            ]),
+            'sessions' => $sessions->map(function (EventSession $s) use ($canAccessSessionContent, $event, $eventReaderUrl, $attendedSessionIds, $myCbtExamsById) {
+                $sExam = $s->cbt_exam_package_id ? $myCbtExamsById->get($s->cbt_exam_package_id) : null;
+
+                return [
+                    'id' => $s->id,
+                    'day_number' => $s->day_number,
+                    'session_number' => $s->session_number,
+                    'time_slot' => $s->time_slot,
+                    'topic' => $s->topic,
+                    'subtopic' => $s->subtopic,
+                    'room' => $s->room,
+                    'session_type_code' => $s->session_type_code,
+                    'session_type_name' => $s->sessionType?->name ?? 'Sesi',
+                    'speaker_name' => $s->speaker?->name,
+                    'is_attendance_open' => $s->isAttendanceActive(),
+                    'learning_module_id' => $s->learning_module_id,
+                    'learning_module_title' => $s->learningModule?->title,
+                    'material_slug' => $canAccessSessionContent($s) ? ($s->material?->slug ?? $s->learningModule?->materials->first()?->slug ?? $s->module?->material?->slug) : null,
+                    'material_reader_url' => $canAccessSessionContent($s) ? $eventReaderUrl($s->material?->slug ?? $s->learningModule?->materials->first()?->slug ?? $s->module?->material?->slug) : null,
+                    'event_material_url' => $canAccessSessionContent($s) && $s->module?->publication_status === 'published'
+                        ? match ($s->module->source_type) {
+                            'uploaded_pdf' => route('event.module.file', [$event->slug, $s->module->id]),
+                            'external_link', 'video' => $s->module->source_url,
+                            default => null,
+                        } : null,
+                    'material_title' => $canAccessSessionContent($s) ? ($s->material?->title ?? $s->learningModule?->title ?? $s->module?->material?->title ?? $s->module?->title) : null,
+                    'material_type' => $s->material?->type ?? 'book',
+                    'cbt_package_code' => ($canAccessSessionContent($s) && $sExam) ? $sExam['code'] : null,
+                    'cbt_package_title' => ($canAccessSessionContent($s) && $sExam) ? $sExam['title'] : null,
+                    'cbt_is_accessible' => $sExam ? (bool) $sExam['is_accessible'] : true,
+                    'cbt_has_attempt' => $sExam ? (bool) $sExam['has_attempt'] : false,
+                    'cbt_exam_state' => $sExam['exam_state'] ?? null,
+                    'cbt_last_score' => $sExam['last_score'] ?? null,
+                    'cbt_is_passed' => $sExam['is_passed'] ?? null,
+                    'cbt_attempts_count' => $sExam['attempts_count'] ?? 0,
+                    'cbt_attempts_allowed' => $sExam['attempts_allowed'] ?? 1,
+                    'cbt_access_denied_reason' => $sExam['access_denied_reason'] ?? null,
+                    'has_attended' => in_array($s->id, $attendedSessionIds),
+                    'can_access_content' => $canAccessSessionContent($s),
+                ];
+            }),
             'modules' => ($canAccessLearning ? $visibleEventModules : collect())->map(fn (EventModule $m) => [
                 'id' => $m->id,
                 'code' => $m->code,
@@ -482,6 +563,7 @@ class EventLearningRoomService
             'myLearningModules' => $canAccessLearning ? $myLearningModules : [],
             'myCbtExams' => $canAccessLearning ? $myCbtExams : [],
             'cbtPackages' => $canAccessLearning ? $myCbtExams : [],
+            'gradeSummary' => $gradeSummary,
             'attendanceRecords' => $attendanceRecords,
             'certificate' => [
                 'number' => $eventParticipant->certificate_number,

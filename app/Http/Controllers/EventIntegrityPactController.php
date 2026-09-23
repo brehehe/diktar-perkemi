@@ -89,6 +89,11 @@ class EventIntegrityPactController extends Controller
             'sign_place' => $existingPact->sign_place ?? 'Mojokerto',
             'sign_date' => $existingPact->sign_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
             'signature_data' => $existingPact->signature_data,
+            'file_path' => $existingPact->file_path,
+            'file_url' => $existingPact->file_url,
+            'original_file_name' => $existingPact->original_file_name,
+            'file_size_formatted' => $existingPact->file_size_formatted,
+            'submission_mode' => $existingPact->submission_mode ?? ($existingPact->file_path ? 'upload' : 'online'),
             'signed_at' => $existingPact->signed_at?->format('d M Y H:i'),
             'status' => $existingPact->status,
         ] : [
@@ -114,6 +119,11 @@ class EventIntegrityPactController extends Controller
             'sign_place' => 'Mojokerto',
             'sign_date' => now()->format('Y-m-d'),
             'signature_data' => $existingForm?->signature_data, // Otomatis bawa tanda tangan dari form pendaftaran jika ada
+            'file_path' => null,
+            'file_url' => null,
+            'original_file_name' => null,
+            'file_size_formatted' => null,
+            'submission_mode' => 'online',
             'signed_at' => null,
             'status' => 'draft',
         ];
@@ -247,6 +257,124 @@ class EventIntegrityPactController extends Controller
 
         return redirect()->route('event.integrity-pact', $event->slug)
             ->with('success', 'Pakta Integritas berhasil ditandatangani secara digital.');
+    }
+
+    /**
+     * Upload physical signed integrity pact file (PDF/Scan/Photo) for participant or admin.
+     */
+    public function upload(Request $request, Event|string $event): RedirectResponse
+    {
+        $event = $this->resolveEvent($event);
+        $user = $request->user();
+        if (! $user) {
+            return redirect()->route('login');
+        }
+
+        $participantId = $request->input('participant_id');
+        $participant = null;
+        $isOrganizerOrAdmin = in_array($user->role, ['Admin', 'Penyelenggara', 'Super Admin'], true);
+
+        if ($participantId && $isOrganizerOrAdmin) {
+            $participant = Participant::find((int) $participantId);
+        }
+
+        if (! $participant) {
+            $participant = Participant::where('user_id', $user->id)->first()
+                ?? Participant::where('email', $user->email)->first();
+        }
+
+        if (! $participant) {
+            return back()->withErrors(['error' => 'Peserta tidak ditemukan.']);
+        }
+
+        $request->validate([
+            'file' => 'required|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:10240',
+            'pact_type' => 'nullable|string|in:pelatih,penguji,wasit',
+            'verified' => 'nullable|boolean',
+            'auto_verify' => 'nullable|boolean',
+            'notes' => 'nullable|string|max:500',
+        ], [
+            'file.required' => 'File pakta integritas wajib dipilih.',
+            'file.mimes' => 'Format file yang didukung: PDF, DOC, DOCX, JPG, JPEG, atau PNG.',
+            'file.max' => 'Ukuran file maksimal 10 MB.',
+        ]);
+
+        $enrollment = EventParticipant::where('event_id', $event->id)
+            ->where('participant_id', $participant->id)
+            ->first();
+
+        $trackCode = $enrollment?->track_code ?? 'PD';
+        $pactType = $request->input('pact_type') ?? self::resolvePactType($trackCode);
+
+        $uploadedFile = $request->file('file');
+        $cleanOriginalName = preg_replace('/[^a-zA-Z0-9_\.-]/', '_', $uploadedFile->getClientOriginalName());
+        $fileName = 'pact_'.time().'_'.$participant->id.'_'.$cleanOriginalName;
+        $storedPath = $uploadedFile->storeAs('integrity_pacts', $fileName, 'public');
+
+        $isVerified = $isOrganizerOrAdmin && ($request->boolean('verified') || $request->boolean('auto_verify'));
+
+        EventIntegrityPact::updateOrCreate(
+            [
+                'event_id' => $event->id,
+                'participant_id' => $participant->id,
+            ],
+            [
+                'event_participant_id' => $enrollment?->id,
+                'pact_type' => $pactType,
+                'track_code' => $trackCode,
+                'full_name' => $participant->name,
+                'birth_place' => $participant->birth_place ?? $participant->origin_city,
+                'birth_date' => $participant->birth_date,
+                'kenshi_id_number' => $participant->kenshi_id_number,
+                'dan_level' => $participant->dan_rank ?? '1 DAN',
+                'religion' => 'Islam',
+                'dojo' => $participant->origin_dojo ?? '-',
+                'city' => $participant->origin_city ?? '-',
+                'province' => $participant->origin_province ?? 'Jawa Timur',
+                'certificate_number' => $enrollment?->certificate_number ?? $participant->last_certificate_number ?? null,
+                'valid_start_date' => $event->end_date ?? now(),
+                'valid_end_date' => $event->end_date ? Carbon::parse($event->end_date)->addYears(4) : now()->addYears(4),
+                'id_card_address' => $participant->address ?? '-',
+                'current_address' => $participant->address ?? '-',
+                'sign_place' => 'Mojokerto',
+                'sign_date' => now()->format('Y-m-d'),
+                'file_path' => $storedPath,
+                'original_file_name' => $uploadedFile->getClientOriginalName(),
+                'file_size' => $uploadedFile->getSize(),
+                'submission_mode' => 'upload',
+                'status' => $isVerified ? 'verified' : 'signed',
+                'signed_at' => now(),
+                'verified_at' => $isVerified ? now() : null,
+                'verified_by' => $isVerified ? $user->id : null,
+                'admin_notes' => $request->input('notes'),
+            ]
+        );
+
+        $msg = $isVerified
+            ? "Berkas Pakta Integritas untuk {$participant->name} berhasil diunggah dan langsung diverifikasi."
+            : 'Berkas Pakta Integritas fisik berhasil diunggah.';
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Verify an integrity pact by admin.
+     */
+    public function verify(Request $request, Event|string $event, EventIntegrityPact $pact): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || ! in_array($user->role, ['Admin', 'Penyelenggara', 'Super Admin'], true)) {
+            abort(403, 'Akses tidak diizinkan.');
+        }
+
+        $pact->update([
+            'status' => 'verified',
+            'verified_at' => now(),
+            'verified_by' => $user->id,
+            'admin_notes' => $request->input('admin_notes'),
+        ]);
+
+        return back()->with('success', "Pakta Integritas untuk {$pact->full_name} berhasil diverifikasi.");
     }
 
     public function print(Request $request, Event|string $event, ?Participant $participant = null): Response|RedirectResponse

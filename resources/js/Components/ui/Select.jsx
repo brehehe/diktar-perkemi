@@ -25,7 +25,7 @@ const Select = forwardRef(function Select(
     const inputId = id || name || generatedId;
 
     return (
-        <div className={`w-full ${wrapperClassName}`}>
+        <div className={`w-full min-w-0 ${wrapperClassName}`}>
             {label && (
                 <label
                     htmlFor={inputId}
@@ -35,7 +35,7 @@ const Select = forwardRef(function Select(
                     {required && <span className="text-[#FA5252] ml-1 font-bold" aria-hidden="true">*</span>}
                 </label>
             )}
-            <div className="relative">
+            <div className="relative min-w-0">
                 <select
                     ref={ref}
                     id={inputId}
@@ -47,7 +47,7 @@ const Select = forwardRef(function Select(
                     aria-invalid={error ? 'true' : 'false'}
                     aria-describedby={error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}
                     className={`
-                        min-h-11 w-full appearance-none rounded-lg bg-white border text-sm text-[#112743] pl-3.5 pr-10 py-2 transition-colors duration-150 cursor-pointer motion-reduce:transition-none
+                        ${className.includes('min-h-') ? '' : 'min-h-11'} w-full max-w-full truncate appearance-none rounded-lg bg-white border text-sm text-[#112743] pl-3.5 pr-10 py-2 transition-colors duration-150 cursor-pointer motion-reduce:transition-none
                         ${error ? 'border-[#FA5252] focus:border-[#FA5252] focus:ring-[#FA5252]/20' : 'border-[#DCE7F3] hover:border-[#0B63CE]/50 focus:border-[#0B63CE] focus:ring-[#0B63CE]/20'}
                         focus:outline-none focus:ring-3
                         disabled:bg-[#F8FBFF] disabled:text-[#6B7C93] disabled:cursor-not-allowed

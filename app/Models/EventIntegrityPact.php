@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class EventIntegrityPact extends Model
 {
@@ -35,6 +36,10 @@ class EventIntegrityPact extends Model
         'sign_place',
         'sign_date',
         'signature_data',
+        'file_path',
+        'original_file_name',
+        'file_size',
+        'submission_mode',
         'signed_at',
         'status',
         'verified_by',
@@ -109,5 +114,31 @@ class EventIntegrityPact extends Model
             'Tetap aktif melatih di Dojo dengan tanpa menuntut upah atau honorarium;',
             'Akan terus melakukan introspeksi, meningkatkan pengetahuan dan keterampilan baik bidang organisasi, pengetahuan dan teknik Shorinji Kempo agar dapat mengamalkannya dengan baik dan benar.',
         ];
+    }
+
+    public function getFileUrlAttribute(): ?string
+    {
+        if (! $this->file_path) {
+            return null;
+        }
+
+        return Storage::url($this->file_path);
+    }
+
+    public function getFileSizeFormattedAttribute(): ?string
+    {
+        if (! $this->file_size) {
+            return null;
+        }
+
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $bytes = (float) $this->file_size;
+        $i = 0;
+        while ($bytes >= 1024 && $i < count($units) - 1) {
+            $bytes /= 1024;
+            $i++;
+        }
+
+        return round($bytes, 1).' '.$units[$i];
     }
 }

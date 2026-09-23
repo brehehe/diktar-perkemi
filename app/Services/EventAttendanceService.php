@@ -187,9 +187,11 @@ class EventAttendanceService
             ->whereIn('day_number', $dayNumbers->unique())
             ->get(['id', 'day_number', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open']);
 
-        // Hanya wajibkan absensi yang sedang aktif (sesi yang tertutup atau tanpa absensi bisa dilewati)
+        // Hanya wajibkan absensi yang sedang aktif dan memang disyaratkan sebelum CBT (sesi yang tertutup, tanpa absensi, atau tidak mensyaratkan absensi sebelum CBT bisa dilewati)
         $requiredSessionIds = $examSessions
-            ->filter(fn (EventSession $s) => ! in_array($s->attendance_setting, ['none', 'disabled'], true) && $s->isAttendanceActive())
+            ->filter(fn (EventSession $s) => (bool) $s->requires_attendance_before_cbt
+                && ! in_array($s->attendance_setting, ['none', 'disabled'], true)
+                && $s->isAttendanceActive())
             ->pluck('id');
 
         if ($linkedRequirement && ! in_array($linkedRequirement->attendance_setting, ['none', 'disabled'], true) && $linkedRequirement->isAttendanceActive()) {

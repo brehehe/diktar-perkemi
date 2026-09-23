@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Http\Controllers\EventIntegrityPactController;
 use App\Http\Controllers\EventRegistrationFormController;
 use App\Models\CbtExamAttempt;
 use App\Models\CbtExamPackage;
 use App\Models\CbtProctoringEvent;
 use App\Models\Event;
 use App\Models\EventAttendance;
+use App\Models\EventIntegrityPact;
 use App\Models\EventLegend;
 use App\Models\EventModule;
 use App\Models\EventParticipant;
@@ -472,6 +474,88 @@ class AdminEventDetailService
             ];
         });
 
+        // Integrity pacts for participants
+        $integrityPactsByParticipant = EventIntegrityPact::with(['participant', 'verifier'])
+            ->where('event_id', $event->id)
+            ->get()
+            ->keyBy('participant_id');
+
+        $integrityPactsPayload = $event->eventParticipants->map(function (EventParticipant $ep) use ($integrityPactsByParticipant, $event) {
+            /** @var EventIntegrityPact|null $pact */
+            $pact = $integrityPactsByParticipant->get($ep->participant_id);
+            $pactType = $pact?->pact_type ?? EventIntegrityPactController::resolvePactType($ep->track?->code);
+
+            return [
+                'id' => $pact?->id,
+                'participant_id' => $ep->participant_id,
+                'event_participant_id' => $ep->id,
+                'participant_name' => $ep->participant?->name ?? '-',
+                'kenshi_id_number' => $ep->participant?->kenshi_id_number ?? $ep->participant?->kenshi_id ?? '-',
+                'dan_level' => $pact?->dan_level ?? $ep->participant?->dan_rank ?? $ep->participant?->dan_level ?? '-',
+                'origin_dojo' => $ep->participant?->origin_dojo ?? $ep->participant?->origin ?? '-',
+                'origin_province' => $ep->participant?->origin_province ?? '-',
+                'track_code' => $ep->track?->code ?? '-',
+                'track_name' => $ep->track?->name ?? '-',
+                'pact_type' => $pactType,
+                'full_name' => $pact?->full_name ?? $ep->participant?->name,
+                'birth_place' => $pact?->birth_place ?? $ep->participant?->origin_city,
+                'birth_date' => $pact?->birth_date?->format('d F Y'),
+                'certificate_number' => $pact?->certificate_number ?? $ep->certificate_number ?? '-',
+                'valid_start_date' => $pact?->valid_start_date?->format('d F Y') ?? $event->end_date?->format('d F Y'),
+                'valid_end_date' => $pact?->valid_end_date?->format('d F Y'),
+                'id_card_address' => $pact?->id_card_address ?? $ep->participant?->address,
+                'current_address' => $pact?->current_address ?? $ep->participant?->address,
+                'management_organization' => $pact?->management_organization ?? '-',
+                'management_position' => $pact?->management_position ?? '-',
+                'sign_place' => $pact?->sign_place ?? 'Mojokerto',
+                'sign_date' => $pact?->sign_date?->format('d F Y') ?? now()->format('d F Y'),
+                'signature_data' => $pact?->signature_data,
+                'file_path' => $pact?->file_path,
+                'file_url' => $pact?->file_url,
+                'file_name' => $pact?->original_file_name ?? ($pact?->file_path ? basename($pact->file_path) : null),
+                'file_size_formatted' => $pact?->file_size_formatted,
+                'submission_mode' => $pact?->submission_mode ?? ($pact?->file_path ? 'upload' : ($pact?->signature_data ? 'online' : null)),
+                'status' => $pact?->status ?? 'unfilled',
+                'signed_at' => $pact?->signed_at?->format('d M Y, H:i'),
+                'verified_at' => $pact?->verified_at?->format('d M Y, H:i'),
+                'verified_by_name' => $pact?->verifier?->name ?? ($pact?->status === 'verified' ? 'Budi Santoso' : null),
+                'print_url' => route('admin.event.integrity-pact.admin-print', [$event->id, $ep->participant_id]),
+            ];
+        });
+
+        // All CBT Exam attempts for this event
+        $examAttemptsPayload = CbtExamAttempt::with(['participant.eventParticipants.track', 'package', 'session'])
+            ->where('event_id', $event->id)
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (CbtExamAttempt $attempt) use ($event) {
+                $ep = $attempt->participant?->eventParticipants->firstWhere('event_id', $event->id);
+
+                return [
+                    'id' => $attempt->id,
+                    'participant_id' => $attempt->participant_id,
+                    'participant_name' => $attempt->participant?->name ?? 'Peserta dihapus',
+                    'kenshi_id_number' => $attempt->participant?->kenshi_id_number ?? '-',
+                    'origin_dojo' => $attempt->participant?->origin_dojo ?? '-',
+                    'track_name' => $ep?->track?->name ?? '-',
+                    'package_id' => $attempt->cbt_exam_package_id,
+                    'package_title' => $attempt->package?->title ?? 'Paket Ujian',
+                    'package_code' => $attempt->package?->code ?? '-',
+                    'exam_type' => $attempt->package?->exam_type ?? 'exam',
+                    'exam_type_label' => $attempt->package?->exam_type_label ?? 'Ujian',
+                    'attempt_number' => $attempt->attempt_number,
+                    'score' => $attempt->total_score !== null ? (float) $attempt->total_score : 0.0,
+                    'passing_score' => (float) ($attempt->package?->passing_score ?? 70),
+                    'is_passed' => (bool) $attempt->is_passed,
+                    'status' => $attempt->status,
+                    'started_at' => $attempt->started_at?->format('d M Y, H:i'),
+                    'submitted_at' => $attempt->submitted_at?->format('d M Y, H:i'),
+                    'duration_minutes' => ($attempt->started_at && $attempt->submitted_at) ? $attempt->started_at->diffInMinutes($attempt->submitted_at) : null,
+                    'total_answered' => is_array($attempt->answers) ? count($attempt->answers) : 0,
+                ];
+            });
+
         // Calculate stats
         $stats = [
             'total_participants' => $event->eventParticipants->count(),
@@ -481,6 +565,13 @@ class AdminEventDetailService
             'submitted_registration_forms' => $registrationFormsPayload->where('status', 'submitted')->count(),
             'verified_registration_forms' => $registrationFormsPayload->where('status', 'verified')->count(),
             'unfilled_registration_forms' => $registrationFormsPayload->where('status', 'unfilled')->count(),
+            'total_integrity_pacts' => $event->eventParticipants->count(),
+            'signed_integrity_pacts' => $integrityPactsPayload->whereIn('status', ['signed', 'verified'])->count(),
+            'verified_integrity_pacts' => $integrityPactsPayload->where('status', 'verified')->count(),
+            'unfilled_integrity_pacts' => $integrityPactsPayload->where('status', 'unfilled')->count(),
+            'total_exam_attempts' => $examAttemptsPayload->count(),
+            'passed_exam_attempts' => $examAttemptsPayload->where('is_passed', true)->count(),
+            'failed_exam_attempts' => $examAttemptsPayload->where('is_passed', false)->count(),
             'dual_participants' => $event->eventParticipants->filter(fn ($p) => $p->track?->is_dual_track)->count(),
             'rotation_a1' => $event->eventParticipants->where('rotation_group', 'A1')->count(),
             'rotation_a2' => $event->eventParticipants->where('rotation_group', 'A2')->count(),
@@ -595,6 +686,8 @@ class AdminEventDetailService
             ]),
             'participants' => $participants,
             'registrationForms' => $registrationFormsPayload,
+            'integrityPacts' => $integrityPactsPayload,
+            'examAttempts' => $examAttemptsPayload,
             'availableParticipants' => Participant::query()
                 ->whereDoesntHave('eventParticipants', fn ($query) => $query->where('event_id', $event->id))
                 ->orderBy('name')

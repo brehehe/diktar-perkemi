@@ -392,6 +392,7 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
                             }}
                             placeholder="Semua Cakupan"
                             ariaLabel="Filter cakupan event atau nasional"
+                            className="w-full sm:w-48 xl:w-52"
                             options={[
                                 { value: 'master', label: 'Master Diktar (Lintas Event)' },
                                 ...events.map((ev) => ({
@@ -408,6 +409,7 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
                             }}
                             placeholder="Semua Tingkat DAN"
                             ariaLabel="Filter tingkat DAN"
+                            className="w-full sm:w-36 xl:w-40"
                             options={[
                                 { value: '1', label: 'I-DAN' },
                                 { value: '2', label: 'II-DAN' },
@@ -425,6 +427,7 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
                             }}
                             placeholder="Semua Jalur"
                             ariaLabel="Filter jalur peserta"
+                            className="w-full sm:w-40 xl:w-44"
                             options={availableTracks.map((track) => ({ value: track.id, label: `${track.code} — ${track.name}` }))}
                         />
                     </TableToolbar>

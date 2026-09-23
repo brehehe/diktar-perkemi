@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Http\Controllers\EventIntegrityPactController;
-use App\Models\CbtExamAttempt;
 use App\Models\CbtExamPackage;
 use App\Models\CbtQuestion;
 use App\Models\Event;
@@ -1689,7 +1688,7 @@ class Jatim2026PenataranSeeder extends Seeder
                     'sign_place' => 'Mojokerto',
                     'sign_date' => '2026-09-24',
                     'applicant_name' => $name,
-                    'signature_data' => $this->generateSampleSignature($name),
+                    'signature_data' => null,
                     'waiver_agreed' => true,
                     'waiver_signed_at' => Carbon::parse('2026-09-23 14:00:00'),
                     'status' => 'verified',
@@ -1733,116 +1732,11 @@ class Jatim2026PenataranSeeder extends Seeder
                     },
                     'sign_place' => 'Mojokerto',
                     'sign_date' => Carbon::parse('2026-09-27'),
-                    'signature_data' => $this->generateSampleSignature($name),
-                    'signed_at' => Carbon::parse('2026-09-27 11:30:00'),
-                    'status' => 'signed',
+                    'signature_data' => null,
+                    'signed_at' => null,
+                    'status' => 'draft',
                 ]
             );
-
-            // Log Ujian CBT (Pre-Test, Quiz, Post-Test, Ujian Praktik) sesuai jadwal rundown
-            // 1. Pre-Test (Hari 1, Kamis 24 Sep 2026, 14:00 - 14:30/14:45)
-            $prePkg = $cbtPackagesByCode->get("CBT-PRE-{$trackCode}-26");
-            $preSess = $sessions->first(fn ($s) => str_contains($s->session_number, "PRE-{$trackCode}"));
-            if ($prePkg) {
-                CbtExamAttempt::query()->updateOrCreate(
-                    [
-                        'cbt_exam_package_id' => $prePkg->id,
-                        'event_id' => $event->id,
-                        'participant_id' => $participant->id,
-                        'attempt_number' => 1,
-                    ],
-                    [
-                        'event_session_id' => $preSess?->id,
-                        'user_id' => $user->id,
-                        'started_at' => Carbon::parse('2026-09-24 14:02:15')->addSeconds(($idx * 7) % 180),
-                        'submitted_at' => Carbon::parse('2026-09-24 14:26:40')->addSeconds(($idx * 5) % 120),
-                        'status' => 'completed',
-                        'total_score' => round(78.0 + (($idx % 12) * 1.3), 1),
-                        'is_passed' => true,
-                    ]
-                );
-            }
-
-            // 2. Kuis Formatif (Hari 2, Jumat 25 Sep 2026, 18:15 - 18:30)
-            $quizPkg = $cbtPackagesByCode->get("CBT-QUIZ-{$trackCode}-26");
-            $quizSess = $sessions->first(fn ($s) => str_contains($s->session_number, "QUIZ-{$trackCode}"));
-            if ($quizPkg) {
-                CbtExamAttempt::query()->updateOrCreate(
-                    [
-                        'cbt_exam_package_id' => $quizPkg->id,
-                        'event_id' => $event->id,
-                        'participant_id' => $participant->id,
-                        'attempt_number' => 1,
-                    ],
-                    [
-                        'event_session_id' => $quizSess?->id,
-                        'user_id' => $user->id,
-                        'started_at' => Carbon::parse('2026-09-25 18:16:10')->addSeconds(($idx * 7) % 60),
-                        'submitted_at' => Carbon::parse('2026-09-25 18:28:45')->addSeconds(($idx * 5) % 60),
-                        'status' => 'completed',
-                        'total_score' => round(82.0 + (($idx % 10) * 1.5), 1),
-                        'is_passed' => true,
-                    ]
-                );
-            }
-
-            // 3. Post-Test Teori (Hari 3, Sabtu 26 Sep 2026, 19:45 - 20:45/21:15)
-            $postPkg = $cbtPackagesByCode->get("CBT-POST-{$trackCode}-26");
-            $postSess = $sessions->first(fn ($s) => str_contains($s->session_number, "POST-{$trackCode}"));
-            if ($postPkg) {
-                CbtExamAttempt::query()->updateOrCreate(
-                    [
-                        'cbt_exam_package_id' => $postPkg->id,
-                        'event_id' => $event->id,
-                        'participant_id' => $participant->id,
-                        'attempt_number' => 1,
-                    ],
-                    [
-                        'event_session_id' => $postSess?->id,
-                        'user_id' => $user->id,
-                        'started_at' => Carbon::parse('2026-09-26 19:48:20')->addSeconds(($idx * 7) % 180),
-                        'submitted_at' => Carbon::parse('2026-09-26 20:42:15')->addSeconds(($idx * 5) % 180),
-                        'status' => 'completed',
-                        'total_score' => $theoryScore,
-                        'is_passed' => true,
-                    ]
-                );
-            }
-
-            // 4. Ujian Teori Standarisasi / Praktik (Hari 4, Minggu 27 Sep 2026, 09:30 - 11:30)
-            $finalPkgCode = match ($trackCode) {
-                'PD', 'PN' => 'CBT-JTM26-PLT',
-                'PED', 'PEN' => 'CBT-JTM26-PGJ',
-                'WAD', 'WAN' => 'CBT-JTM26-WST',
-                default => 'CBT-JTM26-PLT',
-            };
-            $finalSessCode = match ($trackCode) {
-                'PD', 'PN' => 'SESI-D04-40-PLT',
-                'PED', 'PEN' => 'SESI-D04-40-PGJ',
-                'WAD', 'WAN' => 'SESI-D04-40-WST',
-                default => 'SESI-D04-40-PLT',
-            };
-            $finalPkg = $cbtPackagesByCode->get($finalPkgCode);
-            $finalSess = $sessionsByNumber->get($finalSessCode);
-            if ($finalPkg) {
-                CbtExamAttempt::query()->updateOrCreate(
-                    [
-                        'cbt_exam_package_id' => $finalPkg->id,
-                        'event_id' => $event->id,
-                        'participant_id' => $participant->id,
-                        'attempt_number' => 1,
-                    ],
-                    [
-                        'event_session_id' => $finalSess?->id,
-                        'user_id' => $user->id,
-                        'started_at' => Carbon::parse('2026-09-27 09:35:10')->addSeconds(($idx * 7) % 180),
-                        'submitted_at' => Carbon::parse('2026-09-27 10:50:30')->addSeconds(($idx * 5) % 180),
-                        'status' => 'completed',
-                        'total_score' => $practiceScore,
-                        'is_passed' => true,
-                    ]
-                );
-            }
 
             // Presensi Sesi Kedatangan & Sesi Harian D1-D4
             $attendanceSchedule = [

@@ -1303,3 +1303,96 @@ test('admin print qr redirects gracefully when session id is stale or non-existe
 
     $response->assertRedirect(route('admin.event.session.attendance.print', [$event->id, $validSession->id]));
 });
+
+test('session CBT exam matches participant track and is locked after completion', function () {
+    $event = Event::first();
+    $participant = Participant::where('user_id', $this->participantUser->id)->first();
+    $eventParticipant = EventParticipant::where('event_id', $event->id)->where('participant_id', $participant->id)->first();
+    $trackCode = $eventParticipant->track_code;
+
+    $package = CbtExamPackage::create([
+        'event_id' => $event->id,
+        'code' => 'CBT-MATCH-TRACK',
+        'title' => 'Ujian Sesuai Jalur Test',
+        'exam_type' => 'pre_test',
+        'duration_minutes' => 45,
+        'passing_score' => 75,
+        'attempts_allowed' => 1,
+        'status' => 'open',
+        'target_tracks' => [$trackCode],
+    ]);
+
+    $diffPackage = CbtExamPackage::create([
+        'event_id' => $event->id,
+        'code' => 'CBT-DIFF-TRACK',
+        'title' => 'Ujian Jalur Lain',
+        'exam_type' => 'pre_test',
+        'duration_minutes' => 45,
+        'passing_score' => 75,
+        'attempts_allowed' => 1,
+        'status' => 'open',
+        'target_tracks' => ['OTHER_TRACK'],
+    ]);
+
+    $session = $event->sessions()->create([
+        'day_number' => 1,
+        'date' => now()->toDateString(),
+        'start_time' => '08:00',
+        'end_time' => '09:00',
+        'session_number' => 'S-99',
+        'duration_jp' => 1,
+        'session_type_code' => 'UJIAN',
+        'topic' => 'Sesi Ujian Khusus',
+        'method' => 'CBT',
+        'track_codes' => [$trackCode],
+        'status' => 'completed',
+        'attendance_setting' => 'none',
+        'cbt_exam_package_id' => $package->id,
+    ]);
+
+    $service = app(EventLearningRoomService::class);
+    $dataBefore = $service->data($this->participantUser, $event->slug);
+    $visiblePkgBefore = collect($dataBefore['myCbtExams'])->firstWhere('id', $package->id);
+    $diffPkgBefore = collect($dataBefore['myCbtExams'])->firstWhere('id', $diffPackage->id);
+
+    expect($visiblePkgBefore)->not->toBeNull()
+        ->and($visiblePkgBefore['code'])->toBe('CBT-MATCH-TRACK')
+        ->and($visiblePkgBefore['is_accessible'])->toBeTrue()
+        ->and($visiblePkgBefore['has_attempt'])->toBeFalse()
+        ->and($diffPkgBefore)->toBeNull();
+
+    CbtExamAttempt::create([
+        'cbt_exam_package_id' => $package->id,
+        'event_id' => $event->id,
+        'participant_id' => $participant->id,
+        'user_id' => $this->participantUser->id,
+        'attempt_number' => 1,
+        'status' => 'submitted',
+        'total_score' => 80.0,
+        'is_passed' => true,
+        'started_at' => now()->subMinutes(10),
+        'submitted_at' => now(),
+        'answers' => [],
+    ]);
+
+    $dataAfter = $service->data($this->participantUser, $event->slug);
+    $visiblePkgAfter = collect($dataAfter['myCbtExams'])->firstWhere('id', $package->id);
+
+    expect($visiblePkgAfter)->not->toBeNull()
+        ->and($visiblePkgAfter['code'])->toBe('CBT-MATCH-TRACK')
+        ->and($visiblePkgAfter['is_accessible'])->toBeFalse()
+        ->and($visiblePkgAfter['has_attempt'])->toBeTrue()
+        ->and($visiblePkgAfter['exam_state'])->toBe('selesai')
+        ->and((float) $visiblePkgAfter['last_score'])->toBe(80.0);
+
+    $responseAfter = $this->actingAs($this->participantUser)
+        ->get("/event/{$event->slug}/ruang-belajar");
+
+    $responseAfter->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Event/LearningRoom')
+            ->where('sessions', fn ($sList) => collect($sList)->firstWhere('id', $session->id)['cbt_is_accessible'] === false
+                && collect($sList)->firstWhere('id', $session->id)['cbt_has_attempt'] === true
+            )
+        );
+});

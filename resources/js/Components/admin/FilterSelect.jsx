@@ -7,7 +7,7 @@ export default function FilterSelect({
     options = [],
     placeholder = 'Semua',
     ariaLabel,
-    className = 'w-full sm:w-auto sm:min-w-40',
+    className = 'w-full sm:w-auto sm:min-w-36 sm:max-w-56',
     ...props
 }) {
     return (
@@ -17,8 +17,8 @@ export default function FilterSelect({
             options={options}
             placeholder={placeholder}
             aria-label={ariaLabel || placeholder}
-            className="min-h-10 py-2 text-xs"
-            wrapperClassName={className}
+            className="h-10 min-h-10 py-2 text-xs truncate"
+            wrapperClassName={`min-w-0 ${className}`}
             {...props}
         />
     );

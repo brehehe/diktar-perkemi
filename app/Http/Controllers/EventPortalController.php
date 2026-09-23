@@ -29,6 +29,7 @@ use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
 
 class EventPortalController extends Controller
@@ -102,9 +103,6 @@ class EventPortalController extends Controller
     public function index(Request $request): Response|RedirectResponse
     {
         $participant = Participant::where('user_id', $request->user()->id)->first();
-        if ($activeAttempt = $this->anyActiveInProgressExamAttempt($participant)) {
-            return redirect()->route('event.cbt.exam', [$activeAttempt->event->slug, $activeAttempt->package->code]);
-        }
 
         $enrollments = $participant
             ? EventParticipant::with(['event', 'track', 'registrationForm'])
@@ -161,9 +159,6 @@ class EventPortalController extends Controller
     public function certificates(Request $request): Response|RedirectResponse
     {
         $participant = Participant::where('user_id', $request->user()->id)->first();
-        if ($activeAttempt = $this->anyActiveInProgressExamAttempt($participant)) {
-            return redirect()->route('event.cbt.exam', [$activeAttempt->event->slug, $activeAttempt->package->code]);
-        }
 
         $documents = $participant ? EventParticipant::with('event')
             ->where('participant_id', $participant->id)
@@ -276,10 +271,6 @@ class EventPortalController extends Controller
         $event = Event::where('slug', $slug)->firstOrFail();
         [$participant, $eventParticipant] = $this->attendanceService->resolveParticipant($request->user(), $event);
 
-        if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {
-            return redirect()->route('event.cbt.exam', [$slug, $activeAttempt->package->code]);
-        }
-
         $modulesCount = $event->modules()->count();
         $sessionsCount = $event->sessions()->count();
 
@@ -345,10 +336,6 @@ class EventPortalController extends Controller
     {
         $data = $this->learningRoom->data($request->user(), $slug);
 
-        if (! empty($data['activeExamRedirectUrl'])) {
-            return redirect($data['activeExamRedirectUrl']);
-        }
-
         return Inertia::render('Event/LearningRoom', $data);
     }
 
@@ -359,10 +346,6 @@ class EventPortalController extends Controller
     {
         $event = Event::where('slug', $slug)->firstOrFail();
         [$participant, $eventParticipant] = $this->attendanceService->resolveParticipant($request->user(), $event);
-
-        if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {
-            return redirect()->route('event.cbt.exam', [$slug, $activeAttempt->package->code]);
-        }
 
         $token = $request->query('token');
         $code = $request->query('code');
@@ -411,10 +394,6 @@ class EventPortalController extends Controller
         $event = Event::where('slug', $slug)->firstOrFail();
         [$participant, $enrollment] = $this->attendanceService->resolveParticipant($request->user(), $event);
 
-        if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {
-            return redirect()->route('event.cbt.exam', [$slug, $activeAttempt->package->code]);
-        }
-
         $requestedTrack = $request->query('document_track');
         abort_unless($requestedTrack === null || is_string($requestedTrack), 404);
         $documentTrack = EventDocumentGenerator::resolveDocumentTrack($enrollment->track_code, $requestedTrack);
@@ -433,10 +412,6 @@ class EventPortalController extends Controller
     {
         $event = Event::where('slug', $slug)->firstOrFail();
         [$participant, $enrollment] = $this->attendanceService->resolveParticipant($request->user(), $event);
-
-        if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {
-            return redirect()->route('event.cbt.exam', [$slug, $activeAttempt->package->code]);
-        }
 
         $requestedTrack = $request->query('document_track');
         abort_unless($requestedTrack === null || is_string($requestedTrack), 404);
@@ -469,10 +444,6 @@ class EventPortalController extends Controller
         }
 
         [$participant, $enrollment] = $this->attendanceService->resolveParticipant($user, $event);
-
-        if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {
-            return redirect()->route('event.cbt.exam', [$slug, $activeAttempt->package->code]);
-        }
 
         abort_unless($module->event_id === $event->id && $module->publication_status === 'published'
             && $module->source_type === 'uploaded_pdf' && $module->source_file_path, 404);
@@ -616,7 +587,12 @@ class EventPortalController extends Controller
         }
 
         $package = $this->eventPackage($event, $packageCode);
-        $this->attendanceService->ensureExamAttendance($event, $eventParticipant, $package);
+        try {
+            $this->attendanceService->ensureExamAttendance($event, $eventParticipant, $package);
+        } catch (HttpException $e) {
+            return redirect()->route('event.learning-room', $slug)
+                ->with('error', $e->getMessage() ?: 'Absensi wajib diselesaikan sebelum ujian dibuka.');
+        }
 
         if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {
             if ($activeAttempt->package && $activeAttempt->package->code !== $packageCode) {

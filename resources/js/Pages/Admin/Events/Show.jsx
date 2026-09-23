@@ -91,13 +91,15 @@ export default function Show({
     documentNumberDefaults = {},
     documentNumberOverrides = {},
     registrationForms = [],
+    integrityPacts = [],
+    examAttempts = [],
 }) {
     const isPortalAdmin = usePage().props.auth?.user?.is_admin;
     // Active tab state (Exact 10 Tabs)
     const [activeTab, setActiveTab] = useState(() => {
         if (typeof window === 'undefined') return 'ringkasan';
         const requested = new URLSearchParams(window.location.search).get('tab');
-        return ['ringkasan', 'rundown', 'peserta', 'formulir', 'absensi', 'pemateri', 'sertifikat', 'revisi', 'pengawasan', 'legenda', 'dokumen', 'pengaturan', 'ruang', 'modul_cbt', 'materi', 'cbt'].includes(requested) ? requested : 'ringkasan';
+        return ['ringkasan', 'rundown', 'peserta', 'formulir', 'pakta', 'hasil-ujian', 'absensi', 'pemateri', 'sertifikat', 'revisi', 'pengawasan', 'legenda', 'dokumen', 'pengaturan', 'ruang', 'modul_cbt', 'materi', 'cbt'].includes(requested) ? requested : 'ringkasan';
     });
     useEffect(() => {
         const url = new URL(window.location.href);
@@ -202,6 +204,162 @@ export default function Show({
         });
     };
 
+    // Pakta Integritas states
+    const [pactSearch, setPactSearch] = useState('');
+    const [pactTrackFilter, setPactTrackFilter] = useState('all');
+    const [pactStatusFilter, setPactStatusFilter] = useState('all');
+    const [pactPage, setPactPage] = useState(1);
+    const [pactPerPage, setPactPerPage] = useState(25);
+    const [selectedPactForModal, setSelectedPactForModal] = useState(null);
+    const [isVerifyingPact, setIsVerifyingPact] = useState(false);
+    const [uploadModalPactParticipant, setUploadModalPactParticipant] = useState(null);
+    const [adminUploadPactFile, setAdminUploadPactFile] = useState(null);
+    const [adminUploadPactType, setAdminUploadPactType] = useState('pelatih');
+    const [adminUploadPactAutoVerify, setAdminUploadPactAutoVerify] = useState(true);
+    const [isAdminUploadingPact, setIsAdminUploadingPact] = useState(false);
+
+    const filteredIntegrityPacts = useMemo(() => {
+        return (integrityPacts || []).filter((p) => {
+            const matchesSearch = !pactSearch ||
+                p.participant_name?.toLowerCase().includes(pactSearch.toLowerCase()) ||
+                p.kenshi_id_number?.toLowerCase().includes(pactSearch.toLowerCase()) ||
+                p.dan_level?.toLowerCase().includes(pactSearch.toLowerCase()) ||
+                p.origin_dojo?.toLowerCase().includes(pactSearch.toLowerCase());
+
+            const matchesTrack = pactTrackFilter === 'all' ||
+                p.track_code?.toLowerCase().includes(pactTrackFilter.toLowerCase()) ||
+                p.pact_type?.toLowerCase() === pactTrackFilter.toLowerCase();
+
+            const matchesStatus = pactStatusFilter === 'all' ||
+                (pactStatusFilter === 'verified' && p.status === 'verified') ||
+                (pactStatusFilter === 'signed' && (p.status === 'signed' || p.status === 'verified')) ||
+                (pactStatusFilter === 'uploaded' && p.submission_mode === 'upload') ||
+                (pactStatusFilter === 'unfilled' && p.status === 'unfilled');
+
+            return matchesSearch && matchesTrack && matchesStatus;
+        });
+    }, [integrityPacts, pactSearch, pactTrackFilter, pactStatusFilter]);
+
+    const totalPactPages = Math.max(1, Math.ceil(filteredIntegrityPacts.length / pactPerPage));
+    const paginatedIntegrityPacts = useMemo(() => {
+        const start = (pactPage - 1) * pactPerPage;
+        return filteredIntegrityPacts.slice(start, start + pactPerPage);
+    }, [filteredIntegrityPacts, pactPage, pactPerPage]);
+
+    const handleVerifyPact = (pactId) => {
+        if (!pactId) return;
+        setIsVerifyingPact(true);
+        router.post(`/admin/event/${event.id}/pakta-integritas/${pactId}/verifikasi`, {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsVerifyingPact(false);
+                if (selectedPactForModal) {
+                    setSelectedPactForModal((prev) => prev ? { ...prev, status: 'verified', verified_at: new Date().toLocaleDateString('id-ID') } : null);
+                }
+            },
+            onError: () => setIsVerifyingPact(false),
+        });
+    };
+
+    const handleAdminPactUploadSubmit = (e) => {
+        e.preventDefault();
+        if (!adminUploadPactFile) {
+            alert('Silakan pilih berkas pakta integritas terlebih dahulu.');
+            return;
+        }
+        setIsAdminUploadingPact(true);
+        const formData = new FormData();
+        formData.append('file', adminUploadPactFile);
+        formData.append('participant_id', uploadModalPactParticipant.participant_id);
+        formData.append('pact_type', adminUploadPactType);
+        if (adminUploadPactAutoVerify) formData.append('verified', '1');
+
+        router.post(`/admin/event/${event.id}/pakta-integritas/upload`, formData, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsAdminUploadingPact(false);
+                setUploadModalPactParticipant(null);
+                setAdminUploadPactFile(null);
+            },
+            onError: () => {
+                setIsAdminUploadingPact(false);
+            },
+        });
+    };
+
+    // CBT Exam Attempts states
+    const [examSearch, setExamSearch] = useState('');
+    const [examPackageFilter, setExamPackageFilter] = useState('all');
+    const [examStatusFilter, setExamStatusFilter] = useState('all');
+    const [examPage, setExamPage] = useState(1);
+    const [examPerPage, setExamPerPage] = useState(25);
+    const [selectedAttemptForDetail, setSelectedAttemptForDetail] = useState(null);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+    const [attemptDetailData, setAttemptDetailData] = useState(null);
+
+    const filteredExamAttempts = useMemo(() => {
+        return (examAttempts || []).filter((att) => {
+            const matchesSearch = !examSearch ||
+                att.participant_name?.toLowerCase().includes(examSearch.toLowerCase()) ||
+                att.kenshi_id_number?.toLowerCase().includes(examSearch.toLowerCase()) ||
+                att.origin_dojo?.toLowerCase().includes(examSearch.toLowerCase()) ||
+                att.package_title?.toLowerCase().includes(examSearch.toLowerCase());
+
+            const matchesPackage = examPackageFilter === 'all' ||
+                String(att.package_id) === String(examPackageFilter);
+
+            const matchesStatus = examStatusFilter === 'all' ||
+                (examStatusFilter === 'passed' && att.is_passed) ||
+                (examStatusFilter === 'failed' && !att.is_passed && att.status === 'submitted') ||
+                (examStatusFilter === 'in_progress' && att.status !== 'submitted');
+
+            return matchesSearch && matchesPackage && matchesStatus;
+        });
+    }, [examAttempts, examSearch, examPackageFilter, examStatusFilter]);
+
+    const totalExamPages = Math.max(1, Math.ceil(filteredExamAttempts.length / examPerPage));
+    const paginatedExamAttempts = useMemo(() => {
+        const start = (examPage - 1) * examPerPage;
+        return filteredExamAttempts.slice(start, start + examPerPage);
+    }, [filteredExamAttempts, examPage, examPerPage]);
+
+    const uniqueExamPackages = useMemo(() => {
+        const map = new Map();
+        (examAttempts || []).forEach((att) => {
+            if (att.package_id && !map.has(att.package_id)) {
+                map.set(att.package_id, att.package_title);
+            }
+        });
+        return Array.from(map.entries()).map(([id, title]) => ({ id, title }));
+    }, [examAttempts]);
+
+    const handleOpenAttemptDetail = async (attempt) => {
+        setSelectedAttemptForDetail(attempt);
+        setIsDetailModalOpen(true);
+        setIsLoadingDetail(true);
+        setAttemptDetailData(null);
+        try {
+            const res = await fetch(`/admin/event/${event.id}/cbt-attempts/${attempt.id}/detail`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAttemptDetailData(data);
+            } else {
+                alert('Gagal memuat rincian jawaban ujian.');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Terjadi kesalahan jaringan saat memuat rincian.');
+        } finally {
+            setIsLoadingDetail(false);
+        }
+    };
+
     useEffect(() => {
         if (activeTab === 'peserta') {
             const url = new URL(window.location.href);
@@ -269,6 +427,11 @@ export default function Show({
     const [attendancePerPage, setAttendancePerPage] = useState(25);
     const [attendancePage, setAttendancePage] = useState(1);
 
+    // CBT Attempt Restart & Delete State
+    const [restartExamTarget, setRestartExamTarget] = useState(null);
+    const [isRestartingExam, setIsRestartingExam] = useState(false);
+    const [deleteExamTarget, setDeleteExamTarget] = useState(null);
+    const [isDeletingExam, setIsDeletingExam] = useState(false);
 
     // CBT Package Modals
     const [isCbtPackageModalOpen, setIsCbtPackageModalOpen] = useState(false);
@@ -671,6 +834,8 @@ export default function Show({
         { id: 'rundown', label: 'Rundown & Sesi', count: stats.total_sessions },
         { id: 'peserta', label: 'Peserta', count: stats.total_participants },
         { id: 'formulir', label: 'Formulir Pendaftaran', count: stats.total_registration_forms ?? registrationForms.length },
+        { id: 'pakta', label: 'Pakta Integritas', count: stats.total_integrity_pacts ?? (integrityPacts?.length || 0) },
+        { id: 'hasil-ujian', label: 'Hasil Ujian CBT', count: stats.total_exam_attempts ?? (examAttempts?.length || 0) },
         { id: 'absensi', label: 'Absensi', count: stats.total_attendances || attendances.length },
         { id: 'pemateri', label: 'Pemateri', count: stats.total_speakers },
         { id: 'sertifikat', label: 'E-Sertifikat & Transkrip', count: (stats.certificate_files_count || 0) + (stats.transcript_files_count || 0) },
@@ -896,6 +1061,43 @@ export default function Show({
             onStart: () => setIsResettingAttendance(true),
             onSuccess: () => setAttendanceResetTarget(null),
             onFinish: () => setIsResettingAttendance(false),
+        });
+    };
+
+    const handleRestartExam = () => {
+        if (!restartExamTarget) return;
+
+        const isAll = restartExamTarget === 'all';
+        const url = isAll
+            ? `/admin/event/${event.id}/cbt-attempts/mulai-ulang-semua`
+            : `/admin/event/${event.id}/cbt-attempts/${restartExamTarget.id}/mulai-ulang`;
+
+        router.post(
+            url,
+            isAll && examPackageFilter !== 'all' ? { package_id: examPackageFilter } : {},
+            {
+                preserveScroll: true,
+                onStart: () => setIsRestartingExam(true),
+                onSuccess: () => setRestartExamTarget(null),
+                onFinish: () => setIsRestartingExam(false),
+            }
+        );
+    };
+
+    const handleDeleteExam = () => {
+        if (!deleteExamTarget) return;
+
+        const isAll = deleteExamTarget === 'all';
+        const url = isAll
+            ? `/admin/event/${event.id}/cbt-attempts`
+            : `/admin/event/${event.id}/cbt-attempts/${deleteExamTarget.id}`;
+
+        router.delete(url, {
+            data: isAll && examPackageFilter !== 'all' ? { package_id: examPackageFilter } : {},
+            preserveScroll: true,
+            onStart: () => setIsDeletingExam(true),
+            onSuccess: () => setDeleteExamTarget(null),
+            onFinish: () => setIsDeletingExam(false),
         });
     };
 
@@ -1919,6 +2121,15 @@ export default function Show({
                                     </Button>
                                 </a>
                                 <Button
+                                    variant="danger"
+                                    icon={<Trash2 className="w-4 h-4" />}
+                                    disabled={participants.length === 0}
+                                    onClick={() => setAttendanceResetTarget('all')}
+                                    title="Reset seluruh hasil presensi, ujian, sertifikat, dan transkrip semua peserta"
+                                >
+                                    Reset Seluruh Hasil Peserta
+                                </Button>
+                                <Button
                                     variant="primary"
                                     icon={<Plus className="w-4 h-4" />}
                                     onClick={() => setIsAddParticipantModalOpen(true)}
@@ -2537,6 +2748,582 @@ export default function Show({
                                             type="button"
                                             onClick={() => setFormPage((p) => Math.min(totalFormPages, p + 1))}
                                             disabled={formPage === totalFormPages}
+                                            className="rounded border border-[#DCE7F3] bg-white p-1 text-[#112743] disabled:opacity-40 hover:bg-gray-50"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* TAB: PAKTA INTEGRITAS PESERTA */}
+                {activeTab === 'pakta' && (
+                    <div className="space-y-6">
+                        {/* Summary / Stats Cards */}
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                            <div className="rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
+                                <p className="text-xs font-medium text-[#6B7C93]">Total Peserta</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-[#0E2747]">
+                                    {stats.total_integrity_pacts ?? (integrityPacts?.length || 0)}
+                                </p>
+                                <p className="mt-1 text-[11px] text-[#6B7C93]">Peserta terdaftar di event</p>
+                            </div>
+                            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-blue-700">Pakta Masuk</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-blue-900">
+                                    {stats.signed_integrity_pacts ?? (integrityPacts?.filter(p => p.status === 'signed' || p.status === 'verified').length || 0)}
+                                </p>
+                                <p className="mt-1 text-[11px] text-blue-600">Digital atau berkas fisik</p>
+                            </div>
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-emerald-700">Terverifikasi</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-emerald-900">
+                                    {stats.verified_integrity_pacts ?? (integrityPacts?.filter(p => p.status === 'verified').length || 0)}
+                                </p>
+                                <p className="mt-1 text-[11px] text-emerald-600">Disetujui admin PB PERKEMI</p>
+                            </div>
+                            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-amber-700">Belum Mengisi</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-amber-900">
+                                    {stats.unfilled_integrity_pacts ?? (integrityPacts?.filter(p => p.status === 'unfilled').length || 0)}
+                                </p>
+                                <p className="mt-1 text-[11px] text-amber-600">Menunggu pengisian / unggahan</p>
+                            </div>
+                        </div>
+
+                        {/* Filter and Search Bar */}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6B7C93]" />
+                                <input
+                                    type="text"
+                                    value={pactSearch}
+                                    onChange={(e) => {
+                                        setPactSearch(e.target.value);
+                                        setPactPage(1);
+                                    }}
+                                    placeholder="Cari nama kenshi, NIK, DAN, atau dojo..."
+                                    className="w-full rounded-lg border border-[#DCE7F3] py-2 pl-9 pr-3 text-xs text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                />
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <select
+                                    value={pactTrackFilter}
+                                    onChange={(e) => {
+                                        setPactTrackFilter(e.target.value);
+                                        setPactPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value="all">Semua Kategori Pakta</option>
+                                    <option value="pelatih">Pakta Integritas Pelatih</option>
+                                    <option value="penguji">Pakta Integritas Penguji</option>
+                                    <option value="wasit">Pakta Integritas Wasit</option>
+                                </select>
+
+                                <select
+                                    value={pactStatusFilter}
+                                    onChange={(e) => {
+                                        setPactStatusFilter(e.target.value);
+                                        setPactPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value="all">Semua Status Pakta</option>
+                                    <option value="verified">Terverifikasi</option>
+                                    <option value="signed">Ditandatangani (Menunggu Verifikasi)</option>
+                                    <option value="uploaded">Berkas Terunggah (Scan/PDF)</option>
+                                    <option value="unfilled">Belum Mengisi</option>
+                                </select>
+
+                                <select
+                                    value={pactPerPage}
+                                    onChange={(e) => {
+                                        setPactPerPage(Number(e.target.value));
+                                        setPactPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value={10}>10 per hal</option>
+                                    <option value={25}>25 per hal</option>
+                                    <option value={50}>50 per hal</option>
+                                    <option value={100}>100 per hal</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Table of Participant Integrity Pacts */}
+                        <div className="rounded-xl border border-[#DCE7F3] bg-white shadow-xs overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="border-b border-[#DCE7F3] bg-[#F8FBFF] font-semibold text-[#112743]">
+                                        <tr>
+                                            <th className="py-3 px-4 w-12 text-center">No</th>
+                                            <th className="py-3 px-4">Nama Kenshi & NIK</th>
+                                            <th className="py-3 px-4">Tingkatan DAN & Asal</th>
+                                            <th className="py-3 px-4">Jenis Pakta & Jalur</th>
+                                            <th className="py-3 px-4">Status & Metode</th>
+                                            <th className="py-3 px-4">Waktu Tanda Tangan / Unggah</th>
+                                            <th className="py-3 px-4 text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#DCE7F3]">
+                                        {paginatedIntegrityPacts.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={7} className="py-8 text-center text-sm text-[#6B7C93]">
+                                                    Tidak ditemukan pakta integritas yang sesuai filter.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            paginatedIntegrityPacts.map((pact, idx) => {
+                                                const globalIdx = (pactPage - 1) * pactPerPage + idx + 1;
+                                                const hasPact = pact.status !== 'unfilled';
+
+                                                return (
+                                                    <tr key={pact.event_participant_id || pact.participant_id} className="hover:bg-[#F8FBFF] transition-colors">
+                                                        <td className="py-3 px-4 text-center font-mono text-[#6B7C93]">{globalIdx}</td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="font-semibold text-[#0E2747]">{pact.participant_name}</div>
+                                                            <div className="font-mono text-[11px] text-[#6B7C93]">{pact.kenshi_id_number}</div>
+                                                            {pact.file_url && (
+                                                                <div className="mt-1">
+                                                                    <a
+                                                                        href={pact.file_url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                                                        title="Lihat Berkas Scan Pakta Integritas"
+                                                                    >
+                                                                        <FileText className="h-3 w-3" />
+                                                                        Berkas: {pact.file_name || 'Dokumen'} ({pact.file_size_formatted || 'File'})
+                                                                    </a>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <span className="inline-block rounded bg-[#EAF5FF] px-2 py-0.5 text-[11px] font-bold text-[#0B63CE]">
+                                                                {pact.dan_level}
+                                                            </span>
+                                                            <div className="text-[11px] text-[#6B7C93] mt-0.5">
+                                                                {pact.origin_dojo}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="font-semibold text-[#112743] capitalize">
+                                                                Pakta {pact.pact_type}
+                                                            </div>
+                                                            <div className="text-[11px] text-[#6B7C93]">{pact.track_name}</div>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            {pact.status === 'verified' ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 border border-emerald-200">
+                                                                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                                                    Terverifikasi {pact.submission_mode === 'upload' ? '• Berkas' : '• Digital'}
+                                                                </span>
+                                                            ) : pact.status === 'signed' ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 border border-blue-200">
+                                                                    <FileCheck className="h-3 w-3 text-blue-600" />
+                                                                    {pact.submission_mode === 'upload' ? 'Berkas Terunggah' : 'Ditandatangani Digital'}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600 border border-gray-200">
+                                                                    Belum Mengisi
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-[#6B7C93]">
+                                                            {pact.signed_at || '-'}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center">
+                                                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                                                {hasPact && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setSelectedPactForModal(pact)}
+                                                                        className="inline-flex items-center gap-1 rounded-md bg-[#0B63CE] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0A3F82] transition-colors"
+                                                                        title="Lihat komitmen dan tanda tangan pakta integritas"
+                                                                    >
+                                                                        <Eye className="h-3.5 w-3.5" />
+                                                                        Lihat
+                                                                    </button>
+                                                                )}
+
+                                                                {/* Tombol Upload Berkas Fisik (Admin Upload) */}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setUploadModalPactParticipant(pact);
+                                                                        setAdminUploadPactType(pact.pact_type || 'pelatih');
+                                                                        setAdminUploadPactFile(null);
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 transition-colors"
+                                                                    title="Upload berkas scan pakta integritas PDF/JPG untuk kenshi ini"
+                                                                >
+                                                                    <Upload className="h-3.5 w-3.5" />
+                                                                    Upload
+                                                                </button>
+
+                                                                {/* Tombol Isi / Edit Mandiri via Portal */}
+                                                                <a
+                                                                    href={`/event/${event.slug}/pakta-integritas?participant_id=${pact.participant_id}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 rounded-md border border-[#DCE7F3] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#112743] hover:bg-[#F8FBFF] hover:text-[#0B63CE] transition-colors"
+                                                                    title="Isi formulir pakta secara digital"
+                                                                >
+                                                                    <FileEdit className="h-3.5 w-3.5 text-[#0B63CE]" />
+                                                                    {hasPact ? 'Edit Data' : 'Isi Data'}
+                                                                </a>
+
+                                                                {pact.file_url && (
+                                                                    <a
+                                                                        href={pact.file_url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200 px-2 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                                                        title="Lihat / unduh berkas scan terunggah"
+                                                                    >
+                                                                        <Download className="h-3.5 w-3.5" />
+                                                                        Berkas
+                                                                    </a>
+                                                                )}
+
+                                                                {pact.print_url && (
+                                                                    <a
+                                                                        href={pact.print_url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1 rounded-md border border-[#DCE7F3] bg-white px-2 py-1.5 text-xs font-medium text-[#112743] hover:bg-[#F8FBFF] hover:text-[#0B63CE] transition-colors"
+                                                                        title="Cetak format resmi PB PERKEMI"
+                                                                    >
+                                                                        <Printer className="h-3.5 w-3.5" />
+                                                                    </a>
+                                                                )}
+
+                                                                {hasPact && pact.status !== 'verified' && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleVerifyPact(pact.id)}
+                                                                        disabled={isVerifyingPact}
+                                                                        className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                                                                        title="Verifikasi pakta integritas ini"
+                                                                    >
+                                                                        <Check className="h-3.5 w-3.5" />
+                                                                        Verifikasi
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            {totalPactPages > 1 && (
+                                <div className="flex items-center justify-between border-t border-[#DCE7F3] px-4 py-3 bg-[#F8FBFF]">
+                                    <div className="text-xs text-[#6B7C93]">
+                                        Menampilkan <span className="font-semibold text-[#112743]">{(pactPage - 1) * pactPerPage + 1}</span> - <span className="font-semibold text-[#112743]">{Math.min(pactPage * pactPerPage, filteredIntegrityPacts.length)}</span> dari <span className="font-semibold text-[#112743]">{filteredIntegrityPacts.length}</span> peserta
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPactPage((p) => Math.max(1, p - 1))}
+                                            disabled={pactPage === 1}
+                                            className="rounded border border-[#DCE7F3] bg-white p-1 text-[#112743] disabled:opacity-40 hover:bg-gray-50"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </button>
+                                        <span className="px-2 text-xs font-medium text-[#112743]">
+                                            {pactPage} / {totalPactPages}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPactPage((p) => Math.min(totalPactPages, p + 1))}
+                                            disabled={pactPage === totalPactPages}
+                                            className="rounded border border-[#DCE7F3] bg-white p-1 text-[#112743] disabled:opacity-40 hover:bg-gray-50"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* TAB: HASIL UJIAN CBT & RINCIAN JAWABAN */}
+                {activeTab === 'hasil-ujian' && (
+                    <div className="space-y-6">
+                        {/* Summary / Stats Cards */}
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                            <div className="rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
+                                <p className="text-xs font-medium text-[#6B7C93]">Total Percobaan Ujian</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-[#0E2747]">
+                                    {stats.total_exam_attempts ?? (examAttempts?.length || 0)}
+                                </p>
+                                <p className="mt-1 text-[11px] text-[#6B7C93]">Percobaan CBT yang tersimpan</p>
+                            </div>
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-emerald-700">Lulus Ujian</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-emerald-900">
+                                    {stats.passed_exam_attempts ?? (examAttempts?.filter(e => e.is_passed).length || 0)}
+                                </p>
+                                <p className="mt-1 text-[11px] text-emerald-600">Nilai mencapai passing grade</p>
+                            </div>
+                            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-rose-700">Belum Lulus</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-rose-900">
+                                    {stats.failed_exam_attempts ?? (examAttempts?.filter(e => !e.is_passed && e.status === 'submitted').length || 0)}
+                                </p>
+                                <p className="mt-1 text-[11px] text-rose-600">Di bawah batas kelulusan</p>
+                            </div>
+                            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-xs">
+                                <p className="text-xs font-medium text-blue-700">Tingkat Kelulusan</p>
+                                <p className="mt-1 font-display text-2xl font-bold text-blue-900">
+                                    {examAttempts && examAttempts.length > 0
+                                        ? Math.round((examAttempts.filter(e => e.is_passed).length / examAttempts.length) * 100)
+                                        : 0}%
+                                </p>
+                                <p className="mt-1 text-[11px] text-blue-600">Rasio peserta lulus CBT</p>
+                            </div>
+                        </div>
+
+                        {/* Filter and Search Bar */}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6B7C93]" />
+                                <input
+                                    type="text"
+                                    value={examSearch}
+                                    onChange={(e) => {
+                                        setExamSearch(e.target.value);
+                                        setExamPage(1);
+                                    }}
+                                    placeholder="Cari nama kenshi, NIK, dojo, atau paket ujian..."
+                                    className="w-full rounded-lg border border-[#DCE7F3] py-2 pl-9 pr-3 text-xs text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                />
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <select
+                                    value={examPackageFilter}
+                                    onChange={(e) => {
+                                        setExamPackageFilter(e.target.value);
+                                        setExamPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value="all">Semua Paket Ujian CBT</option>
+                                    {uniqueExamPackages.map((pkg) => (
+                                        <option key={pkg.id} value={pkg.id}>
+                                            {pkg.title}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <select
+                                    value={examStatusFilter}
+                                    onChange={(e) => {
+                                        setExamStatusFilter(e.target.value);
+                                        setExamPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value="all">Semua Status Kelulusan</option>
+                                    <option value="passed">Lulus (Memenuhi Batas)</option>
+                                    <option value="failed">Belum Lulus</option>
+                                    <option value="in_progress">Sedang Mengerjakan</option>
+                                </select>
+
+                                <select
+                                    value={examPerPage}
+                                    onChange={(e) => {
+                                        setExamPerPage(Number(e.target.value));
+                                        setExamPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value={10}>10 per hal</option>
+                                    <option value={25}>25 per hal</option>
+                                    <option value={50}>50 per hal</option>
+                                    <option value={100}>100 per hal</option>
+                                </select>
+
+                                <Button
+                                    variant="danger"
+                                    icon={<Trash2 className="h-3.5 w-3.5" />}
+                                    disabled={filteredExamAttempts.length === 0}
+                                    onClick={() => setDeleteExamTarget('all')}
+                                    title="Kosongkan/hapus seluruh hasil ujian CBT (daftar hasil ujian kembali kosong)"
+                                >
+                                    Kosongkan Semua Ujian
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    icon={<RotateCcw className="h-3.5 w-3.5 text-amber-700" />}
+                                    disabled={filteredExamAttempts.length === 0}
+                                    className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 hover:border-amber-400"
+                                    onClick={() => setRestartExamTarget('all')}
+                                    title="Mulai ulang sesi ujian untuk semua peserta pada daftar/filter ini (jawaban tetap tersimpan)"
+                                >
+                                    Mulai Ulang (Simpan Jawaban)
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Table of CBT Exam Attempts */}
+                        <div className="rounded-xl border border-[#DCE7F3] bg-white shadow-xs overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="border-b border-[#DCE7F3] bg-[#F8FBFF] font-semibold text-[#112743]">
+                                        <tr>
+                                            <th className="py-3 px-4 w-12 text-center">No</th>
+                                            <th className="py-3 px-4">Nama Kenshi & Asal</th>
+                                            <th className="py-3 px-4">Paket Soal & Tipe</th>
+                                            <th className="py-3 px-4 text-center">Percobaan</th>
+                                            <th className="py-3 px-4 text-center">Nilai / Batas</th>
+                                            <th className="py-3 px-4 text-center">Status Kelulusan</th>
+                                            <th className="py-3 px-4">Waktu Selesai</th>
+                                            <th className="py-3 px-4 text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#DCE7F3]">
+                                        {paginatedExamAttempts.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={8} className="py-8 text-center text-sm text-[#6B7C93]">
+                                                    Tidak ditemukan hasil ujian CBT yang sesuai filter.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            paginatedExamAttempts.map((att, idx) => {
+                                                const globalIdx = (examPage - 1) * examPerPage + idx + 1;
+
+                                                return (
+                                                    <tr key={att.id} className="hover:bg-[#F8FBFF] transition-colors">
+                                                        <td className="py-3 px-4 text-center font-mono text-[#6B7C93]">{globalIdx}</td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="font-semibold text-[#0E2747]">{att.participant_name}</div>
+                                                            <div className="flex items-center gap-2 font-mono text-[11px] text-[#6B7C93] mt-0.5">
+                                                                <span>{att.kenshi_id_number}</span>
+                                                                <span>•</span>
+                                                                <span>{att.origin_dojo}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="font-semibold text-[#112743]">{att.package_title}</div>
+                                                            <div className="text-[11px] text-[#6B7C93] mt-0.5">
+                                                                {att.package_code} • {att.exam_type_label}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center">
+                                                            <span className="inline-block font-mono font-bold text-xs text-[#0E2747]">
+                                                                #{att.attempt_number}
+                                                            </span>
+                                                            {att.duration_minutes !== null && (
+                                                                <div className="text-[10px] text-[#6B7C93]">{att.duration_minutes} mnt</div>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center">
+                                                            <div className={`font-display text-base font-bold ${att.is_passed ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                                {att.score.toFixed(1)}
+                                                            </div>
+                                                            <div className="text-[10px] text-[#6B7C93]">
+                                                                Min. {att.passing_score}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center">
+                                                            {att.is_passed ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 border border-emerald-200">
+                                                                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                                                    LULUS
+                                                                </span>
+                                                            ) : att.status === 'submitted' ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-800 border border-rose-200">
+                                                                    <X className="h-3 w-3 text-rose-600" />
+                                                                    BELUM LULUS
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 border border-amber-200">
+                                                                    <Clock className="h-3 w-3 text-amber-600" />
+                                                                    SEDANG UJIAN
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-[#6B7C93]">
+                                                            <div>{att.submitted_at || '-'}</div>
+                                                            {att.total_answered > 0 && (
+                                                                <div className="text-[10px] text-[#6B7C93]">{att.total_answered} terjawab</div>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center">
+                                                            <div className="flex items-center justify-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleOpenAttemptDetail(att)}
+                                                                    className="inline-flex items-center gap-1 rounded-md bg-[#0B63CE] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0A3F82] transition-colors shadow-xs"
+                                                                    title="Lihat rincian lembar soal dan jawaban peserta"
+                                                                >
+                                                                    <Eye className="h-3.5 w-3.5" />
+                                                                    Lihat Jawaban
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setRestartExamTarget(att)}
+                                                                    className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors shadow-xs"
+                                                                    title="Mulai ulang ujian peserta ini karena kendala teknis (jawaban tetap tersimpan)"
+                                                                >
+                                                                    <RotateCcw className="h-3.5 w-3.5 text-amber-700" />
+                                                                    Mulai Ulang
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setDeleteExamTarget(att)}
+                                                                    className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors shadow-xs"
+                                                                    title="Hapus / kosongkan percobaan ujian peserta ini"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                                                                    Hapus
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            {totalExamPages > 1 && (
+                                <div className="flex items-center justify-between border-t border-[#DCE7F3] px-4 py-3 bg-[#F8FBFF]">
+                                    <div className="text-xs text-[#6B7C93]">
+                                        Menampilkan <span className="font-semibold text-[#112743]">{(examPage - 1) * examPerPage + 1}</span> - <span className="font-semibold text-[#112743]">{Math.min(examPage * examPerPage, filteredExamAttempts.length)}</span> dari <span className="font-semibold text-[#112743]">{filteredExamAttempts.length}</span> percobaan ujian
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setExamPage((p) => Math.max(1, p - 1))}
+                                            disabled={examPage === 1}
+                                            className="rounded border border-[#DCE7F3] bg-white p-1 text-[#112743] disabled:opacity-40 hover:bg-gray-50"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </button>
+                                        <span className="px-2 text-xs font-medium text-[#112743]">
+                                            {examPage} / {totalExamPages}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setExamPage((p) => Math.min(totalExamPages, p + 1))}
+                                            disabled={examPage === totalExamPages}
                                             className="rounded border border-[#DCE7F3] bg-white p-1 text-[#112743] disabled:opacity-40 hover:bg-gray-50"
                                         >
                                             <ChevronRight className="h-4 w-4" />
@@ -5415,6 +6202,511 @@ export default function Show({
                 </form>
             </Modal>
 
+            {/* MODAL: Preview Pakta Integritas Peserta */}
+            {selectedPactForModal && (
+                <Modal
+                    isOpen={Boolean(selectedPactForModal)}
+                    onClose={() => setSelectedPactForModal(null)}
+                    title={`Pakta Integritas ${selectedPactForModal.pact_type?.toUpperCase()} — ${selectedPactForModal.participant_name}`}
+                    size="2xl"
+                    footer={
+                        <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2">
+                                {selectedPactForModal.status === 'verified' ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                        Terverifikasi {selectedPactForModal.verified_at ? `(${selectedPactForModal.verified_at})` : ''}
+                                    </span>
+                                ) : (
+                                    <Button
+                                        variant="primary"
+                                        onClick={() => handleVerifyPact(selectedPactForModal.id)}
+                                        loading={isVerifyingPact}
+                                        icon={Check}
+                                    >
+                                        Verifikasi Pakta Ini
+                                    </Button>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {selectedPactForModal.print_url && (
+                                    <a
+                                        href={selectedPactForModal.print_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs font-semibold text-[#112743] hover:bg-[#F8FBFF] hover:text-[#0B63CE] transition-colors"
+                                    >
+                                        <Printer className="h-4 w-4" />
+                                        Cetak Dokumen
+                                    </a>
+                                )}
+                                <Button variant="secondary" onClick={() => setSelectedPactForModal(null)}>
+                                    Tutup
+                                </Button>
+                            </div>
+                        </div>
+                    }
+                >
+                    <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+                        {/* Berkas Fisik Terunggah Alert */}
+                        {selectedPactForModal.file_url && (
+                            <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 p-3.5 flex items-center justify-between gap-3 text-xs text-indigo-950">
+                                <div className="flex items-center gap-2.5">
+                                    <FileText className="h-5 w-5 text-indigo-700 shrink-0" />
+                                    <div>
+                                        <div className="font-semibold">
+                                            Berkas Fisik Terunggah (Scan/Foto): {selectedPactForModal.file_name || 'Dokumen Pakta'}
+                                            {selectedPactForModal.file_size_formatted && (
+                                                <span className="font-normal text-indigo-700 ml-1">
+                                                    ({selectedPactForModal.file_size_formatted})
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-[11px] text-indigo-700">
+                                            Peserta atau admin mengunggah dokumen fisik berformat PDF/gambar.
+                                        </div>
+                                    </div>
+                                </div>
+                                <a
+                                    href={selectedPactForModal.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors shrink-0"
+                                >
+                                    <Download className="h-3.5 w-3.5" />
+                                    Buka File Asli
+                                </a>
+                            </div>
+                        )}
+
+                        {/* Lembar Format Resmi PB PERKEMI */}
+                        <div className="rounded-xl border border-[#DCE7F3] bg-white p-6 shadow-xs font-serif text-[11pt] leading-normal text-black">
+                            <div className="border-b-2 border-black pb-3 text-center">
+                                <div className="font-black text-sm tracking-wider uppercase">
+                                    PERSAUDARAAN SHORINJI KEMPO INDONESIA
+                                </div>
+                                <div className="font-bold text-xs tracking-widest uppercase">
+                                    PENGURUS BESAR (PB. PERKEMI)
+                                </div>
+                            </div>
+
+                            <div className="text-center my-4">
+                                <h3 className="font-bold text-base uppercase tracking-wider underline">
+                                    PAKTA INTEGRITAS {selectedPactForModal.pact_type?.toUpperCase()}
+                                </h3>
+                            </div>
+
+                            <p className="text-xs font-sans mb-2 font-medium">
+                                Yang bertanda tangan di bawah ini, saya Kenshi Persaudaraan Shorinji Kempo Indonesia:
+                            </p>
+
+                            {/* Data Kenshi Table */}
+                            <div className="space-y-1 font-sans text-xs bg-[#F8FBFF] p-3 rounded-lg border border-[#DCE7F3] mb-4">
+                                <div className="grid grid-cols-[140px_10px_1fr]">
+                                    <span className="text-[#6B7C93]">Nama Lengkap</span>
+                                    <span>:</span>
+                                    <span className="font-bold text-[#0E2747]">{selectedPactForModal.full_name || selectedPactForModal.participant_name}</span>
+                                </div>
+                                <div className="grid grid-cols-[140px_10px_1fr]">
+                                    <span className="text-[#6B7C93]">Tempat & Tanggal Lahir</span>
+                                    <span>:</span>
+                                    <span>{selectedPactForModal.birth_place || '-'}, {selectedPactForModal.birth_date || '-'}</span>
+                                </div>
+                                <div className="grid grid-cols-[140px_10px_1fr]">
+                                    <span className="text-[#6B7C93]">Nomor Induk Kenshi (NIK)</span>
+                                    <span>:</span>
+                                    <span className="font-mono font-semibold">{selectedPactForModal.kenshi_id_number}</span>
+                                </div>
+                                <div className="grid grid-cols-[140px_10px_1fr]">
+                                    <span className="text-[#6B7C93]">Tingkatan DAN / Dojo</span>
+                                    <span>:</span>
+                                    <span>{selectedPactForModal.dan_level} / {selectedPactForModal.origin_dojo}</span>
+                                </div>
+                                <div className="grid grid-cols-[140px_10px_1fr]">
+                                    <span className="text-[#6B7C93]">No. Sertifikat / Masa Berlaku</span>
+                                    <span>:</span>
+                                    <span>{selectedPactForModal.certificate_number || '-'} {selectedPactForModal.valid_start_date ? `(s.d ${selectedPactForModal.valid_end_date || '-'})` : ''}</span>
+                                </div>
+                                <div className="grid grid-cols-[140px_10px_1fr]">
+                                    <span className="text-[#6B7C93]">Alamat KTP</span>
+                                    <span>:</span>
+                                    <span>{selectedPactForModal.id_card_address || '-'}</span>
+                                </div>
+                            </div>
+
+                            {/* Pledges */}
+                            <div className="space-y-2 font-sans text-xs text-justify">
+                                <p className="font-semibold text-[#0E2747]">
+                                    Menyatakan dengan sesungguhnya dan berikrar untuk:
+                                </p>
+                                <ol className="list-decimal pl-5 space-y-1.5 text-[#112743]">
+                                    <li>
+                                        <strong>Kepatuhan & Loyalitas:</strong> Senantiasa taat dan patuh pada Janji Kenshi, Ikrar Kempo, serta Anggaran Dasar dan Anggaran Rumah Tangga (AD/ART) Persaudaraan Shorinji Kempo Indonesia (PERKEMI).
+                                    </li>
+                                    <li>
+                                        <strong>Integritas & Kehormatan:</strong> Menjunjung tinggi kehormatan, kejujuran, sportivitas, serta budi pekerti luhur dalam setiap pelaksanaan tugas dan pergaulan sesama Kenshi.
+                                    </li>
+                                    <li>
+                                        <strong>Profesionalisme Tugas:</strong> Melaksanakan kewajiban dan wewenang sebagai <span className="capitalize font-semibold">{selectedPactForModal.pact_type}</span> dengan penuh rasa tanggung jawab, dedikasi, keikhlasan, dan tanpa membeda-bedakan dojo maupun daerah.
+                                    </li>
+                                    <li>
+                                        <strong>Penyalahgunaan Wewenang:</strong> Tidak menyalahgunakan sertifikat keahlian, wewenang, jabatan, atau nama organisasi PB PERKEMI untuk kepentingan pribadi maupun pihak lain yang merugikan persaudaraan.
+                                    </li>
+                                    <li>
+                                        <strong>Kesiapan Sanksi:</strong> Bersedia menerima tindakan dan sanksi organisasi sesuai ketentuan dan disiplin PB PERKEMI apabila terbukti melanggar butir-butir pakta integritas ini.
+                                    </li>
+                                </ol>
+                            </div>
+
+                            {/* Signatures */}
+                            <div className="grid grid-cols-2 gap-4 mt-8 pt-4 font-sans text-xs border-t border-slate-200">
+                                <div className="text-center">
+                                    <div className="text-[#6B7C93]">Mengetahui / Memverifikasi,</div>
+                                    <div className="font-bold text-[#0E2747] mt-0.5">PB PERKEMI</div>
+                                    <div className="h-16 flex items-center justify-center my-1">
+                                        {selectedPactForModal.status === 'verified' ? (
+                                            <div className="rounded-lg border border-emerald-400 bg-emerald-50 px-2.5 py-1 text-center">
+                                                <div className="font-bold text-emerald-800 text-[10px]">TERVERIFIKASI PB PERKEMI</div>
+                                                <div className="text-[9px] text-emerald-700">{selectedPactForModal.verified_at}</div>
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-400 italic text-[11px]">(Menunggu Verifikasi)</span>
+                                        )}
+                                    </div>
+                                    <div className="font-bold text-[#0E2747]">
+                                        {selectedPactForModal.verified_by_name || 'Admin PB PERKEMI'}
+                                    </div>
+                                </div>
+
+                                <div className="text-center">
+                                    <div>{selectedPactForModal.sign_place || 'Mojokerto'}, {selectedPactForModal.sign_date || '-'}</div>
+                                    <div className="font-bold mt-0.5">Pembuat Pernyataan,</div>
+                                    <div className="h-16 flex items-center justify-center my-1">
+                                        {selectedPactForModal.signature_data ? (
+                                            <img
+                                                src={selectedPactForModal.signature_data}
+                                                alt="Tanda Tangan Digital"
+                                                className="max-h-14 object-contain"
+                                            />
+                                        ) : selectedPactForModal.submission_mode === 'upload' ? (
+                                            <span className="text-indigo-600 font-medium text-[11px]">(Berkas Fisik Terunggah)</span>
+                                        ) : (
+                                            <span className="text-slate-400 italic text-[11px]">(Belum Ditandatangani)</span>
+                                        )}
+                                    </div>
+                                    <div className="font-bold underline uppercase text-[#0E2747]">
+                                        {selectedPactForModal.full_name || selectedPactForModal.participant_name}
+                                    </div>
+                                    <div className="text-[10px] text-[#6B7C93] font-mono">
+                                        NIK: {selectedPactForModal.kenshi_id_number}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* MODAL: Upload Berkas Pakta Integritas (Admin) */}
+            <Modal
+                isOpen={Boolean(uploadModalPactParticipant)}
+                onClose={() => {
+                    if (!isAdminUploadingPact) {
+                        setUploadModalPactParticipant(null);
+                        setAdminUploadPactFile(null);
+                    }
+                }}
+                title="Unggah Berkas Pakta Integritas Kenshi"
+                size="md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => {
+                                setUploadModalPactParticipant(null);
+                                setAdminUploadPactFile(null);
+                            }}
+                            disabled={isAdminUploadingPact}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="submit"
+                            form="admin-pact-upload-form"
+                            variant="primary"
+                            loading={isAdminUploadingPact}
+                            disabled={!adminUploadPactFile || isAdminUploadingPact}
+                        >
+                            Unggah & Simpan Pakta
+                        </Button>
+                    </>
+                }
+            >
+                <form id="admin-pact-upload-form" onSubmit={handleAdminPactUploadSubmit} className="space-y-4">
+                    {/* Ringkasan Peserta */}
+                    <div className="rounded-xl border border-[#DCE7F3] bg-[#F8FBFF] p-3 text-xs">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7C93] mb-1">
+                            Target Kenshi
+                        </div>
+                        <div className="font-bold text-sm text-[#0E2747]">
+                            {uploadModalPactParticipant?.participant_name}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[#6B7C93] mt-1">
+                            <span>No. Kenshi: <strong className="font-mono text-[#0E2747]">{uploadModalPactParticipant?.kenshi_id_number || '-'}</strong></span>
+                            <span>Tingkatan: <strong className="text-[#0E2747]">{uploadModalPactParticipant?.dan_level || '-'}</strong></span>
+                            <span>Dojo: <strong className="text-[#0E2747]">{uploadModalPactParticipant?.origin_dojo || '-'}</strong></span>
+                        </div>
+                    </div>
+
+                    {uploadModalPactParticipant?.file_url && (
+                        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 text-xs text-indigo-900 flex items-center justify-between">
+                            <div>
+                                <span className="font-semibold">Sudah ada berkas terunggah:</span> {uploadModalPactParticipant.file_name || 'Berkas pakta scan'}
+                            </div>
+                            <a
+                                href={uploadModalPactParticipant.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-semibold text-indigo-700 underline text-[11px] hover:text-indigo-900"
+                            >
+                                Lihat File
+                            </a>
+                        </div>
+                    )}
+
+                    <FormField label="Kategori Pakta Integritas" required>
+                        <Select
+                            value={adminUploadPactType}
+                            onChange={(e) => setAdminUploadPactType(e.target.value)}
+                        >
+                            <option value="pelatih">Pakta Integritas Pelatih</option>
+                            <option value="penguji">Pakta Integritas Penguji</option>
+                            <option value="wasit">Pakta Integritas Wasit</option>
+                        </Select>
+                    </FormField>
+
+                    <FormField
+                        label="Pilih File Berkas Pakta (Scan / PDF / Gambar)"
+                        helperText="Format yang didukung: PDF, DOC, DOCX, JPG, PNG (Maks. 10MB)"
+                        required
+                    >
+                        <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            onChange={(e) => setAdminUploadPactFile(e.target.files?.[0] || null)}
+                            className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-[#0B63CE] hover:file:bg-blue-100 cursor-pointer border border-[#DCE7F3] rounded-lg p-1.5 bg-white"
+                        />
+                        {adminUploadPactFile && (
+                            <p className="mt-1 text-xs text-emerald-600 font-medium">
+                                File terpilih: {adminUploadPactFile.name} ({(adminUploadPactFile.size / 1024).toFixed(1)} KB)
+                            </p>
+                        )}
+                    </FormField>
+
+                    <div className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] p-3">
+                        <Checkbox
+                            id="admin_auto_verify_pact"
+                            checked={adminUploadPactAutoVerify}
+                            onChange={(e) => setAdminUploadPactAutoVerify(e.target.checked)}
+                            label="Langsung tandai status Terverifikasi (Disetujui PB PERKEMI)"
+                            helperText="Jika dicentang, berkas pakta kenshi langsung berstatus Terverifikasi."
+                        />
+                    </div>
+                </form>
+            </Modal>
+
+            {/* MODAL: Detail Jawaban Ujian CBT */}
+            {isDetailModalOpen && (
+                <Modal
+                    isOpen={isDetailModalOpen}
+                    onClose={() => {
+                        setIsDetailModalOpen(false);
+                        setSelectedAttemptForDetail(null);
+                        setAttemptDetailData(null);
+                    }}
+                    title={`Rincian Jawaban Ujian CBT — ${selectedAttemptForDetail?.participant_name || 'Kenshi'}`}
+                    description={`${selectedAttemptForDetail?.package_title || 'Paket Ujian'} (Percobaan #${selectedAttemptForDetail?.attempt_number || 1})`}
+                    size="3xl"
+                    footer={
+                        <div className="flex items-center justify-between w-full">
+                            <div className="text-xs text-[#6B7C93]">
+                                {attemptDetailData?.summary && (
+                                    <span>
+                                        Total: <strong className="text-[#0E2747]">{attemptDetailData.summary.total_questions}</strong> soal •
+                                        Benar: <strong className="text-emerald-700">{attemptDetailData.summary.correct_count}</strong> •
+                                        Salah: <strong className="text-rose-700">{attemptDetailData.summary.incorrect_count}</strong>
+                                    </span>
+                                )}
+                            </div>
+                            <Button variant="secondary" onClick={() => setIsDetailModalOpen(false)}>
+                                Tutup
+                            </Button>
+                        </div>
+                    }
+                >
+                    <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+                        {isLoadingDetail ? (
+                            <div className="py-16 text-center text-sm text-[#6B7C93] flex flex-col items-center justify-center gap-2">
+                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0B63CE] border-t-transparent" />
+                                <span>Memuat lembar soal dan rincian jawaban...</span>
+                            </div>
+                        ) : !attemptDetailData ? (
+                            <div className="py-12 text-center text-sm text-[#6B7C93]">
+                                Data lembar jawaban tidak tersedia.
+                            </div>
+                        ) : (
+                            <>
+                                {/* Banner Score Summary */}
+                                <div className="rounded-xl border border-[#DCE7F3] bg-gradient-to-r from-[#F8FBFF] to-white p-4 shadow-xs">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`flex flex-col items-center justify-center rounded-xl p-3 px-5 border ${attemptDetailData.attempt.is_passed ? 'bg-emerald-50 border-emerald-300 text-emerald-950' : 'bg-rose-50 border-rose-300 text-rose-950'}`}>
+                                                <span className="text-[11px] font-semibold uppercase tracking-wider">Nilai Akhir</span>
+                                                <span className="font-display text-3xl font-black">
+                                                    {attemptDetailData.attempt.score?.toFixed(1)}
+                                                </span>
+                                                <span className="text-[10px] text-[#6B7C93]">
+                                                    Passing: {attemptDetailData.attempt.passing_score}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${attemptDetailData.attempt.is_passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                                                        {attemptDetailData.attempt.is_passed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                                                        {attemptDetailData.attempt.is_passed ? 'LULUS UJIAN' : 'BELUM MEMENUHI KELULUSAN'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-[#0E2747] font-semibold mt-1">
+                                                    {attemptDetailData.attempt.participant_name} ({attemptDetailData.attempt.kenshi_id_number || '-'})
+                                                </div>
+                                                <div className="text-[11px] text-[#6B7C93]">
+                                                    Diselesaikan pada: {attemptDetailData.attempt.submitted_at || '-'} • Durasi: {attemptDetailData.attempt.duration_minutes || '-'} menit
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                            <div className="bg-white border border-[#DCE7F3] rounded-lg p-2 shadow-2xs">
+                                                <div className="text-[#6B7C93] text-[10px]">Benar</div>
+                                                <div className="font-bold text-emerald-700 text-base">{attemptDetailData.summary.correct_count}</div>
+                                            </div>
+                                            <div className="bg-white border border-[#DCE7F3] rounded-lg p-2 shadow-2xs">
+                                                <div className="text-[#6B7C93] text-[10px]">Salah</div>
+                                                <div className="font-bold text-rose-700 text-base">{attemptDetailData.summary.incorrect_count}</div>
+                                            </div>
+                                            <div className="bg-white border border-[#DCE7F3] rounded-lg p-2 shadow-2xs">
+                                                <div className="text-[#6B7C93] text-[10px]">Akurasi</div>
+                                                <div className="font-bold text-[#0B63CE] text-base">{attemptDetailData.summary.percentage}%</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Questions Breakdown */}
+                                <div className="space-y-3">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#6B7C93]">
+                                        Daftar Butir Soal & Pilihan Jawaban ({attemptDetailData.questions?.length || 0})
+                                    </h4>
+
+                                    {attemptDetailData.questions?.map((q) => {
+                                        return (
+                                            <div
+                                                key={q.id}
+                                                className={`rounded-xl border p-4 shadow-xs transition-all ${q.is_correct ? 'border-emerald-200 bg-white' : 'border-rose-200 bg-white'}`}
+                                            >
+                                                {/* Header per question */}
+                                                <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#DCE7F3] text-xs">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold font-mono text-[#0E2747] text-sm">
+                                                            #{q.number}
+                                                        </span>
+                                                        {q.is_correct ? (
+                                                            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-300">
+                                                                <Check className="h-3 w-3" />
+                                                                BENAR
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-800 border border-rose-300">
+                                                                <X className="h-3 w-3" />
+                                                                {q.user_answer ? 'SALAH' : 'TIDAK DIJAWAB'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="font-semibold text-xs text-[#6B7C93]">
+                                                        Poin: <span className={q.is_correct ? 'text-emerald-700 font-bold' : 'text-slate-600'}>{q.earned_points}</span> / {q.points}
+                                                    </div>
+                                                </div>
+
+                                                {/* Question text */}
+                                                <div className="text-xs font-medium text-[#0E2747] mb-3 leading-relaxed">
+                                                    {q.question_text}
+                                                </div>
+
+                                                {/* Options list */}
+                                                <div className="space-y-1.5">
+                                                    {q.options?.map((opt) => {
+                                                        const isUserSelection = String(opt.key) === String(q.user_answer);
+                                                        const isCorrectKey = String(opt.key) === String(q.correct_answer);
+
+                                                        let optionClass = 'border-[#DCE7F3] bg-[#F8FBFF] text-[#112743]';
+                                                        if (isCorrectKey && isUserSelection) {
+                                                            optionClass = 'border-emerald-400 bg-emerald-50 text-emerald-950 font-semibold ring-1 ring-emerald-400';
+                                                        } else if (isCorrectKey && !isUserSelection) {
+                                                            optionClass = 'border-emerald-400 bg-emerald-50/60 text-emerald-900 font-medium';
+                                                        } else if (isUserSelection && !isCorrectKey) {
+                                                            optionClass = 'border-rose-400 bg-rose-50 text-rose-950 font-semibold ring-1 ring-rose-400';
+                                                        }
+
+                                                        return (
+                                                            <div
+                                                                key={opt.key}
+                                                                className={`rounded-lg border p-2 text-xs flex items-center justify-between gap-3 ${optionClass}`}
+                                                            >
+                                                                <div className="flex items-center gap-2.5">
+                                                                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white border border-current text-[11px] font-bold">
+                                                                        {opt.key}
+                                                                    </span>
+                                                                    <span>{opt.text}</span>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
+                                                                    {isUserSelection && (
+                                                                        <span className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-bold ${q.is_correct ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'}`}>
+                                                                            Jawaban Kenshi
+                                                                        </span>
+                                                                    )}
+                                                                    {isCorrectKey && (
+                                                                        <span className="inline-flex items-center gap-0.5 rounded bg-emerald-600 px-1.5 py-0.5 font-bold text-white">
+                                                                            <Check className="h-3 w-3" />
+                                                                            Kunci Benar
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                {/* Explanation */}
+                                                {q.explanation && (
+                                                    <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/70 p-2.5 text-[11px] text-blue-900">
+                                                        <div className="font-semibold text-blue-950 flex items-center gap-1 mb-0.5">
+                                                            <HelpCircle className="h-3.5 w-3.5 text-blue-700" />
+                                                            Pembahasan / Penjelasan:
+                                                        </div>
+                                                        <p className="text-blue-800 leading-relaxed">{q.explanation}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </Modal>
+            )}
+
             <AlertDialog
                 isOpen={Boolean(attendanceResetTarget)}
                 onClose={() => setAttendanceResetTarget(null)}
@@ -5427,6 +6719,34 @@ export default function Show({
                 variant="danger"
                 loading={isResettingAttendance}
                 onConfirm={handleAttendanceReset}
+            />
+
+            <AlertDialog
+                isOpen={Boolean(restartExamTarget)}
+                onClose={() => setRestartExamTarget(null)}
+                title={restartExamTarget === 'all' ? 'Mulai Ulang Seluruh Ujian CBT?' : 'Mulai Ulang Ujian Peserta Ini?'}
+                description={restartExamTarget === 'all'
+                    ? `Sesi seluruh percobaan ujian CBT ${examPackageFilter !== 'all' ? 'pada paket terpilih' : 'pada event ini'} akan dibuka kembali agar peserta dapat melanjutkan pengerjaan (misal jika ada kendala teknis/jaringan). Jawaban yang sudah tersimpan TIDAK akan dihapus, dan durasi waktu pengerjaan akan diperbarui.`
+                    : `Sesi ujian untuk ${restartExamTarget?.participant_name || 'peserta ini'} (${restartExamTarget?.package_title || 'Ujian CBT'}) akan dibuka kembali. Jawaban yang sudah diisi sebelumnya TIDAK akan dihapus, dan peserta dapat langsung melanjutkan atau memeriksa jawaban dengan durasi waktu baru.`}
+                confirmText={isRestartingExam ? 'Memproses...' : 'Mulai Ulang Ujian'}
+                cancelText="Batal"
+                variant="warning"
+                loading={isRestartingExam}
+                onConfirm={handleRestartExam}
+            />
+
+            <AlertDialog
+                isOpen={Boolean(deleteExamTarget)}
+                onClose={() => setDeleteExamTarget(null)}
+                title={deleteExamTarget === 'all' ? 'Kosongkan Seluruh Hasil Ujian CBT?' : 'Hapus Percobaan Ujian Ini?'}
+                description={deleteExamTarget === 'all'
+                    ? `Seluruh catatan percobaan ujian CBT ${examPackageFilter !== 'all' ? 'pada paket terpilih' : 'pada event ini'} akan dihapus permanen dari sistem sehingga daftar hasil ujian kembali kosong. Peserta dapat memulai ujian dari awal kembali.`
+                    : `Percobaan ujian #${deleteExamTarget?.attempt_number} untuk ${deleteExamTarget?.participant_name || 'peserta ini'} (${deleteExamTarget?.package_title || 'Ujian CBT'}) akan dihapus permanen dari sistem.`}
+                confirmText={isDeletingExam ? 'Menghapus...' : 'Hapus & Kosongkan'}
+                cancelText="Batal"
+                variant="danger"
+                loading={isDeletingExam}
+                onConfirm={handleDeleteExam}
             />
         </AdminLayout>
     );

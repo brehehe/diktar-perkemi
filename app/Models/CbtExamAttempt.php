@@ -12,7 +12,7 @@ class CbtExamAttempt extends Model
 {
     use HasFactory;
 
-    public const TERMINAL_STATUSES = ['submitted', 'timed_out', 'evaluated'];
+    public const TERMINAL_STATUSES = ['completed', 'submitted', 'timed_out', 'evaluated'];
 
     protected $fillable = [
         'cbt_exam_package_id',

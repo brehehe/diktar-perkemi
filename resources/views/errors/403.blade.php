@@ -130,7 +130,11 @@
 
         <h1>Akses Tidak Diizinkan</h1>
         <p class="subtitle">
-            Halaman atau tindakan ini memerlukan hak akses khusus (<strong>Administrator</strong>, <strong>Diktar</strong>, atau <strong>Penyelenggara</strong>). Akun yang sedang aktif di peramban Anda tidak memiliki izin untuk fitur ini.
+            @if(!empty($exception) && $exception->getMessage())
+                {{ $exception->getMessage() }}
+            @else
+                Halaman atau tindakan ini memerlukan hak akses khusus (<strong>Administrator</strong>, <strong>Diktar</strong>, atau <strong>Penyelenggara</strong>). Akun yang sedang aktif di peramban Anda tidak memiliki izin untuk fitur ini.
+            @endif
         </p>
 
         @auth

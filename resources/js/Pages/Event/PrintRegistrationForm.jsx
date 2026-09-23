@@ -248,11 +248,11 @@ export default function PrintRegistrationForm({
                                     <span>{idx + 1}.</span>
                                     <span className="font-sans">Nomor:</span>
                                     <span className="border-b border-dotted border-black min-h-[1.2rem] px-1 font-semibold">
-                                        {row.nomor || '-----------------------------'}
+                                        {row.nomor || ''}
                                     </span>
                                     <span className="font-sans text-right">tanggal:</span>
                                     <span className="border-b border-dotted border-black min-h-[1.2rem] px-1 font-sans">
-                                        {row.tanggal || '------------------'}
+                                        {row.tanggal || ''}
                                     </span>
                                 </div>
                             ))}
@@ -270,7 +270,8 @@ export default function PrintRegistrationForm({
                                     <span className="border-b border-dotted border-black">
                                         {certList.find(c => c.jenis?.toLowerCase().includes('pelatih'))?.nomor
                                             ? `Nomor: ${certList.find(c => c.jenis?.toLowerCase().includes('pelatih'))?.nomor}, Tanggal: ${certList.find(c => c.jenis?.toLowerCase().includes('pelatih'))?.tanggal}`
-                                            : 'Nomor: ---------------------, Tanggal ----------'}
+                                            : 'Nomor:\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0, Tanggal:\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'
+                                        }
                                     </span>
                                 </div>
                                 <div className="italic text-xs pl-8 text-slate-600">atau</div>
@@ -280,7 +281,8 @@ export default function PrintRegistrationForm({
                                     <span className="border-b border-dotted border-black">
                                         {certList.find(c => c.jenis?.toLowerCase().includes('penguji'))?.nomor
                                             ? `Nomor: ${certList.find(c => c.jenis?.toLowerCase().includes('penguji'))?.nomor}, Tanggal: ${certList.find(c => c.jenis?.toLowerCase().includes('penguji'))?.tanggal}`
-                                            : 'Nomor: ---------------------, Tanggal ----------'}
+                                            : 'Nomor:\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0, Tanggal:\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'
+                                        }
                                     </span>
                                 </div>
                                 <div className="italic text-xs pl-8 text-slate-600">atau</div>
@@ -290,7 +292,8 @@ export default function PrintRegistrationForm({
                                     <span className="border-b border-dotted border-black">
                                         {certList.find(c => c.jenis?.toLowerCase().includes('wasit'))?.nomor
                                             ? `Nomor: ${certList.find(c => c.jenis?.toLowerCase().includes('wasit'))?.nomor}, Tanggal: ${certList.find(c => c.jenis?.toLowerCase().includes('wasit'))?.tanggal}`
-                                            : 'Nomor: ---------------------, Tanggal ----------'}
+                                            : 'Nomor:\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0, Tanggal:\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'
+                                        }
                                     </span>
                                 </div>
                                 <div className="text-xs italic pl-2 pt-0.5">yang dimiliki.</div>

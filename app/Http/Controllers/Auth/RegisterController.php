@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,10 @@ class RegisterController extends Controller
             return redirect('/');
         }
 
+        if (Setting::isRegistrationOff()) {
+            return redirect()->route('login')->with('info', 'Pendaftaran akun kenshi secara mandiri sedang dinonaktifkan.');
+        }
+
         return Inertia::render('Auth/Register');
     }
 
@@ -30,6 +35,10 @@ class RegisterController extends Controller
      */
     public function register(Request $request): RedirectResponse
     {
+        if (Setting::isRegistrationOff()) {
+            return redirect()->route('login')->with('error', 'Pendaftaran akun kenshi secara mandiri sedang dinonaktifkan.');
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],

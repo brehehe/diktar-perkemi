@@ -114,4 +114,17 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Registration Settings
+    |--------------------------------------------------------------------------
+    |
+    | Controls whether public self-registration for kenshi is active.
+    | When IS_REGISTER_OFF is true, registration routes and buttons are disabled.
+    |
+    */
+
+    'is_register_off' => (bool) env('IS_REGISTER_OFF', false),
+    'registration_enabled' => ! (bool) env('IS_REGISTER_OFF', false),
+
 ];

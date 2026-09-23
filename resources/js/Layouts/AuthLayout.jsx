@@ -34,6 +34,7 @@ export default function AuthLayout({
             {/* Global flash toasts */}
             {flash.success && <Toast message={flash.success} type="success" onClose={() => {}} />}
             {flash.error   && <Toast message={flash.error}   type="error"   onClose={() => {}} />}
+            {flash.info    && <Toast message={flash.info}    type="info"    onClose={() => {}} />}
 
             {/* ─── LEFT: Brand panel (Sky #EAF5FF) ─────────────────────── */}
             <div className="hidden lg:flex lg:w-[44%] xl:w-2/5 flex-col">

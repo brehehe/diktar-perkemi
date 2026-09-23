@@ -57,7 +57,8 @@ function LoginBrandContent() {
    Login Page Component
    ───────────────────────────────────────────────────────────────────────── */
 export default function Login() {
-    const { flash } = usePage().props;
+    const { flash, portal } = usePage().props;
+    const canRegister = portal?.can_register ?? !portal?.is_register_off;
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -167,13 +168,15 @@ export default function Login() {
                 </form>
 
                 {/* ── Footer Navigation ── */}
-                <div className="mt-6 border-t border-[#DCE7F3] pt-5">
-                    <AuthFooterLink
-                        text="Belum memiliki akun?"
-                        linkText="Daftar Kenshi sekarang"
-                        href="/register"
-                    />
-                </div>
+                {canRegister && (
+                    <div className="mt-6 border-t border-[#DCE7F3] pt-5">
+                        <AuthFooterLink
+                            text="Belum memiliki akun?"
+                            linkText="Daftar Kenshi sekarang"
+                            href="/register"
+                        />
+                    </div>
+                )}
             </AuthFormCard>
         </AuthLayout>
     );

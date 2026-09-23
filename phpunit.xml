@@ -33,5 +33,6 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="PUSTAKA_DISK" value="local"/>
+        <env name="IS_REGISTER_OFF" value="false"/>
     </php>
 </phpunit>

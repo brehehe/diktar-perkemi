@@ -36,6 +36,13 @@ export default function PortalLayout({ children, title = '' }) {
                     onClose={() => {}}
                 />
             )}
+            {props.flash?.info && (
+                <Toast
+                    message={props.flash.info}
+                    type="info"
+                    onClose={() => {}}
+                />
+            )}
 
             {/* Main Header */}
             <PortalHeader onOpenMobileMenu={() => setMobileMenuOpen(true)} />

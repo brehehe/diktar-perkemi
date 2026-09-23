@@ -20,6 +20,7 @@ import {
 export default function MobileNavigationDrawer({ isOpen, onClose }) {
     const { url, props } = usePage();
     const user = props.auth?.user;
+    const canRegister = props.portal?.can_register ?? !props.portal?.is_register_off;
     const panelRef = useRef(null);
 
     // Handle Escape key
@@ -250,16 +251,18 @@ export default function MobileNavigationDrawer({ isOpen, onClose }) {
                                     <LogIn className="w-4 h-4" aria-hidden="true" />
                                     <span>Masuk Portal</span>
                                 </Link>
-                                <p className="text-[11px] text-center text-[#6B7C93]">
-                                    Belum memiliki akun?{' '}
-                                    <Link
-                                        href="/register"
-                                        onClick={onClose}
-                                        className="rounded-sm font-medium text-[#0B63CE] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"
-                                    >
-                                        Daftar di sini
-                                    </Link>
-                                </p>
+                                {canRegister && (
+                                    <p className="text-[11px] text-center text-[#6B7C93]">
+                                        Belum memiliki akun?{' '}
+                                        <Link
+                                            href="/register"
+                                            onClick={onClose}
+                                            className="rounded-sm font-medium text-[#0B63CE] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"
+                                        >
+                                            Daftar di sini
+                                        </Link>
+                                    </p>
+                                )}
                             </div>
                         )}
                     </div>

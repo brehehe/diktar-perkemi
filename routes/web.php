@@ -144,9 +144,12 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/event/{event}/sesi/{session}/absensi/buka', [AttendanceController::class, 'open'])->name('event.session.attendance.open');
         Route::post('/event/{event}/sesi/{session}/absensi/tutup', [AttendanceController::class, 'close'])->name('event.session.attendance.close');
         Route::get('/event/{event}/sesi/{session}/cetak-qr', [AttendanceController::class, 'printQr'])->name('event.session.attendance.print');
+        Route::get('/event/{event}/absensi/cetak-semua-qr', [AttendanceController::class, 'printAllQr'])->name('event.attendance.print-all-qr');
         Route::post('/event/{event}/absensi/override', [AttendanceController::class, 'override'])->name('event.attendance.override');
         Route::delete('/event/{event}/absensi/{attendance}', [AttendanceController::class, 'destroy'])->name('event.attendance.destroy');
         Route::delete('/event/{event}/absensi', [AttendanceController::class, 'destroyAll'])->name('event.attendance.destroy-all');
+        Route::post('/event/{event}/absensi/generate', [AttendanceController::class, 'generateAll'])->name('event.attendance.generate-all');
+        Route::get('/event/{event}/rundown/export-excel', [EventController::class, 'exportRundownExcel'])->name('event.rundown.export-excel');
 
         // Event CBT Packages
         Route::post('/event/{event}/cbt', [CbtController::class, 'storePackage'])->name('event.cbt.package.store');
@@ -157,6 +160,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/event/{event}/modul', [EventController::class, 'storeModule'])->name('event.module.store');
         Route::get('/event/{event}/modul/{module}/pdf', [EventController::class, 'downloadModuleFile'])->name('event.module.download');
 
+        Route::get('/event/{event}/peserta/export-excel', [EventController::class, 'exportParticipantsExcel'])->name('event.participants.export-excel');
         Route::post('/event/{event}/peserta', [EventController::class, 'addParticipant'])->name('event.participant.store');
         Route::post('/event/{event}/peserta-baru', [EventController::class, 'createAndAddParticipant'])->name('event.participant.create-and-add');
         Route::post('/event/{event}/jalur', [EventController::class, 'storeTrack'])->name('event.track.store');

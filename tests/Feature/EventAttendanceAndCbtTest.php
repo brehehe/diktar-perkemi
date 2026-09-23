@@ -532,6 +532,32 @@ test('admin can reset all participant results without deleting event setup', fun
         );
 });
 
+test('admin can generate attendance for all participants across relevant sessions', function () {
+    $event = Event::firstOrFail();
+    $participantCount = $event->eventParticipants()->count();
+    expect($participantCount)->toBeGreaterThan(0);
+
+    // Ensure clean attendance before generation
+    $event->attendances()->delete();
+    expect($event->attendances()->count())->toBe(0);
+
+    $response = $this->actingAs($this->admin)
+        ->post("/admin/event/{$event->id}/absensi/generate", [
+            'status' => 'present',
+            'method' => 'manual_admin',
+            'include_arrival' => true,
+            'include_daily' => true,
+            'include_sessions' => true,
+        ]);
+
+    $response->assertRedirect()->assertSessionHas('success');
+    expect($event->attendances()->count())->toBeGreaterThan(0);
+
+    // Verify each participant now has checked_in_at and attendance_status present
+    expect($event->eventParticipants()->where('attendance_status', 'present')->count())->toBe($participantCount);
+    expect($event->eventParticipants()->where('checkin_status', 'checked_in')->count())->toBe($participantCount);
+});
+
 test('attendance from another event cannot be reset through the current event', function () {
     $event = Event::firstOrFail();
     $otherEvent = Event::create([
@@ -1229,4 +1255,41 @@ test('admin can update rundown session to CBT exam package with empty speaker an
         ->and($session->status)->toBe('scheduled')
         ->and($session->attendance_setting)->toBe('check_in')
         ->and($event->linkedCbtPackages()->where('cbt_exam_packages.id', $package->id)->exists())->toBeTrue();
+});
+
+test('admin can access batch printable QR codes page for all sessions', function () {
+    $event = Event::first();
+
+    $response = $this->actingAs($this->admin)
+        ->get("/admin/event/{$event->id}/absensi/cetak-semua-qr");
+
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Admin/Events/PrintAllQr')
+        ->has('event')
+        ->has('sessions')
+        ->where('event.id', $event->id)
+    );
+});
+
+test('admin can export event rundown to excel', function () {
+    $event = Event::first();
+
+    $response = $this->actingAs($this->admin)
+        ->get("/admin/event/{$event->id}/rundown/export-excel");
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect($response->headers->get('content-disposition'))->toContain('.xlsx');
+});
+
+test('admin can export event participants with login credentials to excel', function () {
+    $event = Event::first();
+
+    $response = $this->actingAs($this->admin)
+        ->get("/admin/event/{$event->id}/peserta/export-excel");
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect($response->headers->get('content-disposition'))->toContain('.xlsx');
 });

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Event;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -55,6 +56,8 @@ class HandleInertiaRequests extends Middleware
             ],
             'portal' => [
                 'name' => config('app.name', 'Pustaka Penataran'),
+                'is_register_off' => Setting::isRegistrationOff(),
+                'can_register' => ! Setting::isRegistrationOff(),
             ],
         ];
     }

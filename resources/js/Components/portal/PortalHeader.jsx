@@ -16,6 +16,7 @@ import MainNavigation from './MainNavigation';
 export default function PortalHeader({ onOpenMobileMenu }) {
     const { props } = usePage();
     const user = props.auth?.user;
+    const canRegister = props.portal?.can_register ?? !props.portal?.is_register_off;
     const [isScrolled, setIsScrolled] = useState(false);
     const [userDropdownOpen, setUserDropdownOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -317,12 +318,14 @@ export default function PortalHeader({ onOpenMobileMenu }) {
                                 </>
                             ) : (
                                 <div className="flex items-center gap-2">
-                                    <Button as={Link} href="/login" variant="secondary" size="sm">
+                                    <Button as={Link} href="/login" variant={canRegister ? 'secondary' : 'primary'} size="sm">
                                         Masuk
                                     </Button>
-                                    <Button as={Link} href="/register" variant="primary" size="sm">
-                                        Daftar Kenshi
-                                    </Button>
+                                    {canRegister && (
+                                        <Button as={Link} href="/register" variant="primary" size="sm">
+                                            Daftar Kenshi
+                                        </Button>
+                                    )}
                                 </div>
                             )}
                         </div>

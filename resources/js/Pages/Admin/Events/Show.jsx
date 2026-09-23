@@ -34,6 +34,7 @@ import {
     Settings,
     Plus,
     Trash2,
+    ChevronLeft,
     ChevronRight,
     Search,
     Filter,
@@ -57,6 +58,8 @@ import {
     AlertTriangle,
     RotateCcw,
     Save,
+    FileSpreadsheet,
+    Download,
 } from 'lucide-react';
 
 export default function Show({
@@ -101,6 +104,27 @@ export default function Show({
     const [selectedDay, setSelectedDay] = useState(1);
     const [attendanceSessionFilter, setAttendanceSessionFilter] = useState('all');
     const [credentialSearch, setCredentialSearch] = useState('');
+    const [participantSearch, setParticipantSearch] = useState('');
+    const [participantTrackFilter, setParticipantTrackFilter] = useState('all');
+    const [participantCheckinFilter, setParticipantCheckinFilter] = useState('all');
+    const [participantPerPage, setParticipantPerPage] = useState(25);
+    const [participantPage, setParticipantPage] = useState(() => {
+        if (typeof window === 'undefined') return 1;
+        const pageParam = parseInt(new URLSearchParams(window.location.search).get('page'), 10);
+        return !isNaN(pageParam) && pageParam > 0 ? pageParam : 1;
+    });
+
+    useEffect(() => {
+        if (activeTab === 'peserta') {
+            const url = new URL(window.location.href);
+            if (participantPage > 1) {
+                url.searchParams.set('page', String(participantPage));
+            } else {
+                url.searchParams.delete('page');
+            }
+            window.history.replaceState(window.history.state, '', url);
+        }
+    }, [activeTab, participantPage]);
     const [isGeneratingDocuments, setIsGeneratingDocuments] = useState(false);
     const documentNumberForm = useForm({
         numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
@@ -140,10 +164,23 @@ export default function Show({
     const [isQrPreviewModalOpen, setIsQrPreviewModalOpen] = useState(false);
     const [previewQrSession, setPreviewQrSession] = useState(null);
 
-    // Attendance Override Modal
+    // Attendance Override & Generate Modal
     const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
     const [attendanceResetTarget, setAttendanceResetTarget] = useState(null);
     const [isResettingAttendance, setIsResettingAttendance] = useState(false);
+    const [isGenerateAttendanceModalOpen, setIsGenerateAttendanceModalOpen] = useState(false);
+    const [isGeneratingAttendance, setIsGeneratingAttendance] = useState(false);
+    const [generateTrack, setGenerateTrack] = useState('all');
+    const [generateStatus, setGenerateStatus] = useState('present');
+    const [generateIncludeArrival, setGenerateIncludeArrival] = useState(true);
+    const [generateIncludeDaily, setGenerateIncludeDaily] = useState(true);
+    const [generateIncludeSessions, setGenerateIncludeSessions] = useState(true);
+
+    const [attendanceSearch, setAttendanceSearch] = useState('');
+    const [attendanceStatusFilter, setAttendanceStatusFilter] = useState('all');
+    const [attendancePerPage, setAttendancePerPage] = useState(25);
+    const [attendancePage, setAttendancePage] = useState(1);
+
 
     // CBT Package Modals
     const [isCbtPackageModalOpen, setIsCbtPackageModalOpen] = useState(false);
@@ -622,13 +659,60 @@ export default function Show({
 
     const activeDayData = sessionsByDay[selectedDay] || { day_number: selectedDay, sessions: [] };
 
-    // Filtered attendances for Tab 4
+    // Filtered & Paginated attendances for Tab 4
     const filteredAttendances = useMemo(() => {
-        if (attendanceSessionFilter === 'all') {
-            return attendances;
+        return (attendances || []).filter((att) => {
+            if (attendanceSessionFilter !== 'all' && String(att.session_id) !== String(attendanceSessionFilter)) {
+                return false;
+            }
+            if (attendanceStatusFilter !== 'all' && att.status !== attendanceStatusFilter) {
+                return false;
+            }
+            if (attendanceSearch.trim()) {
+                const q = attendanceSearch.trim().toLowerCase();
+                const matchName = (att.participant_name || '').toLowerCase().includes(q);
+                const matchTopic = (att.session_topic || '').toLowerCase().includes(q);
+                const matchNumber = (att.session_number || '').toLowerCase().includes(q);
+                const matchRecordedBy = (att.recorded_by || '').toLowerCase().includes(q);
+                const matchNotes = (att.notes || '').toLowerCase().includes(q);
+                if (!matchName && !matchTopic && !matchNumber && !matchRecordedBy && !matchNotes) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }, [attendances, attendanceSessionFilter, attendanceStatusFilter, attendanceSearch]);
+
+    const totalAttendancePages = attendancePerPage === 'all'
+        ? 1
+        : Math.max(1, Math.ceil(filteredAttendances.length / Number(attendancePerPage)));
+
+    const safeAttendancePage = Math.min(attendancePage, totalAttendancePages);
+
+    const paginatedAttendances = useMemo(() => {
+        if (attendancePerPage === 'all') {
+            return filteredAttendances;
         }
-        return attendances.filter((att) => String(att.session_id) === String(attendanceSessionFilter));
-    }, [attendances, attendanceSessionFilter]);
+        const perPageNum = Number(attendancePerPage);
+        const start = (safeAttendancePage - 1) * perPageNum;
+        return filteredAttendances.slice(start, start + perPageNum);
+    }, [filteredAttendances, safeAttendancePage, attendancePerPage]);
+
+    const attendancePageNumbers = useMemo(() => {
+        const total = totalAttendancePages;
+        const current = safeAttendancePage;
+        if (total <= 7) {
+            return Array.from({ length: total }, (_, i) => i + 1);
+        }
+        if (current <= 4) {
+            return [1, 2, 3, 4, 5, '...', total];
+        }
+        if (current >= total - 3) {
+            return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+        }
+        return [1, '...', current - 1, current, current + 1, '...', total];
+    }, [totalAttendancePages, safeAttendancePage]);
+
 
     const credentialParticipants = useMemo(() => {
         const query = credentialSearch.trim().toLocaleLowerCase('id-ID');
@@ -644,6 +728,69 @@ export default function Show({
             participant.track_name,
         ].some((value) => String(value || '').toLocaleLowerCase('id-ID').includes(query)));
     }, [credentialSearch, participants]);
+
+    const availableTrackOptions = useMemo(() => {
+        const set = new Set();
+        (tracks || []).forEach((t) => t.code && set.add(t.code));
+        (participants || []).forEach((p) => p.track_code && set.add(p.track_code));
+        return Array.from(set).sort();
+    }, [tracks, participants]);
+
+    const filteredParticipants = useMemo(() => {
+        return (participants || []).filter((p) => {
+            if (participantTrackFilter !== 'all' && p.track_code !== participantTrackFilter) {
+                return false;
+            }
+            if (participantCheckinFilter === 'checked_in' && !p.checked_in_at) {
+                return false;
+            }
+            if (participantCheckinFilter === 'not_checked_in' && p.checked_in_at) {
+                return false;
+            }
+            if (participantSearch.trim()) {
+                const q = participantSearch.trim().toLowerCase();
+                const matchName = (p.name || '').toLowerCase().includes(q);
+                const matchKenshiId = (p.kenshi_id || '').toLowerCase().includes(q);
+                const matchOrigin = (p.origin || '').toLowerCase().includes(q);
+                const matchTrack = (p.track_code || '').toLowerCase().includes(q) || (p.track_name || '').toLowerCase().includes(q);
+                const matchDan = (p.dan_roman || '').toLowerCase().includes(q);
+                if (!matchName && !matchKenshiId && !matchOrigin && !matchTrack && !matchDan) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }, [participants, participantSearch, participantTrackFilter, participantCheckinFilter]);
+
+    const totalParticipantPages = participantPerPage === 'all'
+        ? 1
+        : Math.max(1, Math.ceil(filteredParticipants.length / Number(participantPerPage)));
+
+    const safeParticipantPage = Math.min(participantPage, totalParticipantPages);
+
+    const paginatedParticipants = useMemo(() => {
+        if (participantPerPage === 'all') {
+            return filteredParticipants;
+        }
+        const perPageNum = Number(participantPerPage);
+        const start = (safeParticipantPage - 1) * perPageNum;
+        return filteredParticipants.slice(start, start + perPageNum);
+    }, [filteredParticipants, safeParticipantPage, participantPerPage]);
+
+    const participantPageNumbers = useMemo(() => {
+        const total = totalParticipantPages;
+        const current = safeParticipantPage;
+        if (total <= 7) {
+            return Array.from({ length: total }, (_, i) => i + 1);
+        }
+        if (current <= 4) {
+            return [1, 2, 3, 4, 5, '...', total];
+        }
+        if (current >= total - 3) {
+            return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+        }
+        return [1, '...', current - 1, current, current + 1, '...', total];
+    }, [totalParticipantPages, safeParticipantPage]);
 
     const handleAttendanceReset = () => {
         if (!attendanceResetTarget) return;
@@ -662,6 +809,26 @@ export default function Show({
             onFinish: () => setIsResettingAttendance(false),
         });
     };
+
+    const handleGenerateAllAttendance = (e) => {
+        e?.preventDefault();
+        router.post(`/admin/event/${event.id}/absensi/generate`, {
+            status: generateStatus,
+            method: 'manual_admin',
+            target_track: generateTrack,
+            include_arrival: generateIncludeArrival,
+            include_daily: generateIncludeDaily,
+            include_sessions: generateIncludeSessions,
+        }, {
+            preserveScroll: true,
+            onStart: () => setIsGeneratingAttendance(true),
+            onFinish: () => {
+                setIsGeneratingAttendance(false);
+                setIsGenerateAttendanceModalOpen(false);
+            },
+        });
+    };
+
 
     return (
         <AdminLayout>
@@ -925,7 +1092,32 @@ export default function Show({
                                 })}
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <a
+                                    href={`/admin/event/${event.id}/rundown/export-excel`}
+                                    download
+                                    className="inline-block"
+                                >
+                                    <Button
+                                        variant="secondary"
+                                        icon={<FileSpreadsheet className="w-4 h-4 text-emerald-600" />}
+                                    >
+                                        Export Excel
+                                    </Button>
+                                </a>
+                                <a
+                                    href={`/admin/event/${event.id}/absensi/cetak-semua-qr`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-block"
+                                >
+                                    <Button
+                                        variant="secondary"
+                                        icon={<Printer className="w-4 h-4 text-[#0B63CE]" />}
+                                    >
+                                        Cetak Semua QR
+                                    </Button>
+                                </a>
                             {!activeDayData.sessions.some((session) => session.session_type_code === 'KEHADIRAN_HARIAN') && <Button
                                 variant="secondary"
                                 icon={<QrCode className="w-4 h-4" />}
@@ -1569,13 +1761,126 @@ export default function Show({
                                     Kelola penempatan jalur, kelompok rotasi kelas ganda (A1/A2), verifikasi dokumen, dan kehadiran.
                                 </p>
                             </div>
-                            <Button
-                                variant="primary"
-                                icon={<Plus className="w-4 h-4" />}
-                                onClick={() => setIsAddParticipantModalOpen(true)}
-                            >
-                                Daftarkan Peserta ke Event
-                            </Button>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <a
+                                    href={`/admin/event/${event.id}/peserta/export-excel`}
+                                    download
+                                    className="inline-block"
+                                >
+                                    <Button
+                                        variant="secondary"
+                                        icon={<FileSpreadsheet className="w-4 h-4 text-emerald-600" />}
+                                    >
+                                        Export Excel (Data & Login)
+                                    </Button>
+                                </a>
+                                <Button
+                                    variant="primary"
+                                    icon={<Plus className="w-4 h-4" />}
+                                    onClick={() => setIsAddParticipantModalOpen(true)}
+                                >
+                                    Daftarkan Peserta ke Event
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Filter & Search Bar */}
+                        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#DCE7F3]">
+                            <div className="relative flex-1 min-w-[240px]">
+                                <Search className="w-4 h-4 text-[#6B7C93] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    value={participantSearch}
+                                    onChange={(e) => {
+                                        setParticipantSearch(e.target.value);
+                                        setParticipantPage(1);
+                                    }}
+                                    placeholder="Cari kenshi (nama, nomor kenshi, asal dojo, jalur)..."
+                                    className="w-full pl-9 pr-8 py-2 border border-[#DCE7F3] rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0B63CE] text-[#0E2747]"
+                                />
+                                {participantSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setParticipantSearch('');
+                                            setParticipantPage(1);
+                                        }}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7C93] hover:text-[#0E2747]"
+                                        aria-label="Hapus pencarian"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-[#6B7C93] font-medium">Jalur:</span>
+                                    <select
+                                        value={participantTrackFilter}
+                                        onChange={(e) => {
+                                            setParticipantTrackFilter(e.target.value);
+                                            setParticipantPage(1);
+                                        }}
+                                        className="border border-[#DCE7F3] rounded-lg px-2.5 py-1.5 text-xs bg-white text-[#0E2747] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]"
+                                    >
+                                        <option value="all">Semua Jalur</option>
+                                        {availableTrackOptions.map((code) => (
+                                            <option key={code} value={code}>{code}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-[#6B7C93] font-medium">Status:</span>
+                                    <select
+                                        value={participantCheckinFilter}
+                                        onChange={(e) => {
+                                            setParticipantCheckinFilter(e.target.value);
+                                            setParticipantPage(1);
+                                        }}
+                                        className="border border-[#DCE7F3] rounded-lg px-2.5 py-1.5 text-xs bg-white text-[#0E2747] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]"
+                                    >
+                                        <option value="all">Semua Presensi</option>
+                                        <option value="checked_in">Sudah Check-in</option>
+                                        <option value="not_checked_in">Belum Check-in</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-[#6B7C93] font-medium">Baris:</span>
+                                    <select
+                                        value={participantPerPage}
+                                        onChange={(e) => {
+                                            setParticipantPerPage(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                                            setParticipantPage(1);
+                                        }}
+                                        className="border border-[#DCE7F3] rounded-lg px-2.5 py-1.5 text-xs bg-white text-[#0E2747] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]"
+                                    >
+                                        <option value={10}>10</option>
+                                        <option value={25}>25</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                        <option value="all">Semua</option>
+                                    </select>
+                                </div>
+
+                                {(participantSearch || participantTrackFilter !== 'all' || participantCheckinFilter !== 'all') && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setParticipantSearch('');
+                                            setParticipantTrackFilter('all');
+                                            setParticipantCheckinFilter('all');
+                                            setParticipantPage(1);
+                                        }}
+                                        className="inline-flex items-center gap-1 text-xs text-[#B42355] hover:text-[#DD4D7C] px-2 py-1.5 rounded hover:bg-[#FFF1F5]"
+                                    >
+                                        <RotateCcw className="w-3 h-3" />
+                                        <span>Reset</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         <div className="bg-white rounded-xl border border-[#DCE7F3] shadow-xs overflow-hidden">
@@ -1594,89 +1899,187 @@ export default function Show({
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#DCE7F3]/60">
-                                        {participants.map((p) => (
-                                            <tr key={p.id} className="hover:bg-[#F8FBFF] transition-colors">
-                                                <td className="px-4 py-3">
-                                                    <div className="font-bold text-[#0E2747]">{p.name}</div>
-                                                    <div className="text-[11px] font-mono text-[#6B7C93]">{p.kenshi_id}</div>
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.track_badge}`}>
-                                                        {p.track_code}
-                                                    </span>
-                                                    <span className="text-[11px] text-[#6B7C93] block mt-0.5">
-                                                        Kelompok {p.rotation_group || 'belum ditetapkan'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <div className="font-medium text-[#112743]">{p.dan_roman}</div>
-                                                    <div className="text-[10px] text-[#6B7C93]">{p.origin}</div>
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    {p.checked_in_at ? (
-                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                                            <Check className="w-3 h-3" />
-                                                            <span>{p.checked_in_at}</span>
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                                            Belum Check-in
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                                        p.admin_status === 'verified'
-                                                            ? 'bg-emerald-100 text-emerald-800'
-                                                            : 'bg-amber-100 text-amber-800'
-                                                    }`}>
-                                                        {p.admin_status === 'verified' ? 'Terverifikasi' : p.admin_status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 font-mono font-bold text-[#0E2747]">
-                                                    {p.theory_score ?? '-'}
-                                                </td>
-                                                <td className="px-4 py-3 font-mono font-bold text-[#0E2747]">
-                                                    {p.practice_score ?? '-'}
-                                                </td>
-                                                <td className="px-4 py-3 text-right whitespace-nowrap">
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openEditParticipantModal(p)}
-                                                            className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#6B7C93] hover:bg-[#EAF5FF] hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
-                                                            aria-label={`Edit peserta ${p.name}`}
-                                                        >
-                                                            <Edit3 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setAttendanceResetTarget({
-                                                                id: p.id,
-                                                                scope: 'participant',
-                                                                participant_name: p.name,
-                                                            })}
-                                                            className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#B42355] hover:bg-[#FFF1F5] focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
-                                                            aria-label={`Reset seluruh hasil ${p.name}`}
-                                                            title="Reset presensi, nilai, ujian, revisi, serta dokumen kelulusan"
-                                                        >
-                                                            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveParticipant(p)}
-                                                            className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#6B7C93] hover:bg-[#FDE8EF] hover:text-[#DD4D7C] focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
-                                                            aria-label={`Keluarkan peserta ${p.name}`}
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
+                                        {paginatedParticipants.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={8} className="px-4 py-8 text-center text-xs text-[#6B7C93]">
+                                                    <div className="flex flex-col items-center justify-center gap-2">
+                                                        <Users className="w-8 h-8 text-slate-300" />
+                                                        <p className="font-medium text-[#112743]">Tidak ada data peserta</p>
+                                                        <p className="text-[11px] text-[#6B7C93]">
+                                                            {participantSearch || participantTrackFilter !== 'all' || participantCheckinFilter !== 'all'
+                                                                ? 'Coba sesuaikan kata kunci pencarian atau filter yang dipilih.'
+                                                                : 'Belum ada peserta yang terdaftar pada event ini.'}
+                                                        </p>
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            paginatedParticipants.map((p) => (
+                                                <tr key={p.id} className="hover:bg-[#F8FBFF] transition-colors">
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-bold text-[#0E2747]">{p.name}</div>
+                                                        <div className="text-[11px] font-mono text-[#6B7C93]">{p.kenshi_id}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.track_badge}`}>
+                                                            {p.track_code}
+                                                        </span>
+                                                        <span className="text-[11px] text-[#6B7C93] block mt-0.5">
+                                                            Kelompok {p.rotation_group || 'belum ditetapkan'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <div className="font-medium text-[#112743]">{p.dan_roman}</div>
+                                                        <div className="text-[10px] text-[#6B7C93]">{p.origin}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        {p.checked_in_at ? (
+                                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                                <Check className="w-3 h-3" />
+                                                                <span>{p.checked_in_at}</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                                                Belum Check-in
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                                            p.admin_status === 'verified'
+                                                                ? 'bg-emerald-100 text-emerald-800'
+                                                                : 'bg-amber-100 text-amber-800'
+                                                        }`}>
+                                                            {p.admin_status === 'verified' ? 'Terverifikasi' : p.admin_status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono font-bold text-[#0E2747]">
+                                                        {p.theory_score ?? '-'}
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono font-bold text-[#0E2747]">
+                                                        {p.practice_score ?? '-'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openEditParticipantModal(p)}
+                                                                className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#6B7C93] hover:bg-[#EAF5FF] hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
+                                                                aria-label={`Edit peserta ${p.name}`}
+                                                            >
+                                                                <Edit3 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setAttendanceResetTarget({
+                                                                    id: p.id,
+                                                                    scope: 'participant',
+                                                                    participant_name: p.name,
+                                                                })}
+                                                                className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#B42355] hover:bg-[#FFF1F5] focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
+                                                                aria-label={`Reset seluruh hasil ${p.name}`}
+                                                                title="Reset presensi, nilai, ujian, revisi, serta dokumen kelulusan"
+                                                            >
+                                                                <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveParticipant(p)}
+                                                                className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#6B7C93] hover:bg-[#FDE8EF] hover:text-[#DD4D7C] focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
+                                                                aria-label={`Keluarkan peserta ${p.name}`}
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
                             </TableSurface>
+
+                            {/* Table Pagination Footer */}
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-[#DCE7F3] bg-[#F8FBFF]/60 text-xs text-[#6B7C93]">
+                                <div>
+                                    Menampilkan{' '}
+                                    <span className="font-semibold text-[#112743]">
+                                        {filteredParticipants.length > 0
+                                            ? (participantPerPage === 'all' ? 1 : (safeParticipantPage - 1) * Number(participantPerPage) + 1)
+                                            : 0}
+                                    </span>
+                                    –
+                                    <span className="font-semibold text-[#112743]">
+                                        {participantPerPage === 'all'
+                                            ? filteredParticipants.length
+                                            : Math.min(safeParticipantPage * Number(participantPerPage), filteredParticipants.length)}
+                                    </span>{' '}
+                                    dari <span className="font-semibold text-[#112743]">{filteredParticipants.length}</span> peserta
+                                    {filteredParticipants.length !== (participants?.length || 0) && (
+                                        <span className="ml-1 text-[#6B7C93]">
+                                            (total {participants?.length || 0} kenshi)
+                                        </span>
+                                    )}
+                                </div>
+
+                                {totalParticipantPages > 1 && (
+                                    <div className="flex items-center gap-1.5 select-none">
+                                        <button
+                                            type="button"
+                                            disabled={safeParticipantPage <= 1}
+                                            onClick={() => setParticipantPage((p) => Math.max(1, p - 1))}
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium border transition-colors ${
+                                                safeParticipantPage <= 1
+                                                    ? 'border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed'
+                                                    : 'border-[#DCE7F3] text-[#0E2747] bg-white hover:bg-[#F8FBFF] hover:border-[#0B63CE]/40 active:bg-slate-100'
+                                            }`}
+                                            aria-label="Halaman sebelumnya"
+                                        >
+                                            <ChevronLeft className="w-3.5 h-3.5" />
+                                            <span className="hidden sm:inline">Sebelumnya</span>
+                                        </button>
+
+                                        <div className="flex items-center gap-1">
+                                            {participantPageNumbers.map((p, idx) =>
+                                                p === '...' ? (
+                                                    <span key={`ellipsis-${idx}`} className="px-1.5 text-slate-400">
+                                                        ...
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        key={p}
+                                                        type="button"
+                                                        onClick={() => setParticipantPage(p)}
+                                                        className={`min-w-8 h-8 px-2 rounded text-xs font-semibold transition-colors ${
+                                                            safeParticipantPage === p
+                                                                ? 'bg-[#0B63CE] text-white shadow-xs'
+                                                                : 'bg-white border border-[#DCE7F3] text-[#0E2747] hover:bg-slate-50'
+                                                        }`}
+                                                        aria-current={safeParticipantPage === p ? 'page' : undefined}
+                                                    >
+                                                        {p}
+                                                    </button>
+                                                )
+                                            )}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            disabled={safeParticipantPage >= totalParticipantPages}
+                                            onClick={() => setParticipantPage((p) => Math.min(totalParticipantPages, p + 1))}
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium border transition-colors ${
+                                                safeParticipantPage >= totalParticipantPages
+                                                    ? 'border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed'
+                                                    : 'border-[#DCE7F3] text-[#0E2747] bg-white hover:bg-[#F8FBFF] hover:border-[#0B63CE]/40 active:bg-slate-100'
+                                            }`}
+                                            aria-label="Halaman berikutnya"
+                                        >
+                                            <span className="hidden sm:inline">Berikutnya</span>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1733,28 +2136,18 @@ export default function Show({
                             </div>
                         </div>
 
-                        {/* Filter Bar & Action */}
+                        {/* Actions Bar */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#DCE7F3]">
-                            <div className="flex items-center gap-3">
-                                <Filter className="w-4 h-4 text-[#6B7C93]" />
-                                <label htmlFor="attendance-session-filter" className="text-xs font-semibold text-[#0E2747]">Filter berdasarkan sesi:</label>
-                                <Select
-                                    id="attendance-session-filter"
-                                    value={attendanceSessionFilter}
-                                    onChange={(e) => setAttendanceSessionFilter(e.target.value)}
-                                    className="text-xs py-1.5"
-                                >
-                                    <option value="all">Semua Sesi Rundown ({attendances.length})</option>
-                                    {arrivalSession && <option value={arrivalSession.id}>Kedatangan awal event</option>}
-                                    {Object.values(sessionsByDay).flatMap((d) => d.sessions).map((s) => (
-                                        <option key={s.id} value={s.id}>
-                                            Hari {s.day_number} - {s.session_number}: {s.topic}
-                                        </option>
-                                    ))}
-                                </Select>
+                            <div>
+                                <h3 className="font-display font-bold text-sm text-[#0E2747]">
+                                    Log & Pengelolaan Kehadiran Peserta
+                                </h3>
+                                <p className="text-xs text-[#6B7C93]">
+                                    Pantau presensi QR, catat override manual, atau generate kehadiran lengkap untuk seluruh kenshi.
+                                </p>
                             </div>
 
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <div className="flex flex-wrap gap-2 items-center">
                                 <Button
                                     variant="secondary"
                                     icon={<Trash2 className="h-4 w-4" />}
@@ -1762,10 +2155,10 @@ export default function Show({
                                     className="border-[#DD4D7C]/40 text-[#B42355] hover:border-[#DD4D7C] hover:bg-[#FFF1F5]"
                                     onClick={() => setAttendanceResetTarget('all')}
                                 >
-                                    Reset semua hasil peserta
+                                    Reset semua hasil
                                 </Button>
                                 <Button
-                                    variant="primary"
+                                    variant="secondary"
                                     icon={<Edit3 className="w-4 h-4" />}
                                     onClick={() => {
                                         overrideForm.setData({
@@ -1778,8 +2171,133 @@ export default function Show({
                                         setIsOverrideModalOpen(true);
                                     }}
                                 >
-                                    Override Kehadiran Manual
+                                    Override Manual
                                 </Button>
+                                <a
+                                    href={`/admin/event/${event.id}/absensi/cetak-semua-qr`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-block"
+                                >
+                                    <Button
+                                        variant="secondary"
+                                        icon={<Printer className="w-4 h-4 text-[#0B63CE]" />}
+                                    >
+                                        Cetak Semua QR Absensi
+                                    </Button>
+                                </a>
+                                <Button
+                                    variant="primary"
+                                    icon={<Sparkles className="w-4 h-4" />}
+                                    disabled={participants.length === 0 || isGeneratingAttendance}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600"
+                                    onClick={() => setIsGenerateAttendanceModalOpen(true)}
+                                >
+                                    Generate Absensi Semua
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Filter & Search Bar */}
+                        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#DCE7F3]">
+                            <div className="relative flex-1 min-w-[240px]">
+                                <Search className="w-4 h-4 text-[#6B7C93] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    value={attendanceSearch}
+                                    onChange={(e) => {
+                                        setAttendanceSearch(e.target.value);
+                                        setAttendancePage(1);
+                                    }}
+                                    placeholder="Cari absensi (nama kenshi, topik sesi, dicatat oleh)..."
+                                    className="w-full pl-9 pr-8 py-2 border border-[#DCE7F3] rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0B63CE] text-[#0E2747]"
+                                />
+                                {attendanceSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setAttendanceSearch('');
+                                            setAttendancePage(1);
+                                        }}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7C93] hover:text-[#0E2747]"
+                                        aria-label="Hapus pencarian"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-[#6B7C93] font-medium">Sesi:</span>
+                                    <select
+                                        value={attendanceSessionFilter}
+                                        onChange={(e) => {
+                                            setAttendanceSessionFilter(e.target.value);
+                                            setAttendancePage(1);
+                                        }}
+                                        className="border border-[#DCE7F3] rounded-lg px-2.5 py-1.5 text-xs bg-white text-[#0E2747] focus:outline-none focus:ring-2 focus:ring-[#0B63CE] max-w-[200px] truncate"
+                                    >
+                                        <option value="all">Semua Sesi ({attendances.length})</option>
+                                        {arrivalSession && <option value={arrivalSession.id}>Kedatangan awal</option>}
+                                        {Object.values(sessionsByDay).flatMap((d) => d.sessions).map((s) => (
+                                            <option key={s.id} value={s.id}>
+                                                H{s.day_number} - {s.session_number}: {s.topic}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-[#6B7C93] font-medium">Status:</span>
+                                    <select
+                                        value={attendanceStatusFilter}
+                                        onChange={(e) => {
+                                            setAttendanceStatusFilter(e.target.value);
+                                            setAttendancePage(1);
+                                        }}
+                                        className="border border-[#DCE7F3] rounded-lg px-2.5 py-1.5 text-xs bg-white text-[#0E2747] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]"
+                                    >
+                                        <option value="all">Semua Status</option>
+                                        <option value="present">Hadir</option>
+                                        <option value="late">Terlambat</option>
+                                        <option value="manual_override">Manual Override</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-[#6B7C93] font-medium">Baris:</span>
+                                    <select
+                                        value={attendancePerPage}
+                                        onChange={(e) => {
+                                            setAttendancePerPage(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                                            setAttendancePage(1);
+                                        }}
+                                        className="border border-[#DCE7F3] rounded-lg px-2.5 py-1.5 text-xs bg-white text-[#0E2747] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]"
+                                    >
+                                        <option value={10}>10</option>
+                                        <option value={25}>25</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                        <option value="all">Semua</option>
+                                    </select>
+                                </div>
+
+                                {(attendanceSearch || attendanceSessionFilter !== 'all' || attendanceStatusFilter !== 'all') && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setAttendanceSearch('');
+                                            setAttendanceSessionFilter('all');
+                                            setAttendanceStatusFilter('all');
+                                            setAttendancePage(1);
+                                        }}
+                                        className="inline-flex items-center gap-1 text-xs text-[#B42355] hover:text-[#DD4D7C] px-2 py-1.5 rounded hover:bg-[#FFF1F5]"
+                                    >
+                                        <RotateCcw className="w-3 h-3" />
+                                        <span>Reset</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -1800,14 +2318,22 @@ export default function Show({
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#DCE7F3]/60">
-                                        {filteredAttendances.length === 0 ? (
+                                        {paginatedAttendances.length === 0 ? (
                                             <tr>
                                                 <td colSpan={8} className="text-center py-10 text-xs text-[#6B7C93]">
-                                                    Belum ada catatan absensi untuk sesi yang dipilih.
+                                                    <div className="flex flex-col items-center justify-center gap-2">
+                                                        <UserCheck className="w-8 h-8 text-slate-300" />
+                                                        <p className="font-medium text-[#112743]">Belum ada catatan absensi</p>
+                                                        <p className="text-[11px] text-[#6B7C93]">
+                                                            {attendanceSearch || attendanceSessionFilter !== 'all' || attendanceStatusFilter !== 'all'
+                                                                ? 'Coba sesuaikan kata kunci pencarian atau filter yang dipilih.'
+                                                                : 'Gunakan tombol "Generate Absensi Semua" untuk mencatat kehadiran seluruh peserta secara otomatis.'}
+                                                        </p>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredAttendances.map((att) => (
+                                            paginatedAttendances.map((att) => (
                                                 <tr key={att.id} className="hover:bg-[#F8FBFF] transition-colors">
                                                     <td className="px-4 py-3 font-bold text-[#0E2747]">
                                                         {att.participant_name}
@@ -1851,9 +2377,92 @@ export default function Show({
                                     </tbody>
                                 </table>
                             </TableSurface>
+
+                            {/* Table Pagination Footer */}
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-[#DCE7F3] bg-[#F8FBFF]/60 text-xs text-[#6B7C93]">
+                                <div>
+                                    Menampilkan{' '}
+                                    <span className="font-semibold text-[#112743]">
+                                        {filteredAttendances.length > 0
+                                            ? (attendancePerPage === 'all' ? 1 : (safeAttendancePage - 1) * Number(attendancePerPage) + 1)
+                                            : 0}
+                                    </span>
+                                    –
+                                    <span className="font-semibold text-[#112743]">
+                                        {attendancePerPage === 'all'
+                                            ? filteredAttendances.length
+                                            : Math.min(safeAttendancePage * Number(attendancePerPage), filteredAttendances.length)}
+                                    </span>{' '}
+                                    dari <span className="font-semibold text-[#112743]">{filteredAttendances.length}</span> absensi
+                                    {filteredAttendances.length !== (attendances?.length || 0) && (
+                                        <span className="ml-1 text-[#6B7C93]">
+                                            (total {attendances?.length || 0} catatan)
+                                        </span>
+                                    )}
+                                </div>
+
+                                {totalAttendancePages > 1 && (
+                                    <div className="flex items-center gap-1.5 select-none">
+                                        <button
+                                            type="button"
+                                            disabled={safeAttendancePage <= 1}
+                                            onClick={() => setAttendancePage((p) => Math.max(1, p - 1))}
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium border transition-colors ${
+                                                safeAttendancePage <= 1
+                                                    ? 'border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed'
+                                                    : 'border-[#DCE7F3] text-[#0E2747] bg-white hover:bg-[#F8FBFF] hover:border-[#0B63CE]/40 active:bg-slate-100'
+                                            }`}
+                                            aria-label="Halaman sebelumnya"
+                                        >
+                                            <ChevronLeft className="w-3.5 h-3.5" />
+                                            <span className="hidden sm:inline">Sebelumnya</span>
+                                        </button>
+
+                                        <div className="flex items-center gap-1">
+                                            {attendancePageNumbers.map((p, idx) =>
+                                                p === '...' ? (
+                                                    <span key={`ellipsis-${idx}`} className="px-1.5 text-slate-400">
+                                                        ...
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        key={p}
+                                                        type="button"
+                                                        onClick={() => setAttendancePage(p)}
+                                                        className={`min-w-8 h-8 px-2 rounded text-xs font-semibold transition-colors ${
+                                                            safeAttendancePage === p
+                                                                ? 'bg-[#0B63CE] text-white shadow-xs'
+                                                                : 'bg-white border border-[#DCE7F3] text-[#0E2747] hover:bg-slate-50'
+                                                        }`}
+                                                        aria-current={safeAttendancePage === p ? 'page' : undefined}
+                                                    >
+                                                        {p}
+                                                    </button>
+                                                )
+                                            )}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            disabled={safeAttendancePage >= totalAttendancePages}
+                                            onClick={() => setAttendancePage((p) => Math.min(totalAttendancePages, p + 1))}
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium border transition-colors ${
+                                                safeAttendancePage >= totalAttendancePages
+                                                    ? 'border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed'
+                                                    : 'border-[#DCE7F3] text-[#0E2747] bg-white hover:bg-[#F8FBFF] hover:border-[#0B63CE]/40 active:bg-slate-100'
+                                            }`}
+                                            aria-label="Halaman berikutnya"
+                                        >
+                                            <span className="hidden sm:inline">Berikutnya</span>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
+
 
                 {/* TAB 5: MATERI (MODULES & DIGITAL BOOKS) */}
                 {activeTab === 'materi' && (
@@ -2958,6 +3567,108 @@ export default function Show({
                     </FormField>
                 </form>
             </Modal>
+
+            {/* MODAL: Generate Absensi Seluruh Peserta */}
+            <Modal
+                isOpen={isGenerateAttendanceModalOpen}
+                onClose={() => setIsGenerateAttendanceModalOpen(false)}
+                title="Generate Absensi Semua Peserta"
+                size="md"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setIsGenerateAttendanceModalOpen(false)}>
+                            Batal
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="primary"
+                            loading={isGeneratingAttendance}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={handleGenerateAllAttendance}
+                        >
+                            Generate Absensi Sekarang
+                        </Button>
+                    </>
+                }
+            >
+                <div className="space-y-4 text-xs text-[#112743]">
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-emerald-800">
+                        <div className="flex items-start gap-2.5">
+                            <Sparkles className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="font-semibold text-emerald-900">Catat Kehadiran Lengkap Otomatis</p>
+                                <p className="mt-1 text-[11px] leading-relaxed">
+                                    Tindakan ini akan mencatat status presensi hadir secara serentak untuk seluruh kenshi terdaftar 
+                                    (<strong>{participants.length} peserta</strong>) pada seluruh sesi penataran yang sesuai dengan jalurnya masing-masing.
+                                    Data kehadiran yang sudah ada akan diperbarui tanpa membuat duplikat.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <FormField label="Pilih Target Jalur Peserta">
+                        <Select
+                            value={generateTrack}
+                            onChange={(e) => setGenerateTrack(e.target.value)}
+                        >
+                            <option value="all">Semua Jalur ({participants.length} peserta)</option>
+                            {availableTrackOptions.map((code) => {
+                                const count = participants.filter((p) => p.track_code === code).length;
+                                return (
+                                    <option key={code} value={code}>
+                                        Jalur {code} ({count} peserta)
+                                    </option>
+                                );
+                            })}
+                        </Select>
+                    </FormField>
+
+                    <FormField label="Status Kehadiran">
+                        <Select
+                            value={generateStatus}
+                            onChange={(e) => setGenerateStatus(e.target.value)}
+                        >
+                            <option value="present">Hadir Tepat Waktu (Present)</option>
+                            <option value="late">Terlambat (Late)</option>
+                            <option value="manual_override">Manual Override</option>
+                        </Select>
+                    </FormField>
+
+                    <div className="space-y-2 pt-2 border-t border-[#DCE7F3]">
+                        <span className="font-semibold text-[#0E2747] block text-[11px] uppercase tracking-wider">
+                            Cakupan Sesi yang Digenerate:
+                        </span>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={generateIncludeArrival}
+                                onChange={(e) => setGenerateIncludeArrival(e.target.checked)}
+                                className="rounded border-slate-300 text-[#0B63CE] focus:ring-[#0B63CE]"
+                            />
+                            <span>Kedatangan awal event (Check-in awal kenshi)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={generateIncludeDaily}
+                                onChange={(e) => setGenerateIncludeDaily(e.target.checked)}
+                                className="rounded border-slate-300 text-[#0B63CE] focus:ring-[#0B63CE]"
+                            />
+                            <span>Presensi harian wajib seluruh hari kegiatan</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={generateIncludeSessions}
+                                onChange={(e) => setGenerateIncludeSessions(e.target.checked)}
+                                className="rounded border-slate-300 text-[#0B63CE] focus:ring-[#0B63CE]"
+                            />
+                            <span>Sesi materi, kelas paralel & ujian sesuai jalur</span>
+                        </label>
+                    </div>
+                </div>
+            </Modal>
+
 
             {/* MODAL: Buat / Edit Paket CBT */}
             <Modal

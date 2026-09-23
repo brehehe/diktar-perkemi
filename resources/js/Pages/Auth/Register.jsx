@@ -1,10 +1,11 @@
 import React from 'react';
-import { useForm } from '@inertiajs/react';
-import { Loader2, AlertCircle, Library, BookOpen, Users } from 'lucide-react';
+import { Link, useForm, usePage } from '@inertiajs/react';
+import { Loader2, AlertCircle, Library, BookOpen, Users, Lock } from 'lucide-react';
 import AuthLayout from '@/Layouts/AuthLayout';
 import AuthFormCard from '@/Components/auth/AuthFormCard';
 import AuthNotice from '@/Components/auth/AuthNotice';
 import AuthFooterLink from '@/Components/auth/AuthFooterLink';
+import Button from '@/Components/ui/Button';
 import PasswordInput from '@/Components/ui/PasswordInput';
 import PasswordStrength from '@/Components/auth/PasswordStrength';
 
@@ -45,6 +46,9 @@ const ROLES = [
 ];
 
 export default function Register() {
+    const { portal } = usePage().props;
+    const canRegister = portal?.can_register ?? !portal?.is_register_off;
+
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         email: '',
@@ -60,6 +64,39 @@ export default function Register() {
             onFinish: () => reset('password', 'password_confirmation'),
         });
     };
+
+    if (!canRegister) {
+        return (
+            <AuthLayout
+                title="Pendaftaran Dinonaktifkan — Pustaka Penataran PERKEMI"
+                badge="📘 DIGITAL LEARNING CENTER"
+                headline={<>Pendaftaran Akun<br />Kenshi Ditutup.</>}
+                description="Pendaftaran mandiri akun kenshi sedang dinonaktifkan oleh administrator."
+                brandContent={<RegisterBrandContent />}
+            >
+                <AuthFormCard>
+                    <div className="text-center py-6 space-y-4">
+                        <div className="mx-auto w-12 h-12 rounded-full bg-[#EAF5FF] text-[#0B63CE] flex items-center justify-center border border-[#BCE0FD]">
+                            <Lock className="w-6 h-6" />
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="font-serif text-2xl font-bold text-[#0E2747]">
+                                Pendaftaran Dinonaktifkan
+                            </h2>
+                            <p className="text-sm text-[#6B7C93] max-w-sm mx-auto leading-relaxed">
+                                Pendaftaran akun mandiri untuk kenshi saat ini sedang ditutup. Silakan masuk menggunakan akun yang sudah terdaftar atau hubungi panitia penataran terkait.
+                            </p>
+                        </div>
+                        <div className="pt-4">
+                            <Button as={Link} href="/login" variant="primary" size="lg" className="w-full">
+                                Masuk ke Portal
+                            </Button>
+                        </div>
+                    </div>
+                </AuthFormCard>
+            </AuthLayout>
+        );
+    }
 
     /* Reusable field error inline */
     const FieldError = ({ msg, id }) =>

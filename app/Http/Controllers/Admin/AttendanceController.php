@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Events\GenerateEventAttendanceAll;
 use App\Actions\Events\ResetEventParticipantResults;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
@@ -118,6 +119,71 @@ class AttendanceController extends Controller
     }
 
     /**
+     * Show official batch printable QR Codes for all sessions with attendance.
+     */
+    public function printAllQr(Request $request, Event $event): Response
+    {
+        // Get all sessions that require attendance
+        $sessions = EventSession::query()
+            ->where('event_id', $event->id)
+            ->where('attendance_setting', '!=', 'disabled')
+            ->where('attendance_setting', '!=', 'none')
+            ->with(['speaker', 'sessionType'])
+            ->orderBy('day_number')
+            ->orderBy('start_time')
+            ->orderBy('session_number')
+            ->get();
+
+        // Ensure every session has a valid qr_short_code and qr_token
+        foreach ($sessions as $session) {
+            if (! $session->qr_short_code || ! $session->qr_token) {
+                $session->update([
+                    'qr_short_code' => $session->qr_short_code ?: strtoupper(Str::random(6)),
+                    'qr_token' => $session->qr_token ?: Str::random(40),
+                ]);
+            }
+        }
+
+        $sessionsPayload = $sessions->map(function (EventSession $session) use ($event) {
+            $scanUrl = route('event.scan', [
+                'slug' => $event->slug,
+                'code' => $session->qr_short_code,
+            ]);
+
+            return [
+                'id' => $session->id,
+                'session_number' => $session->session_number,
+                'day_number' => $session->day_number,
+                'session_date' => $session->session_date?->format('d/m/Y'),
+                'session_type_code' => $session->session_type_code,
+                'session_type_name' => $session->sessionType?->name,
+                'time_slot' => $session->time_slot ?: ($session->start_time && $session->end_time ? "{$session->start_time} - {$session->end_time}" : null),
+                'topic' => $session->topic,
+                'subtopic' => $session->subtopic,
+                'room' => $session->room,
+                'target_tracks' => $session->target_tracks,
+                'speaker_name' => $session->speaker?->name,
+                'qr_short_code' => $session->qr_short_code,
+                'attendance_setting' => $session->attendance_setting,
+                'scanUrl' => $scanUrl,
+                'qrSvg' => QrCodeService::svg($session->qr_short_code, 260, '#0E2747', '#FFFFFF'),
+            ];
+        });
+
+        return Inertia::render('Admin/Events/PrintAllQr', [
+            'event' => [
+                'id' => $event->id,
+                'name' => $event->name,
+                'slug' => $event->slug,
+                'date_formatted' => $event->date_formatted,
+                'place' => $event->place,
+                'organizer' => $event->organizer,
+            ],
+            'sessions' => $sessionsPayload,
+        ]);
+    }
+
+    /**
      * Perform manual attendance override by an authorized admin.
      */
     public function override(Request $request, Event $event): RedirectResponse
@@ -206,6 +272,28 @@ class AttendanceController extends Controller
         return back()->with(
             'success',
             "Hasil {$result['participant_count']} peserta berhasil direset, termasuk {$result['attendance_count']} presensi dan {$result['attempt_count']} percobaan ujian.",
+        );
+    }
+
+    public function generateAll(
+        Request $request,
+        Event $event,
+        GenerateEventAttendanceAll $generator,
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'status' => ['nullable', 'string', 'in:present,late,manual_override'],
+            'method' => ['nullable', 'string', 'in:manual_admin,qr_scan,short_code'],
+            'target_track' => ['nullable', 'string'],
+            'include_arrival' => ['nullable', 'boolean'],
+            'include_daily' => ['nullable', 'boolean'],
+            'include_sessions' => ['nullable', 'boolean'],
+        ]);
+
+        $result = $generator->execute($event, $validated);
+
+        return back()->with(
+            'success',
+            "Berhasil men-generate {$result['attendance_count']} data absensi untuk {$result['participant_count']} peserta pada {$result['session_count']} sesi.",
         );
     }
 }

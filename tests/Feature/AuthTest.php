@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -129,4 +130,49 @@ test('authenticated user can logout', function () {
 
     $this->assertGuest();
     $response->assertRedirect('/');
+});
+
+test('registration is disabled when is_register_off config is true', function () {
+    config(['auth.is_register_off' => true]);
+
+    // GET /register should redirect to /login with info message
+    $response = $this->get('/register');
+    $response->assertRedirect('/login');
+    $response->assertSessionHas('info');
+
+    // POST /register should be blocked and not create user
+    $postResponse = $this->post('/register', [
+        'name' => 'Budi Santoso',
+        'email' => 'budi@perkemi.id',
+        'role' => 'Peserta',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+        'terms' => '1',
+    ]);
+    $postResponse->assertRedirect('/login');
+    $postResponse->assertSessionHas('error');
+    $this->assertGuest();
+    $this->assertDatabaseMissing('users', ['email' => 'budi@perkemi.id']);
+
+    // Inertia shared props should expose can_register = false and is_register_off = true
+    $homeResponse = $this->get('/');
+    $homeResponse->assertInertia(fn (Assert $page) => $page
+        ->where('portal.is_register_off', true)
+        ->where('portal.can_register', false)
+    );
+});
+
+test('registration is disabled when database allow_registration setting is 0', function () {
+    config(['auth.is_register_off' => false]);
+    Setting::set('allow_registration', '0', 'access');
+
+    $response = $this->get('/register');
+    $response->assertRedirect('/login');
+    $response->assertSessionHas('info');
+
+    $homeResponse = $this->get('/');
+    $homeResponse->assertInertia(fn (Assert $page) => $page
+        ->where('portal.is_register_off', true)
+        ->where('portal.can_register', false)
+    );
 });

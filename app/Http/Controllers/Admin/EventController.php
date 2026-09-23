@@ -23,6 +23,7 @@ use App\Models\Speaker;
 use App\Models\User;
 use App\Services\AdminEventDetailService;
 use App\Services\EventAttendanceScheduleService;
+use App\Services\EventExportService;
 use App\Services\MaterialSourceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -659,5 +661,21 @@ class EventController extends Controller
         $event->linkedCbtPackages()->detach($package->id);
 
         return back()->with('success', 'Paket ujian CBT dilepas dari event.');
+    }
+
+    /**
+     * Export event rundown to Excel (.xlsx).
+     */
+    public function exportRundownExcel(Event $event, EventExportService $exportService): BinaryFileResponse
+    {
+        return $exportService->exportRundown($event);
+    }
+
+    /**
+     * Export event participants along with login credentials to Excel (.xlsx).
+     */
+    public function exportParticipantsExcel(Event $event, EventExportService $exportService): BinaryFileResponse
+    {
+        return $exportService->exportParticipants($event);
     }
 }

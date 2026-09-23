@@ -40,4 +40,21 @@ class Setting extends Model
             ['value' => $value, 'group' => $group]
         );
     }
+
+    /**
+     * Check if self-registration is turned off.
+     */
+    public static function isRegistrationOff(): bool
+    {
+        if ((bool) config('auth.is_register_off', false)) {
+            return true;
+        }
+
+        $allow = static::get('allow_registration');
+        if ($allow !== null) {
+            return in_array(strtolower((string) $allow), ['0', 'false', 'off', 'no'], true);
+        }
+
+        return false;
+    }
 }

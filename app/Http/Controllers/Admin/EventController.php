@@ -541,6 +541,107 @@ class EventController extends Controller
     }
 
     /**
+     * Update an event curriculum module.
+     */
+    public function updateModule(Request $request, Event $event, EventModule $module): RedirectResponse
+    {
+        abort_unless($module->event_id === $event->id, 404);
+
+        $sourceType = $request->input('source_type', 'collection');
+        $request->merge(['source_type' => $sourceType]);
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:50'],
+            'title' => ['required', 'string', 'max:255'],
+            'speaker_id' => ['nullable', Rule::exists('speakers', 'id')->where(fn ($query) => $query->whereNull('event_id')->orWhere('event_id', $event->id))],
+            'material_id' => ['nullable', 'exists:materials,id'],
+            'target_tracks' => ['nullable', 'array'],
+            'duration_jp' => ['required', 'integer', 'min:1'],
+            'target_tracks.*' => ['string', 'exists:participant_tracks,code'],
+            'delivery_method' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string'],
+            'learning_indicators' => ['nullable', 'string'],
+            'publication_status' => ['required', 'in:draft,review,published'],
+            'source_type' => ['required', 'in:collection,uploaded_pdf,external_link,video'],
+            'source_file' => [
+                Rule::requiredIf($sourceType === 'uploaded_pdf' && ! $module->source_file_path),
+                'nullable',
+                'file',
+                'mimes:pdf',
+                'max:51200',
+            ],
+            'source_url' => [Rule::requiredIf(in_array($sourceType, ['external_link', 'video'], true)), 'nullable', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail) use ($sourceType): void {
+                if ($sourceType === 'external_link' && ! MaterialSourceService::isValidExternalUrl($value)) {
+                    $fail('Gunakan tautan HTTPS publik yang valid.');
+                }
+                if ($sourceType === 'video' && ! MaterialSourceService::parseVideoUrl($value)) {
+                    $fail('Gunakan URL video YouTube atau Vimeo yang valid.');
+                }
+            }],
+        ]);
+
+        $filePath = $module->source_file_path;
+        $oldFilePathToDelete = null;
+
+        try {
+            if ($sourceType === 'uploaded_pdf') {
+                if ($request->hasFile('source_file')) {
+                    $oldFilePathToDelete = $module->source_file_path;
+                    $filePath = $request->file('source_file')->store("event-modules/{$event->id}", 'local');
+                }
+            } elseif ($module->source_file_path) {
+                // Switched to a non-file source type
+                $oldFilePathToDelete = $module->source_file_path;
+                $filePath = null;
+            }
+
+            $module->update([
+                'code' => $validated['code'],
+                'title' => $validated['title'],
+                'speaker_id' => $validated['speaker_id'] ?? null,
+                'material_id' => $sourceType === 'collection' ? ($validated['material_id'] ?? null) : null,
+                'track_codes' => $validated['target_tracks'] ?? [],
+                'jp' => $validated['duration_jp'],
+                'fulfillment_method' => $validated['delivery_method'] ?? null,
+                'description' => $validated['description'] ?? null,
+                'learning_indicators' => $validated['learning_indicators'] ?? null,
+                'publication_status' => $validated['publication_status'],
+                'is_published' => $validated['publication_status'] === 'published',
+                'source_type' => $sourceType,
+                'source_url' => in_array($sourceType, ['external_link', 'video'], true) ? ($validated['source_url'] ?? null) : null,
+                'source_file_path' => $filePath,
+            ]);
+
+            if ($oldFilePathToDelete && Storage::disk('local')->exists($oldFilePathToDelete)) {
+                Storage::disk('local')->delete($oldFilePathToDelete);
+            }
+        } catch (Throwable $exception) {
+            if ($filePath && $filePath !== $module->source_file_path) {
+                Storage::disk('local')->delete($filePath);
+            }
+
+            throw $exception;
+        }
+
+        return back()->with('success', 'Modul pembelajaran berhasil diperbarui.');
+    }
+
+    /**
+     * Delete an event curriculum module.
+     */
+    public function destroyModule(Event $event, EventModule $module): RedirectResponse
+    {
+        abort_unless($module->event_id === $event->id, 404);
+
+        if ($module->source_file_path && Storage::disk('local')->exists($module->source_file_path)) {
+            Storage::disk('local')->delete($module->source_file_path);
+        }
+
+        $module->delete();
+
+        return back()->with('success', 'Modul pembelajaran berhasil dihapus.');
+    }
+
+    /**
      * Update an event participant enrollment.
      */
     public function updateParticipant(Request $request, Event $event, EventParticipant $eventParticipant): RedirectResponse

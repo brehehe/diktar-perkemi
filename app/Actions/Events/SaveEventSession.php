@@ -154,7 +154,7 @@ class SaveEventSession
             'cbt_exam_package_id' => $isDaily ? null : ($isCbt ? $cbtPackageId : (array_key_exists('cbt_exam_package_id', $validated) ? $cbtPackageId : $session?->cbt_exam_package_id)),
             'requires_attendance_before_cbt' => array_key_exists('requires_attendance_before_cbt', $validated)
                 ? (bool) $validated['requires_attendance_before_cbt']
-                : ($session?->requires_attendance_before_cbt ?? false),
+                : (($isCbt || ! empty($cbtPackageId)) ? true : ($session?->requires_attendance_before_cbt ?? false)),
         ];
 
         if ($isDaily) {

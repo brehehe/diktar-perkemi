@@ -53,8 +53,14 @@ class EventLearningRoomService
         $isAdminOrOrganizer = $user->isAdmin() || in_array($user->role, ['Admin', 'Diktar', 'Penyelenggara'], true);
 
         // The event date range is authoritative. Stale sessions outside that range are not exposed.
+        // Guarantee strict chronological order (from earliest/oldest to latest/newest).
         $allEventSessions = $event->sessions
             ->filter(fn (EventSession $session) => $session->day_number >= 1 && $session->day_number <= $totalDays)
+            ->sortBy([
+                ['day_number', 'asc'],
+                ['start_time', 'asc'],
+                ['id', 'asc'],
+            ])
             ->values();
 
         // For participants, filter sessions matching their track or plenary sessions
@@ -67,11 +73,6 @@ class EventLearningRoomService
 
                 return in_array($trackCode, $session->track_codes, true);
             })->values();
-
-        // Determine active or next upcoming session
-        $activeSession = $sessions->first(fn (EventSession $session) => $session->isAttendanceActive())
-            ?? $sessions->firstWhere('status', 'ongoing')
-            ?? $sessions->first();
 
         // Participant's attendance records for this event
         $attendanceRecords = [];
@@ -98,6 +99,13 @@ class EventLearningRoomService
         $attendedSessionIds = collect($attendanceRecords)
             ->filter(fn ($record) => $record['type'] === 'check_in' && in_array($record['status'], ['present', 'late', 'manual_override'], true))
             ->pluck('session_id')->unique()->all();
+
+        // Determine active or next upcoming session
+        $unattendedActiveSession = $sessions->first(fn (EventSession $session) => $session->isAttendanceActive() && ! in_array($session->id, $attendedSessionIds, true));
+        $activeSession = $unattendedActiveSession
+            ?? $sessions->first(fn (EventSession $session) => $session->isAttendanceActive())
+            ?? $sessions->firstWhere('status', 'ongoing')
+            ?? $sessions->first();
         $dailySessions = $sessions->where('session_type_code', 'KEHADIRAN_HARIAN')->keyBy('day_number');
         $todayDailySession = $dailySessions->first(fn (EventSession $session) => $session->date?->isToday() && $session->isAttendanceActive());
         $hasArrivalAttendance = $isAdminOrOrganizer || $this->attendanceService->hasArrivalAttendance($event, $eventParticipant)
@@ -112,11 +120,12 @@ class EventLearningRoomService
                 return false;
             }
 
-            // Jika sesi tidak memerlukan absensi (none/disabled) atau absensi sudah tertutup/tidak aktif, bisa dilewati
-            if (in_array($session->attendance_setting, ['none', 'disabled'], true) || ! $session->isAttendanceActive()) {
+            // Sesi tanpa absensi (none/disabled) dapat diakses langsung
+            if (in_array($session->attendance_setting, ['none', 'disabled'], true)) {
                 return true;
             }
 
+            // Sesi yang mewajibkan absensi harus sudah dihadiri peserta
             return in_array($session->id, $attendedSessionIds, true);
         };
         $eventReaderUrl = fn (?string $materialSlug): ?string => $materialSlug
@@ -131,7 +140,7 @@ class EventLearningRoomService
             }
 
             $requiredSessions = $sessions->where('event_module_id', $module->id)
-                ->filter(fn (EventSession $session) => ! in_array($session->attendance_setting, ['none', 'disabled'], true) && $session->isAttendanceActive());
+                ->filter(fn (EventSession $session) => ! in_array($session->attendance_setting, ['none', 'disabled'], true));
 
             return $requiredSessions->isEmpty() || $requiredSessions->contains(fn (EventSession $session) => in_array($session->id, $attendedSessionIds, true));
         };
@@ -162,7 +171,7 @@ class EventLearningRoomService
                 }
 
                 $requiredSessions = $sessions->where('learning_module_id', $module->id)
-                    ->filter(fn (EventSession $session) => $session->attendance_setting !== 'none');
+                    ->filter(fn (EventSession $session) => ! in_array($session->attendance_setting, ['none', 'disabled'], true));
 
                 return $requiredSessions->isEmpty()
                     || $requiredSessions->contains(fn (EventSession $session) => in_array($session->id, $attendedSessionIds, true));
@@ -180,24 +189,32 @@ class EventLearningRoomService
                 'learning_objectives' => $lm->learning_objectives ?? [],
                 'competency_outcomes' => $lm->competency_outcomes ?? [],
                 'materials_count' => $lm->materials->count(),
-                'materials' => $lm->materials->map(fn ($mat) => [
-                    'id' => $mat->id,
-                    'title' => $mat->title,
-                    'slug' => $mat->slug,
-                    'type' => $mat->type,
-                    'cover_path' => $mat->cover_path,
-                    'author' => $mat->author,
-                    'sort_order' => $mat->pivot->sort_order,
-                    'is_required' => (bool) $mat->pivot->is_required,
-                    'instructor_notes' => $mat->pivot->instructor_notes,
-                    'estimated_duration_minutes' => $mat->pivot->estimated_duration_minutes,
-                    'cta_text' => match ($mat->type) {
-                        'video' => 'Tonton Video',
-                        'book', 'document' => 'Baca E-Book',
-                        default => 'Buka Buku Digital',
-                    },
-                    'reader_url' => $eventReaderUrl($mat->slug),
-                ]),
+                'materials' => $lm->materials->map(function ($mat) use ($eventReaderUrl, $sessions, $attendedSessionIds, $isAdminOrOrganizer) {
+                    $matSessions = $sessions->where('material_id', $mat->id)
+                        ->filter(fn (EventSession $session) => ! in_array($session->attendance_setting, ['none', 'disabled'], true));
+                    $isMatLocked = ! $isAdminOrOrganizer && $matSessions->isNotEmpty()
+                        && ! $matSessions->contains(fn (EventSession $session) => in_array($session->id, $attendedSessionIds, true));
+
+                    return [
+                        'id' => $mat->id,
+                        'title' => $mat->title,
+                        'slug' => $mat->slug,
+                        'type' => $mat->type,
+                        'cover_path' => $mat->cover_path,
+                        'author' => $mat->author,
+                        'sort_order' => $mat->pivot->sort_order,
+                        'is_required' => (bool) $mat->pivot->is_required,
+                        'is_locked' => $isMatLocked,
+                        'instructor_notes' => $mat->pivot->instructor_notes,
+                        'estimated_duration_minutes' => $mat->pivot->estimated_duration_minutes,
+                        'cta_text' => match ($mat->type) {
+                            'video' => 'Tonton Video',
+                            'book', 'document' => 'Baca E-Book',
+                            default => 'Buka Buku Digital',
+                        },
+                        'reader_url' => $isMatLocked ? null : $eventReaderUrl($mat->slug),
+                    ];
+                }),
             ]);
 
         // 2. My CBT Exams (filtered by participant track with accessibility rules)
@@ -266,7 +283,7 @@ class EventLearningRoomService
                 return $packageMatchesTrack($pkg);
             })
             ->values()
-            ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $hasArrivalAttendance, $isAdminOrOrganizer) {
+            ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $isAdminOrOrganizer) {
                 $userAttempts = $attemptsByPackage->get($pkg->id, collect());
 
                 $attemptsCount = $userAttempts->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)->count();
@@ -276,16 +293,15 @@ class EventLearningRoomService
                 // Check attendance prerequisite
                 $attendanceReqSessionId = $pkg->pivot?->requires_attendance_session_id;
                 $missingExamSession = $event->sessions->first(fn (EventSession $session) => $session->cbt_exam_package_id === $pkg->id
-                    && (bool) $session->requires_attendance_before_cbt
+                    && ((bool) $session->requires_attendance_before_cbt || $session->session_type_code === 'UJIAN')
                     && ! in_array($session->attendance_setting, ['none', 'disabled'], true)
-                    && $session->isAttendanceActive()
                     && ! in_array($session->id, $attendedSessionIds, true));
                 $sessionPrereqMet = ! $missingExamSession;
                 $sessionPrereqName = $missingExamSession?->topic;
 
                 if ($attendanceReqSessionId) {
                     $reqSession = $event->sessions->firstWhere('id', $attendanceReqSessionId);
-                    if ($reqSession && ! in_array($reqSession->attendance_setting, ['none', 'disabled'], true) && $reqSession->isAttendanceActive() && ! in_array($attendanceReqSessionId, $attendedSessionIds, true)) {
+                    if ($reqSession && ! in_array($reqSession->attendance_setting, ['none', 'disabled'], true) && ! in_array($attendanceReqSessionId, $attendedSessionIds, true)) {
                         $sessionPrereqMet = false;
                         $sessionPrereqName = $reqSession->topic ?? "Sesi #{$attendanceReqSessionId}";
                     }
@@ -303,7 +319,7 @@ class EventLearningRoomService
                     $deniedReason = 'Ujian belum dibuka.';
                 } elseif (! $sessionPrereqMet) {
                     $isAllowed = false;
-                    $deniedReason = "Anda belum melakukan absensi pada {$sessionPrereqName}.";
+                    $deniedReason = "Anda belum melakukan absensi pada {$sessionPrereqName}. Silakan scan absensi sesi terlebih dahulu.";
                 } elseif ($attemptsCount >= $attemptsAllowed) {
                     $isAllowed = false;
                     $deniedReason = ($lastAttempt?->is_passed)
@@ -312,12 +328,6 @@ class EventLearningRoomService
                 } elseif ($pkg->revision_method === 'paper' && in_array($lastAttempt?->status, CbtExamAttempt::TERMINAL_STATUSES, true) && ! $lastAttempt->is_passed) {
                     $isAllowed = false;
                     $deniedReason = 'Revisi ujian ini menggunakan unggah makalah PDF.';
-                }
-
-                $arrivalSessionActive = $event->sessions->where('session_type_code', 'KEHADIRAN_AWAL')->contains(fn ($s) => $s->isAttendanceActive());
-                if (! $hasArrivalAttendance && $arrivalSessionActive) {
-                    $isAllowed = false;
-                    $deniedReason = 'Kehadiran awal event belum tercatat.';
                 }
 
                 if ($isAdminOrOrganizer) {
@@ -340,6 +350,8 @@ class EventLearningRoomService
                     $examState = 'akan_datang';
                 } elseif ($pkg->status === 'closed') {
                     $examState = 'ditutup';
+                } elseif (! $isAllowed) {
+                    $examState = 'terkunci';
                 }
 
                 // Build per-attempt history (all terminal/completed attempts)

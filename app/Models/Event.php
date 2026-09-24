@@ -85,7 +85,7 @@ class Event extends Model
 
     public function sessions(): HasMany
     {
-        return $this->hasMany(EventSession::class)->orderBy('day_number')->orderBy('start_time');
+        return $this->hasMany(EventSession::class)->orderBy('day_number')->orderBy('start_time')->orderBy('id');
     }
 
     public function rooms(): HasMany

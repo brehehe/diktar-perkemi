@@ -149,12 +149,10 @@ class EventAttendanceService
 
     public function ensureExamAttendance(Event $event, EventParticipant $enrollment, CbtExamPackage $package): void
     {
-        $this->ensureArrivalAttendance($event, $enrollment);
-
         $examSessions = EventSession::query()
             ->where('event_id', $event->id)
             ->where('cbt_exam_package_id', $package->id)
-            ->get(['id', 'day_number', 'attendance_setting', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open']);
+            ->get(['id', 'day_number', 'attendance_setting', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open', 'requires_attendance_before_cbt', 'session_type_code', 'topic']);
 
         $linkedRequirementId = $event->linkedCbtPackages()
             ->where('cbt_exam_packages.id', $package->id)
@@ -164,48 +162,22 @@ class EventAttendanceService
             ? EventSession::query()
                 ->where('event_id', $event->id)
                 ->whereKey($linkedRequirementId)
-                ->first(['id', 'day_number', 'attendance_setting', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open'])
+                ->first(['id', 'day_number', 'attendance_setting', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open', 'requires_attendance_before_cbt', 'session_type_code', 'topic'])
             : null;
 
-        $dayNumbers = $examSessions->pluck('day_number');
-        if ($linkedRequirement) {
-            $dayNumbers->push($linkedRequirement->day_number);
-        }
-
-        $todayDailySession = EventSession::query()
-            ->where('event_id', $event->id)
-            ->where('session_type_code', 'KEHADIRAN_HARIAN')
-            ->whereDate('date', today())
-            ->first(['id', 'day_number', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open']);
-        if ($todayDailySession) {
-            $dayNumbers->push($todayDailySession->day_number);
-        }
-
-        $dailySessions = EventSession::query()
-            ->where('event_id', $event->id)
-            ->where('session_type_code', 'KEHADIRAN_HARIAN')
-            ->whereIn('day_number', $dayNumbers->unique())
-            ->get(['id', 'day_number', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open']);
-
-        // Hanya wajibkan absensi yang sedang aktif dan memang disyaratkan sebelum CBT (sesi yang tertutup, tanpa absensi, atau tidak mensyaratkan absensi sebelum CBT bisa dilewati)
+        // Sesi yang mewajibkan absensi sebelum CBT sesuai setting sesi di rundown
         $requiredSessionIds = $examSessions
-            ->filter(fn (EventSession $s) => (bool) $s->requires_attendance_before_cbt
-                && ! in_array($s->attendance_setting, ['none', 'disabled'], true)
-                && $s->isAttendanceActive())
+            ->filter(fn (EventSession $s) => ((bool) $s->requires_attendance_before_cbt || $s->session_type_code === 'UJIAN')
+                && ! in_array($s->attendance_setting, ['none', 'disabled'], true))
             ->pluck('id');
 
-        if ($linkedRequirement && ! in_array($linkedRequirement->attendance_setting, ['none', 'disabled'], true) && $linkedRequirement->isAttendanceActive()) {
+        if ($linkedRequirement && ! in_array($linkedRequirement->attendance_setting, ['none', 'disabled'], true)) {
             $requiredSessionIds->push($linkedRequirement->id);
         }
 
-        $activeDailySessions = $dailySessions->filter(fn (EventSession $s) => $s->isAttendanceActive());
+        $requiredSessionIds = $requiredSessionIds->unique()->values();
 
-        $attendanceSessionIds = $activeDailySessions->pluck('id')
-            ->merge($requiredSessionIds)
-            ->unique()
-            ->values();
-
-        if ($attendanceSessionIds->isEmpty()) {
+        if ($requiredSessionIds->isEmpty()) {
             return;
         }
 
@@ -214,22 +186,16 @@ class EventAttendanceService
             ->where('participant_id', $enrollment->participant_id)
             ->where('attendance_type', 'check_in')
             ->whereIn('status', $this->acceptedStatuses())
-            ->whereIn('event_session_id', $attendanceSessionIds)
+            ->whereIn('event_session_id', $requiredSessionIds)
             ->pluck('event_session_id');
 
-        foreach ($activeDailySessions as $dailySession) {
-            abort_unless(
-                $attendedSessionIds->contains($dailySession->id),
-                403,
-                "Absensi awal hari ke-{$dailySession->day_number} wajib dicatat sebelum memasuki sesi.",
-            );
-        }
+        $missingSessionIds = $requiredSessionIds->diff($attendedSessionIds);
 
-        abort_unless(
-            $requiredSessionIds->unique()->diff($attendedSessionIds)->isEmpty(),
-            403,
-            'Absensi sesi wajib diselesaikan sebelum ujian dibuka.',
-        );
+        if ($missingSessionIds->isNotEmpty()) {
+            $missingSession = EventSession::whereIn('id', $missingSessionIds)->first();
+            $sessionName = $missingSession?->topic ?? 'sesi ujian';
+            abort(403, "Silakan lakukan absensi terlebih dahulu pada \"{$sessionName}\" sebelum memulai ujian.");
+        }
     }
 
     public function record(

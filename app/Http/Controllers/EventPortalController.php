@@ -448,16 +448,9 @@ class EventPortalController extends Controller
         abort_unless($module->event_id === $event->id && $module->publication_status === 'published'
             && $module->source_type === 'uploaded_pdf' && $module->source_file_path, 404);
         abort_unless(! $module->track_codes || in_array($enrollment->track_code, $module->track_codes, true), 403);
-        $this->attendanceService->ensureArrivalAttendance($event, $enrollment);
-
-        $todayDailySession = $event->sessions()->where('session_type_code', 'KEHADIRAN_HARIAN')
-            ->whereDate('date', today())->first();
-        if ($todayDailySession && $todayDailySession->isAttendanceActive()) {
-            $this->attendanceService->ensureDayAttendance($event, $enrollment, $todayDailySession->day_number);
-        }
 
         $activeRequiredSessionIds = $event->sessions()->where('event_module_id', $module->id)
-            ->filter(fn ($s) => ! in_array($s->attendance_setting, ['none', 'disabled'], true) && $s->isAttendanceActive())
+            ->filter(fn ($s) => ! in_array($s->attendance_setting, ['none', 'disabled'], true))
             ->pluck('id');
         if ($activeRequiredSessionIds->isNotEmpty()) {
             abort_unless(EventAttendance::where('event_id', $event->id)
@@ -587,11 +580,15 @@ class EventPortalController extends Controller
         }
 
         $package = $this->eventPackage($event, $packageCode);
-        try {
+        if ($request->header('X-Inertia')) {
+            try {
+                $this->attendanceService->ensureExamAttendance($event, $eventParticipant, $package);
+            } catch (HttpException $e) {
+                return redirect()->route('event.learning-room', $slug)
+                    ->with('error', $e->getMessage() ?: 'Absensi wajib diselesaikan sebelum ujian dibuka.');
+            }
+        } else {
             $this->attendanceService->ensureExamAttendance($event, $eventParticipant, $package);
-        } catch (HttpException $e) {
-            return redirect()->route('event.learning-room', $slug)
-                ->with('error', $e->getMessage() ?: 'Absensi wajib diselesaikan sebelum ujian dibuka.');
         }
 
         if ($activeAttempt = $this->activeInProgressExamAttempt($event, $participant)) {

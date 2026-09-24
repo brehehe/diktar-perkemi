@@ -44,7 +44,8 @@ class AdminEventDetailService
                 $q->with(['speaker', 'sessionType', 'material', 'learningModule', 'module', 'cbtPackage'])
                     ->withCount('attendances')
                     ->orderBy('day_number')
-                    ->orderBy('start_time');
+                    ->orderBy('start_time')
+                    ->orderBy('id');
             },
             'eventParticipants' => function ($q) {
                 $q->with(['participant.user', 'track', 'registrationForm.verifier'])->orderBy('id');

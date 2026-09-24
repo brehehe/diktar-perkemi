@@ -166,6 +166,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/cbt/{package}/soal', [CbtController::class, 'storeQuestion'])->name('cbt.question.store');
 
         Route::post('/event/{event}/modul', [EventController::class, 'storeModule'])->name('event.module.store');
+        Route::match(['PUT', 'POST'], '/event/{event}/modul/{module}', [EventController::class, 'updateModule'])->name('event.module.update');
+        Route::delete('/event/{event}/modul/{module}', [EventController::class, 'destroyModule'])->name('event.module.destroy');
         Route::get('/event/{event}/modul/{module}/pdf', [EventController::class, 'downloadModuleFile'])->name('event.module.download');
 
         Route::get('/event/{event}/peserta/export-excel', [EventController::class, 'exportParticipantsExcel'])->name('event.participants.export-excel');

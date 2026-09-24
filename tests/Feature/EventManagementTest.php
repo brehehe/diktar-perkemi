@@ -324,3 +324,30 @@ test('admin can view master tracks and legends', function () {
         ->has('legends')
     );
 });
+
+test('admin can update and delete an event module', function () {
+    $event = Event::firstOrFail();
+    $module = $event->modules()->firstOrFail();
+
+    $response = $this->actingAs($this->admin)->put("/admin/event/{$event->id}/modul/{$module->id}", [
+        'code' => 'MOD-UPDATED-01',
+        'title' => 'Judul Modul Diperbarui',
+        'duration_jp' => 4,
+        'publication_status' => 'published',
+        'source_type' => 'collection',
+    ]);
+
+    $response->assertRedirect();
+    $this->assertDatabaseHas('event_modules', [
+        'id' => $module->id,
+        'code' => 'MOD-UPDATED-01',
+        'title' => 'Judul Modul Diperbarui',
+        'jp' => 4,
+    ]);
+
+    $deleteResponse = $this->actingAs($this->admin)->delete("/admin/event/{$event->id}/modul/{$module->id}");
+    $deleteResponse->assertRedirect();
+    $this->assertDatabaseMissing('event_modules', [
+        'id' => $module->id,
+    ]);
+});

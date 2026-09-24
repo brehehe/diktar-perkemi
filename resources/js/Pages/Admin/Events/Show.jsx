@@ -403,6 +403,7 @@ export default function Show({
     const [editingSession, setEditingSession] = useState(null);
     const [selectedSessionLinks, setSelectedSessionLinks] = useState([]);
     const [isModuleModalOpen, setIsModuleModalOpen] = useState(false);
+    const [editingModule, setEditingModule] = useState(null);
 
     useEffect(() => {
         if (!isSessionModalOpen) return;
@@ -477,7 +478,7 @@ export default function Show({
         event_module_id: '',
         material_id: '',
         cbt_exam_package_id: '',
-        requires_attendance_before_cbt: false,
+        requires_attendance_before_cbt: true,
     });
 
     // Master Linking Forms
@@ -639,13 +640,59 @@ export default function Show({
 
     const handleSaveModule = (e) => {
         e.preventDefault();
-        moduleForm.post(`/admin/event/${event.id}/modul`, {
-            forceFormData: true,
-            onSuccess: () => {
-                setIsModuleModalOpen(false);
-                moduleForm.reset();
-            },
+        if (editingModule) {
+            moduleForm.transform((data) => ({
+                ...data,
+                _method: 'PUT',
+            })).post(`/admin/event/${event.id}/modul/${editingModule.id}`, {
+                forceFormData: true,
+                onSuccess: () => {
+                    setIsModuleModalOpen(false);
+                    setEditingModule(null);
+                    moduleForm.reset();
+                },
+            });
+        } else {
+            moduleForm.transform((data) => ({
+                ...data,
+                _method: 'POST',
+            })).post(`/admin/event/${event.id}/modul`, {
+                forceFormData: true,
+                onSuccess: () => {
+                    setIsModuleModalOpen(false);
+                    moduleForm.reset();
+                },
+            });
+        }
+    };
+
+    const openEditModuleModal = (m) => {
+        setEditingModule(m);
+        moduleForm.clearErrors();
+        moduleForm.setData({
+            code: m.code || '',
+            title: m.title || '',
+            speaker_id: m.speaker?.id || '',
+            material_id: m.material?.id || '',
+            source_type: m.source_type || 'collection',
+            source_url: m.source_url || '',
+            source_file: null,
+            target_tracks: m.target_tracks || [],
+            duration_jp: m.duration_jp || 2,
+            delivery_method: m.delivery_method || '',
+            description: m.description || '',
+            learning_indicators: m.learning_indicators || '',
+            publication_status: m.publication_status || 'draft',
         });
+        setIsModuleModalOpen(true);
+    };
+
+    const handleDeleteModule = (m) => {
+        if (confirm(`Hapus modul kurikulum "${m.title}" (${m.code}) dari event ini?`)) {
+            router.delete(`/admin/event/${event.id}/modul/${m.id}`, {
+                preserveScroll: true,
+            });
+        }
     };
 
     const handleUpdateParticipant = (e) => {
@@ -817,7 +864,7 @@ export default function Show({
             event_module_id: session.event_module_id || '',
             material_id: session.material_id || '',
             cbt_exam_package_id: session.cbt_exam_package_id || '',
-            requires_attendance_before_cbt: session.requires_attendance_before_cbt || false,
+            requires_attendance_before_cbt: session.requires_attendance_before_cbt !== undefined ? Boolean(session.requires_attendance_before_cbt) : true,
         });
         setIsSessionModalOpen(true);
     };
@@ -1516,7 +1563,7 @@ export default function Show({
                                         event_module_id: '',
                                         material_id: '',
                                         cbt_exam_package_id: '',
-                                        requires_attendance_before_cbt: false,
+                                        requires_attendance_before_cbt: true,
                                     });
                                     setIsSessionModalOpen(true);
                                 }}
@@ -3788,6 +3835,7 @@ export default function Show({
                                 variant="primary"
                                 icon={<Plus className="w-4 h-4" />}
                                 onClick={() => {
+                                    setEditingModule(null);
                                     moduleForm.reset();
                                     setIsModuleModalOpen(true);
                                 }}
@@ -3807,9 +3855,29 @@ export default function Show({
                                             <span className="font-mono text-xs font-bold text-[#0B63CE] bg-[#EAF5FF] px-2 py-0.5 rounded">
                                                 {m.code}
                                             </span>
-                                            <span className="text-xs font-bold text-[#EE9B25] bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                                {m.duration_jp} JP
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-xs font-bold text-[#EE9B25] bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                                    {m.duration_jp} JP
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openEditModuleModal(m)}
+                                                    className="p-1 rounded text-[#6B7C93] hover:text-[#0B63CE] hover:bg-[#EAF5FF] transition-colors"
+                                                    title="Edit Modul"
+                                                    aria-label={`Edit modul ${m.title}`}
+                                                >
+                                                    <Edit3 className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteModule(m)}
+                                                    className="p-1 rounded text-[#6B7C93] hover:text-[#DD4D7C] hover:bg-[#FDE8EF] transition-colors"
+                                                    title="Hapus Modul"
+                                                    aria-label={`Hapus modul ${m.title}`}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <h3 className="font-bold text-sm text-[#0E2747] group-hover:text-[#0B63CE] transition-colors line-clamp-2">
@@ -3828,25 +3896,45 @@ export default function Show({
                                         )}
                                     </div>
 
-                                    <div className="pt-3 border-t border-[#DCE7F3] flex items-center justify-between">
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#0A3F82] bg-[#EAF5FF] px-2 py-0.5 rounded border border-[#DCE7F3]">
-                                            {m.publication_status === 'published' ? 'Terbit' : m.publication_status === 'review' ? 'Dalam peninjauan' : 'Draft'}
-                                        </span>
-
-                                        {m.source_type === 'uploaded_pdf' && m.has_source_file ? (
-                                            <a href={`/admin/event/${event.id}/modul/${m.id}/pdf`} className="inline-flex min-h-11 items-center px-3 text-xs font-semibold text-[#0B63CE] hover:underline focus-visible:outline-2 focus-visible:outline-[#0B63CE]">Unduh PDF</a>
-                                        ) : ['external_link', 'video'].includes(m.source_type) && m.source_url ? (
-                                            <a href={m.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center px-3 text-xs font-semibold text-[#0B63CE] hover:underline focus-visible:outline-2 focus-visible:outline-[#0B63CE]">Buka sumber</a>
-                                        ) : m.material?.slug ? (
-                                            <Link
-                                                href={`/koleksi/${m.material.slug}/baca`}
-                                                target="_blank"
-                                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0B63CE] text-white text-xs font-semibold hover:bg-[#0A3F82] transition-colors shadow-2xs"
+                                    <div className="pt-3 border-t border-[#DCE7F3] flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#0A3F82] bg-[#EAF5FF] px-2 py-0.5 rounded border border-[#DCE7F3]">
+                                                {m.publication_status === 'published' ? 'Terbit' : m.publication_status === 'review' ? 'Dalam peninjauan' : 'Draft'}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => openEditModuleModal(m)}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-[#0B63CE] hover:bg-[#EAF5FF] rounded transition-colors"
                                             >
-                                                <BookOpen className="w-3.5 h-3.5" />
-                                                <span>Buka di Flipbook</span>
-                                            </Link>
-                                        ) : <span className="text-xs text-[#6B7C93]">Belum ada sumber materi</span>}
+                                                <Edit3 className="w-3 h-3" />
+                                                <span>Edit</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteModule(m)}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-[#DD4D7C] hover:bg-[#FDE8EF] rounded transition-colors"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                                <span>Hapus</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            {m.source_type === 'uploaded_pdf' && m.has_source_file ? (
+                                                <a href={`/admin/event/${event.id}/modul/${m.id}/pdf`} className="inline-flex min-h-9 items-center px-2.5 text-xs font-semibold text-[#0B63CE] hover:underline focus-visible:outline-2 focus-visible:outline-[#0B63CE]">Unduh PDF</a>
+                                            ) : ['external_link', 'video'].includes(m.source_type) && m.source_url ? (
+                                                <a href={m.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center px-2.5 text-xs font-semibold text-[#0B63CE] hover:underline focus-visible:outline-2 focus-visible:outline-[#0B63CE]">Buka sumber</a>
+                                            ) : m.material?.slug ? (
+                                                <Link
+                                                    href={`/koleksi/${m.material.slug}/baca`}
+                                                    target="_blank"
+                                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0B63CE] text-white text-xs font-semibold hover:bg-[#0A3F82] transition-colors shadow-2xs"
+                                                >
+                                                    <BookOpen className="w-3.5 h-3.5" />
+                                                    <span>Flipbook</span>
+                                                </Link>
+                                            ) : <span className="text-xs text-[#6B7C93]">Belum ada sumber</span>}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -4666,6 +4754,7 @@ export default function Show({
                                             event_module_id: isCbt ? '' : current.event_module_id,
                                             material_id: isCbt ? '' : current.material_id,
                                             cbt_exam_package_id: isCbt ? current.cbt_exam_package_id : '',
+                                            requires_attendance_before_cbt: isCbt ? true : current.requires_attendance_before_cbt,
                                         }));
                                     }
                                 }}
@@ -4742,6 +4831,14 @@ export default function Show({
                                         searchPlaceholder="Cari kode atau nama paket CBT…"
                                         error={sessionForm.errors.cbt_exam_package_id}
                                         required
+                                    />
+
+                                    <Checkbox
+                                        checked={Boolean(sessionForm.data.requires_attendance_before_cbt)}
+                                        onChange={(e) => sessionForm.setData('requires_attendance_before_cbt', e.target.checked)}
+                                        label="Wajibkan absensi masuk sesi sebelum peserta dapat memulai ujian CBT"
+                                        helperText="Peserta harus tercatat hadir (scan QR / manual override) pada sesi ini sebelum tombol ujian dapat dibuka."
+                                        className="min-h-11 rounded-lg border border-[#DCE7F3] bg-white p-3"
                                     />
 
                                     <p className="border border-[#DCE7F3] bg-white p-3 text-xs text-[#112743]">Peserta harus absen masuk dengan QR sesi ini sebelum dapat memulai ujian.</p>
@@ -5488,19 +5585,25 @@ export default function Show({
                 </form>
             </Modal>
 
-            {/* MODAL: Tambah Modul Pembelajaran */}
+            {/* MODAL: Tambah/Edit Modul Pembelajaran */}
             <Modal
                 isOpen={isModuleModalOpen}
-                onClose={() => setIsModuleModalOpen(false)}
-                title="Tambah Modul Kurikulum Penataran"
+                onClose={() => {
+                    setIsModuleModalOpen(false);
+                    setEditingModule(null);
+                }}
+                title={editingModule ? 'Edit Modul Kurikulum Penataran' : 'Tambah Modul Kurikulum Penataran'}
                 size="full"
                 footer={
                     <>
-                        <Button variant="secondary" onClick={() => setIsModuleModalOpen(false)}>
+                        <Button variant="secondary" onClick={() => {
+                            setIsModuleModalOpen(false);
+                            setEditingModule(null);
+                        }}>
                             Batal
                         </Button>
                         <Button type="submit" form="module-form" variant="primary" loading={moduleForm.processing}>
-                            Simpan Modul
+                            {editingModule ? 'Simpan Perubahan' : 'Simpan Modul'}
                         </Button>
                     </>
                 }
@@ -5564,7 +5667,7 @@ export default function Show({
                             {publishedMaterials.map((mat) => <option key={mat.id} value={mat.id}>[{mat.code}] {mat.title}</option>)}
                         </Select>
                     </FormField>}
-                    {moduleForm.data.source_type === 'uploaded_pdf' && <FileInput id="module-pdf" label="Berkas PDF, maksimal 50 MB" accept="application/pdf" required onChange={(event) => moduleForm.setData('source_file', event.target.files[0] || null)} error={moduleForm.errors.source_file} />}
+                    {moduleForm.data.source_type === 'uploaded_pdf' && <FileInput id="module-pdf" label={editingModule?.has_source_file ? "Berkas PDF (kosongkan jika tidak mengubah, maks 50 MB)" : "Berkas PDF, maksimal 50 MB"} accept="application/pdf" required={!editingModule || !editingModule.has_source_file} onChange={(event) => moduleForm.setData('source_file', event.target.files[0] || null)} error={moduleForm.errors.source_file} />}
                     {['external_link', 'video'].includes(moduleForm.data.source_type) && <FormField label={moduleForm.data.source_type === 'video' ? 'URL video YouTube atau Vimeo' : 'URL buku digital HTTPS'} error={moduleForm.errors.source_url}>
                         <Input type="url" required value={moduleForm.data.source_url} onChange={(e) => moduleForm.setData('source_url', e.target.value)} />
                     </FormField>}

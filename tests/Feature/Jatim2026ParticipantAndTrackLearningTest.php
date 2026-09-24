@@ -54,11 +54,12 @@ test('learning room filters parallel sessions and CBT exams by participant track
 
     // Check in arrival so learning room opens
     $arrSession = $this->event->sessions()->where('session_type_code', 'KEHADIRAN_AWAL')->firstOrFail();
-    EventAttendance::create([
+    EventAttendance::firstOrCreate([
         'event_id' => $this->event->id,
         'event_session_id' => $arrSession->id,
         'participant_id' => $victor->id,
         'attendance_type' => 'check_in',
+    ], [
         'status' => 'present',
         'checked_in_at' => now(),
         'method' => 'scan_qr',

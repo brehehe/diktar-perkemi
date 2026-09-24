@@ -34,28 +34,29 @@ beforeEach(function () {
 test('admin can open and close attendance for an event session', function () {
     $event = Event::first();
     $session = $event->sessions()->first();
+    $session->update(['attendance_setting' => 'none', 'is_attendance_open' => false]);
 
-    // 1. Open attendance
+    // 1. Open attendance without explicit setting (should default to check_in)
     $openResponse = $this->actingAs($this->admin)
-        ->post("/admin/event/{$event->id}/sesi/{$session->id}/absensi/buka", [
-            'attendance_setting' => 'check_in',
-        ]);
+        ->post("/admin/event/{$event->id}/sesi/{$session->id}/absensi/buka");
 
     $openResponse->assertSessionHasNoErrors();
     $session->refresh();
 
     expect($session->is_attendance_open)->toBeTrue()
+        ->and($session->attendance_setting)->toBe('check_in')
         ->and($session->qr_token)->not->toBeEmpty()
         ->and($session->qr_short_code)->not->toBeEmpty();
 
-    // 2. Close attendance
+    // 2. Close attendance (should set attendance_setting to none)
     $closeResponse = $this->actingAs($this->admin)
         ->post("/admin/event/{$event->id}/sesi/{$session->id}/absensi/tutup");
 
     $closeResponse->assertSessionHasNoErrors();
     $session->refresh();
 
-    expect($session->is_attendance_open)->toBeFalse();
+    expect($session->is_attendance_open)->toBeFalse()
+        ->and($session->attendance_setting)->toBe('none');
 });
 
 test('admin can view printable QR code page for an event session', function () {
@@ -597,6 +598,30 @@ test('admin can generate attendance for all participants across relevant session
     // Verify each participant now has checked_in_at and attendance_status present
     expect($event->eventParticipants()->where('attendance_status', 'present')->count())->toBe($participantCount);
     expect($event->eventParticipants()->where('checkin_status', 'checked_in')->count())->toBe($participantCount);
+});
+
+test('admin can generate attendance specifically for a single day', function () {
+    $event = Event::firstOrFail();
+    $event->attendances()->delete();
+
+    $response = $this->actingAs($this->admin)
+        ->post("/admin/event/{$event->id}/absensi/generate", [
+            'status' => 'present',
+            'method' => 'manual_admin',
+            'include_arrival' => true,
+            'include_daily' => true,
+            'include_sessions' => true,
+            'day_number' => 1,
+        ]);
+
+    $response->assertRedirect()->assertSessionHas('success');
+    expect($event->attendances()->count())->toBeGreaterThan(0);
+
+    // Verify all generated attendances belong only to day 1 sessions
+    $nonDay1AttendanceCount = EventAttendance::where('event_id', $event->id)
+        ->whereHas('session', fn ($q) => $q->where('day_number', '!=', 1))
+        ->count();
+    expect($nonDay1AttendanceCount)->toBe(0);
 });
 
 test('attendance from another event cannot be reset through the current event', function () {

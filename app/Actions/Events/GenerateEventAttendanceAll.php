@@ -21,6 +21,7 @@ class GenerateEventAttendanceAll
      *     include_sessions?: bool,
      *     target_track?: ?string,
      *     recorded_by?: ?int,
+     *     day_number?: int|string|null,
      * }  $options
      * @return array{
      *     attendance_count: int,
@@ -37,6 +38,9 @@ class GenerateEventAttendanceAll
         $includeDaily = $options['include_daily'] ?? true;
         $includeSessions = $options['include_sessions'] ?? true;
         $targetTrack = $options['target_track'] ?? null;
+        $dayNumber = isset($options['day_number']) && $options['day_number'] !== '' && $options['day_number'] !== 'all'
+            ? (int) $options['day_number']
+            : null;
 
         return DB::transaction(function () use (
             $event,
@@ -46,7 +50,8 @@ class GenerateEventAttendanceAll
             $includeArrival,
             $includeDaily,
             $includeSessions,
-            $targetTrack
+            $targetTrack,
+            $dayNumber
         ): array {
             $participants = EventParticipant::query()
                 ->where('event_id', $event->id)
@@ -71,7 +76,11 @@ class GenerateEventAttendanceAll
                 ->get();
 
             // Filter sessions based on scope
-            $targetSessions = $sessions->filter(function (EventSession $session) use ($includeArrival, $includeDaily, $includeSessions) {
+            $targetSessions = $sessions->filter(function (EventSession $session) use ($includeArrival, $includeDaily, $includeSessions, $dayNumber) {
+                if ($dayNumber !== null && (int) $session->day_number !== $dayNumber) {
+                    return false;
+                }
+
                 if ($session->session_type_code === 'KEHADIRAN_AWAL') {
                     return $includeArrival;
                 }

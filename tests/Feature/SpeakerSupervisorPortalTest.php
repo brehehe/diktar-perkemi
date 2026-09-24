@@ -337,3 +337,207 @@ test('admin can create login account for speaker from event', function () {
     expect($createdUser->role)->toBe('Pemateri');
     expect(Hash::check('Pemateri2026!', $createdUser->password))->toBeTrue();
 });
+
+test('koordinator acara can access schedule portal and see management capabilities', function () {
+    $coordinator = User::factory()->create(['role' => 'Koordinator Acara', 'email' => 'koordinator@perkemi.id']);
+    $event = createTestEvent();
+
+    EventSession::create([
+        'event_id' => $event->id,
+        'topic' => 'Sesi Penataran Dasar',
+        'session_type_code' => 'TEORI',
+        'day_number' => 1,
+        'session_number' => 'Sesi 1',
+        'start_time' => '08:00',
+        'end_time' => '09:30',
+        'duration_jp' => 2,
+    ]);
+
+    $response = $this->actingAs($coordinator)->get(route('speaker.schedule'));
+
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Speaker/Schedule')
+        ->where('canManageSchedule', true)
+        ->where('isSupervisorMode', true)
+        ->has('sessions', 1)
+    );
+});
+
+test('koordinator acara or admin can reschedule delayed session and shift subsequent sessions', function () {
+    $coordinator = User::factory()->create(['role' => 'Koordinator Acara']);
+    $event = createTestEvent();
+
+    // Sesi 1: 08:00 - 09:30
+    $session1 = EventSession::create([
+        'event_id' => $event->id,
+        'topic' => 'Sesi 1 (Molor)',
+        'session_type_code' => 'TEORI',
+        'day_number' => 1,
+        'session_number' => 'Sesi 1',
+        'start_time' => '08:00',
+        'end_time' => '09:30',
+        'duration_jp' => 2,
+        'status' => 'scheduled',
+    ]);
+
+    // Sesi 2: 09:45 - 11:15
+    $session2 = EventSession::create([
+        'event_id' => $event->id,
+        'topic' => 'Sesi 2 (Subsequent)',
+        'session_type_code' => 'PRAKTIK',
+        'day_number' => 1,
+        'session_number' => 'Sesi 2',
+        'start_time' => '09:45',
+        'end_time' => '11:15',
+        'duration_jp' => 2,
+        'status' => 'scheduled',
+    ]);
+
+    // Sesi Hari 2 (should NOT be shifted)
+    $sessionDay2 = EventSession::create([
+        'event_id' => $event->id,
+        'topic' => 'Sesi Hari 2',
+        'session_type_code' => 'TEORI',
+        'day_number' => 2,
+        'session_number' => 'Sesi 1',
+        'start_time' => '08:00',
+        'end_time' => '09:30',
+        'duration_jp' => 2,
+        'status' => 'scheduled',
+    ]);
+
+    // Reschedule Session 1: extended by 30 mins (ends at 10:00 instead of 09:30) with shift_subsequent_sessions = true
+    $response = $this->actingAs($coordinator)->post(route('speaker.session.reschedule', $session1), [
+        'start_time' => '08:00',
+        'end_time' => '10:00',
+        'status' => 'delayed',
+        'shift_subsequent_sessions' => true,
+    ]);
+
+    $response->assertRedirect();
+    $response->assertSessionHas('success');
+
+    $session1->refresh();
+    $session2->refresh();
+    $sessionDay2->refresh();
+
+    expect($session1->status)->toBe('delayed');
+    expect(substr($session1->end_time, 0, 5))->toBe('10:00');
+
+    // Sesi 2 shifted forward by 30 minutes: 09:45 -> 10:15, 11:15 -> 11:45
+    expect(substr($session2->start_time, 0, 5))->toBe('10:15');
+    expect(substr($session2->end_time, 0, 5))->toBe('11:45');
+    expect($session2->status)->toBe('delayed');
+
+    // Sesi Day 2 remains intact
+    expect(substr($sessionDay2->start_time, 0, 5))->toBe('08:00');
+    expect(substr($sessionDay2->end_time, 0, 5))->toBe('09:30');
+});
+
+test('koordinator acara can create and update rundown session via speaker portal', function () {
+    $coordinator = User::factory()->create(['role' => 'Koordinator Acara']);
+    $event = createTestEvent();
+
+    $storeResponse = $this->actingAs($coordinator)->post(route('speaker.session.store', $event), [
+        'day_number' => 1,
+        'session_number' => 'Sesi 1',
+        'start_time' => '08:00',
+        'end_time' => '09:30',
+        'duration_jp' => 2,
+        'topic' => 'Sesi Baru Dibuat Koordinator',
+        'subtopic' => 'Pengenalan Shorinji Kempo',
+        'status' => 'scheduled',
+        'method' => 'Teori & Praktik',
+    ]);
+
+    $storeResponse->assertRedirect();
+    $created = EventSession::where('topic', 'Sesi Baru Dibuat Koordinator')->first();
+    expect($created)->not->toBeNull();
+    expect($created->day_number)->toBe(1);
+
+    // Update
+    $updateResponse = $this->actingAs($coordinator)->put(route('speaker.session.update', $created), [
+        'day_number' => 1,
+        'session_number' => 'Sesi 1 Revisi',
+        'start_time' => '08:30',
+        'end_time' => '10:00',
+        'duration_jp' => 2,
+        'topic' => 'Sesi Diperbarui Koordinator',
+        'status' => 'ongoing',
+    ]);
+
+    $updateResponse->assertRedirect();
+    $created->refresh();
+    expect($created->topic)->toBe('Sesi Diperbarui Koordinator');
+    expect($created->status)->toBe('ongoing');
+});
+
+test('pemateri user has view only access and cannot manage schedule or mutate sessions', function () {
+    $pemateriUser = User::factory()->create(['role' => 'Pemateri', 'email' => 'sensei.viewonly@perkemi.id']);
+    $speaker = Speaker::create([
+        'user_id' => $pemateriUser->id,
+        'name' => 'Sensei View Only',
+        'contact_email' => $pemateriUser->email,
+        'type' => 'internal',
+        'is_active' => true,
+        'is_supervisor' => true,
+    ]);
+
+    $event = createTestEvent();
+    $session = EventSession::create([
+        'event_id' => $event->id,
+        'speaker_id' => $speaker->id,
+        'topic' => 'Sesi Penataran View Only',
+        'session_type_code' => 'TEORI',
+        'day_number' => 1,
+        'start_time' => '08:00',
+        'end_time' => '09:30',
+        'duration_jp' => 2,
+        'is_attendance_open' => true,
+        'attendance_setting' => 'check_in',
+        'qr_short_code' => 'ABC123',
+    ]);
+
+    // 1. Check schedule props: canManageSchedule is false, attendance fields are present and real
+    $response = $this->actingAs($pemateriUser)->get(route('speaker.schedule'));
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Speaker/Schedule')
+        ->where('canManageSchedule', false)
+        ->has('sessions', 1)
+        ->where('sessions.0.is_attendance_open', true)
+        ->where('sessions.0.attendance_setting', 'check_in')
+        ->where('sessions.0.qr_short_code', 'ABC123')
+        ->where('sessions.0.attendances_count', 0)
+    );
+
+    // 2. Pemateri cannot store new session
+    $this->actingAs($pemateriUser)
+        ->post(route('speaker.session.store', $event), [
+            'day_number' => 1,
+            'topic' => 'Sesi Ilegal',
+        ])
+        ->assertForbidden();
+
+    // 3. Pemateri cannot update session
+    $this->actingAs($pemateriUser)
+        ->put(route('speaker.session.update', $session), [
+            'day_number' => 1,
+            'topic' => 'Update Ilegal',
+        ])
+        ->assertForbidden();
+
+    // 4. Pemateri cannot reschedule session
+    $this->actingAs($pemateriUser)
+        ->post(route('speaker.session.reschedule', $session), [
+            'start_time' => '09:00',
+            'end_time' => '10:30',
+        ])
+        ->assertForbidden();
+
+    // 5. Pemateri cannot delete session
+    $this->actingAs($pemateriUser)
+        ->delete(route('speaker.session.destroy', $session))
+        ->assertForbidden();
+});

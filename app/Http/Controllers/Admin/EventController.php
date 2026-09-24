@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Events\RescheduleEventSession;
 use App\Actions\Events\SaveEvent;
 use App\Actions\Events\SaveEventSession;
 use App\Http\Controllers\Controller;
@@ -28,7 +29,9 @@ use App\Services\EventExportService;
 use App\Services\MaterialSourceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -177,6 +180,62 @@ class EventController extends Controller
     }
 
     /**
+     * Display dedicated rundown management page across events with dynamic event & day filter.
+     */
+    public function rundownIndex(Request $request): Response
+    {
+        $events = Event::query()
+            ->latest('start_date')
+            ->get();
+
+        $today = now()->toDateString();
+        $activeEvent = $events->first(function ($e) use ($today) {
+            if ($e->status === 'ongoing') {
+                return true;
+            }
+            if ($e->start_date && $e->end_date) {
+                $start = $e->start_date->format('Y-m-d');
+                $end = $e->end_date->format('Y-m-d');
+
+                return $today >= $start && $today <= $end;
+            }
+
+            return false;
+        }) ?? $events->firstWhere('status', 'registration_open')
+           ?? $events->first();
+
+        $selectedEventId = $request->input('event_id');
+        if ($selectedEventId && is_numeric($selectedEventId)) {
+            $selectedEvent = Event::find((int) $selectedEventId) ?? $activeEvent;
+        } else {
+            $selectedEvent = $activeEvent;
+        }
+
+        if (! $selectedEvent && $events->isNotEmpty()) {
+            $selectedEvent = $events->first();
+        }
+
+        $payload = $selectedEvent ? $this->eventDetail->data($selectedEvent) : [];
+
+        $payload['availableEvents'] = $events->map(fn ($e) => [
+            'id' => $e->id,
+            'title' => $e->title ?? $e->name,
+            'name' => $e->name ?? $e->title,
+            'status' => $e->status,
+            'start_date' => $e->start_date?->format('d M Y'),
+            'end_date' => $e->end_date?->format('d M Y'),
+            'location' => $e->location,
+            'total_days' => $e->total_days,
+            'is_active' => $activeEvent && $activeEvent->id === $e->id,
+        ]);
+        $payload['activeEventId'] = $activeEvent?->id;
+        $payload['selectedEventId'] = $selectedEvent?->id;
+        $payload['initialDay'] = (int) $request->input('day', 1);
+
+        return Inertia::render('Admin/Rundown/Index', $payload);
+    }
+
+    /**
      * Show the form for editing an event.
      */
     public function edit(Event $event): Response
@@ -269,6 +328,42 @@ class EventController extends Controller
         $session->delete();
 
         return back()->with('success', 'Sesi rundown berhasil dihapus.');
+    }
+
+    /**
+     * Reschedule session or adjust for delay (molor) and optionally shift subsequent sessions.
+     */
+    public function rescheduleSession(
+        Request $request,
+        Event $event,
+        EventSession $session,
+        RescheduleEventSession $rescheduler,
+    ): RedirectResponse {
+        abort_unless($session->event_id === $event->id, 404);
+
+        $validated = $request->validate([
+            'day_number' => ['nullable', 'integer', 'min:1', 'max:'.($event->total_days ?: 30)],
+            'start_time' => ['nullable', 'string', 'max:10'],
+            'end_time' => ['nullable', 'string', 'max:10'],
+            'status' => ['nullable', 'string', 'in:scheduled,ongoing,delayed,completed,cancelled'],
+            'speaker_id' => ['nullable', 'exists:speakers,id'],
+            'room' => ['nullable', 'string', 'max:100'],
+            'topic' => ['nullable', 'string', 'max:255'],
+            'subtopic' => ['nullable', 'string'],
+            'shift_minutes' => ['nullable', 'integer'],
+            'shift_subsequent_sessions' => ['nullable', 'boolean'],
+        ]);
+
+        $result = $rescheduler->handle($session, $validated);
+
+        $msg = "Jadwal sesi \"{$session->topic}\" berhasil disesuaikan.";
+        if ($result['shifted_sessions_count'] > 0) {
+            $shiftMin = $result['shift_minutes'];
+            $prefix = $shiftMin > 0 ? "+{$shiftMin}" : "{$shiftMin}";
+            $msg .= " Sebanyak {$result['shifted_sessions_count']} sesi berikutnya pada hari ini otomatis digeser ({$prefix} menit).";
+        }
+
+        return back()->with('success', $msg);
     }
 
     public function storeRoom(Request $request, Event $event): RedirectResponse
@@ -858,5 +953,58 @@ class EventController extends Controller
     public function exportParticipantsExcel(Event $event, EventExportService $exportService): BinaryFileResponse
     {
         return $exportService->exportParticipants($event);
+    }
+
+    /**
+     * Display printable event rundown.
+     */
+    public function printRundown(Event $event): Response
+    {
+        Gate::authorize('view', $event);
+
+        $sessions = $event->sessions()
+            ->with([
+                'sessionType:id,code,name',
+                'speaker:id,name,title_degree,dan_rank,type,position,organization',
+                'eventRoom:id,name',
+                'learningModule:id,code,title',
+            ])
+            ->orderBy('day_number')
+            ->orderBy('start_time')
+            ->get();
+
+        return Inertia::render('Admin/Events/PrintRundown', [
+            'event' => [
+                'id' => $event->id,
+                'name' => $event->title,
+                'slug' => $event->slug,
+                'location' => $event->location,
+                'start_date' => $event->start_date?->format('Y-m-d'),
+                'end_date' => $event->end_date?->format('Y-m-d'),
+                'date_formatted' => $event->date_formatted,
+                'duration_text' => $event->duration_days,
+                'total_days' => $event->total_days,
+            ],
+            'sessions' => $sessions->map(fn ($s) => [
+                'id' => $s->id,
+                'day_number' => $s->day_number,
+                'session_number' => $s->session_number,
+                'session_type_name' => $s->sessionType?->name ?? $s->session_type_code ?? 'SESI',
+                'session_date' => $s->date?->format('Y-m-d'),
+                'date_formatted' => $s->date ? Carbon::parse($s->date)->locale('id')->isoFormat('dddd, D MMMM Y') : '-',
+                'start_time' => $s->start_time ? substr($s->start_time, 0, 5) : '',
+                'end_time' => $s->end_time ? substr($s->end_time, 0, 5) : '',
+                'time_range' => $s->start_time && $s->end_time ? substr($s->start_time, 0, 5).' — '.substr($s->end_time, 0, 5).' WIB' : '-',
+                'topic' => $s->topic,
+                'subtopic' => $s->subtopic,
+                'method' => $s->method ?? 'Teori & Praktik',
+                'room' => $s->eventRoom?->name ?? $s->room ?? '-',
+                'speaker_name' => $s->speaker?->full_name_with_title ?? $s->speaker?->name ?? '-',
+                'speaker_dan' => $s->speaker?->dan_rank ?? '',
+                'target_tracks' => $s->track_codes ?? $s->target_tracks ?? [],
+                'duration_jp' => $s->duration_jp,
+                'status' => $s->status ?? 'scheduled',
+            ]),
+        ]);
     }
 }

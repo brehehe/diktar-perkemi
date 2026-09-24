@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Event;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -10,7 +11,21 @@ class SaveEventSessionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return Gate::allows('update', $this->route('event'));
+        $user = $this->user();
+        if (! $user || in_array($user->role, ['Pemateri', 'Peserta'], true)) {
+            return false;
+        }
+
+        $event = $this->route('event') ?? $this->route('session')?->event;
+        if (! $event && $this->input('event_id')) {
+            $event = Event::find($this->input('event_id'));
+        }
+
+        if ($event) {
+            return Gate::allows('update', $event);
+        }
+
+        return $user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara', 'Koordinator Acara', 'Koordinator Jadwal'], true);
     }
 
     protected function prepareForValidation(): void
@@ -41,7 +56,7 @@ class SaveEventSessionRequest extends FormRequest
 
         if ($this->has('status')) {
             $st = $this->input('status');
-            if (! in_array($st, ['scheduled', 'ongoing', 'completed', 'cancelled'], true)) {
+            if (! in_array($st, ['scheduled', 'ongoing', 'completed', 'cancelled', 'delayed'], true)) {
                 $merge['status'] = 'scheduled';
             }
         }
@@ -53,14 +68,24 @@ class SaveEventSessionRequest extends FormRequest
 
     public function rules(): array
     {
-        $event = $this->route('event');
+        $event = $this->route('event') ?? $this->route('session')?->event;
+        $eventId = $event?->id ?? $this->input('event_id');
 
         return [
             'day_number' => ['required', 'integer', 'min:1', 'max:60'],
             'session_number' => ['required', 'string', 'max:50'],
             'event_session_type_id' => ['nullable'],
             'session_type_code' => ['nullable', 'string', 'max:50'],
-            'speaker_id' => ['nullable', Rule::exists('speakers', 'id')->where(fn ($query) => $query->whereNull('event_id')->orWhere('event_id', $event->id))],
+            'speaker_id' => [
+                'nullable',
+                Rule::exists('speakers', 'id')->where(function ($query) use ($eventId) {
+                    if ($eventId) {
+                        return $query->whereNull('event_id')->orWhere('event_id', $eventId);
+                    }
+
+                    return $query;
+                }),
+            ],
             'session_date' => ['nullable', 'date'],
             'date' => ['nullable', 'date'],
             'start_time' => ['required', 'string'],
@@ -75,11 +100,20 @@ class SaveEventSessionRequest extends FormRequest
             'track_codes' => ['nullable', 'array'],
             'track_codes.*' => ['string', 'exists:participant_tracks,code'],
             'module_code' => ['nullable', 'string', 'max:50'],
-            'status' => ['required', 'in:scheduled,ongoing,completed,cancelled'],
+            'status' => ['required', 'in:scheduled,ongoing,completed,cancelled,delayed'],
             'attendance_setting' => ['nullable', 'in:none,check_in,check_in_out'],
             'material_id' => ['nullable', 'exists:materials,id'],
             'learning_module_id' => ['nullable', 'exists:learning_modules,id'],
-            'event_module_id' => ['nullable', Rule::exists('event_modules', 'id')->where('event_id', $event->id)],
+            'event_module_id' => [
+                'nullable',
+                Rule::exists('event_modules', 'id')->where(function ($query) use ($eventId) {
+                    if ($eventId) {
+                        return $query->where('event_id', $eventId);
+                    }
+
+                    return $query;
+                }),
+            ],
             'cbt_exam_package_id' => ['nullable', 'exists:cbt_exam_packages,id'],
             'requires_attendance_before_cbt' => ['nullable', 'boolean'],
         ];

@@ -32,9 +32,9 @@ class AttendanceController extends Controller
             'attendance_close_at' => ['nullable', 'date', 'after:now'],
         ]);
 
-        if ($session->attendance_setting === 'none' && empty($validated['attendance_setting'])) {
-            return back()->withErrors(['attendance_setting' => 'Aktifkan absensi pada pengaturan sesi sebelum membuka QR.']);
-        }
+        // Default to 'check_in' (Absensi Masuk Saja) unless already set to 'check_in_out' or explicitly requested
+        $setting = $validated['attendance_setting']
+            ?? ($session->attendance_setting === 'check_in_out' ? 'check_in_out' : 'check_in');
 
         $qrToken = Str::random(40);
         $shortCodeCandidates = collect(range(1, 10))->map(fn () => strtoupper(Str::random(6)))->unique();
@@ -55,10 +55,12 @@ class AttendanceController extends Controller
             'attendance_close_at' => $closeAt,
             'qr_token' => $qrToken,
             'qr_short_code' => $qrShortCode,
-            'attendance_setting' => $validated['attendance_setting'] ?? $session->attendance_setting ?? 'check_in',
+            'attendance_setting' => $setting,
         ]);
 
-        return back()->with('success', "Absensi untuk \"{$session->topic}\" berhasil dibuka. Kode sesi: {$qrShortCode}");
+        $settingLabel = $setting === 'check_in_out' ? 'Absensi Masuk & Keluar' : 'Absensi Masuk Saja';
+
+        return back()->with('success', "Absensi untuk \"{$session->topic}\" berhasil dibuka ({$settingLabel}). Kode sesi: {$qrShortCode}");
     }
 
     /**
@@ -69,9 +71,10 @@ class AttendanceController extends Controller
         $session->update([
             'is_attendance_open' => false,
             'attendance_close_at' => now(),
+            'attendance_setting' => 'none',
         ]);
 
-        return back()->with('success', "Absensi untuk \"{$session->topic}\" telah ditutup.");
+        return back()->with('success', "Absensi untuk \"{$session->topic}\" telah ditutup dan pengaturan absensi diubah ke Tidak Diperlukan.");
     }
 
     /**
@@ -129,10 +132,14 @@ class AttendanceController extends Controller
                 'id' => $session->id,
                 'session_number' => $session->session_number,
                 'day_number' => $session->day_number,
+                'session_date' => $session->session_date?->format('d/m/Y'),
                 'session_type_code' => $session->session_type_code,
-                'time_slot' => $session->time_slot,
+                'session_type_name' => $session->sessionType?->name,
+                'time_slot' => $session->time_slot ?: ($session->start_time && $session->end_time ? "{$session->start_time} - {$session->end_time}" : null),
                 'topic' => $session->topic,
+                'subtopic' => $session->subtopic,
                 'room' => $session->room,
+                'target_tracks' => $session->target_tracks,
                 'speaker_name' => $session->speaker?->name,
                 'qr_short_code' => $session->qr_short_code,
                 'attendance_setting' => $session->attendance_setting,
@@ -150,16 +157,28 @@ class AttendanceController extends Controller
      */
     public function printAllQr(Request $request, Event $event): Response
     {
-        // Get all sessions that require attendance
-        $sessions = EventSession::query()
-            ->where('event_id', $event->id)
-            ->where('attendance_setting', '!=', 'disabled')
-            ->where('attendance_setting', '!=', 'none')
-            ->with(['speaker', 'sessionType'])
-            ->orderBy('day_number')
-            ->orderBy('start_time')
-            ->orderBy('session_number')
-            ->get();
+        if ($request->filled('session_id')) {
+            $sessions = EventSession::query()
+                ->where('event_id', $event->id)
+                ->where('id', (int) $request->input('session_id'))
+                ->with(['speaker', 'sessionType'])
+                ->get();
+        } else {
+            $query = EventSession::query()
+                ->where('event_id', $event->id)
+                ->where('attendance_setting', '!=', 'disabled')
+                ->where('attendance_setting', '!=', 'none')
+                ->with(['speaker', 'sessionType'])
+                ->orderBy('day_number')
+                ->orderBy('start_time')
+                ->orderBy('session_number');
+
+            if ($request->filled('day')) {
+                $query->where('day_number', (int) $request->input('day'));
+            }
+
+            $sessions = $query->get();
+        }
 
         // Ensure every session has a valid qr_short_code and qr_token
         foreach ($sessions as $session) {
@@ -397,6 +416,7 @@ class AttendanceController extends Controller
             'include_arrival' => ['nullable', 'boolean'],
             'include_daily' => ['nullable', 'boolean'],
             'include_sessions' => ['nullable', 'boolean'],
+            'day_number' => ['nullable'],
         ]);
 
         $result = $generator->execute($event, $validated);

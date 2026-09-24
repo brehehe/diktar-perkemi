@@ -58,7 +58,7 @@ class UserController extends Controller
             ];
         });
 
-        $roles = ['Peserta', 'Pelatih', 'Penguji', 'Wasit', 'Pemateri', 'Penyelenggara', 'Diktar', 'Admin'];
+        $roles = ['Peserta', 'Pelatih', 'Penguji', 'Wasit', 'Pemateri', 'Koordinator Acara', 'Penyelenggara', 'Diktar', 'Admin'];
 
         return Inertia::render('Admin/Users/Index', [
             'users' => $users,

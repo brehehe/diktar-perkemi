@@ -21,10 +21,10 @@ class EnsureMasterAccess
             return redirect()->route('login');
         }
 
-        if ($user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara'], true)) {
+        if ($user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara', 'Koordinator Acara', 'Koordinator Jadwal'], true)) {
             return $next($request);
         }
 
-        abort(403, 'Akses ditolak. Halaman master data hanya dapat diakses oleh Admin, Diktar, atau Penyelenggara.');
+        abort(403, 'Akses ditolak. Halaman master data hanya dapat diakses oleh Admin, Diktar, Penyelenggara, atau Koordinator Acara.');
     }
 }

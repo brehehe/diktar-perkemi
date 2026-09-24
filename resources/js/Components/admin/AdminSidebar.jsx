@@ -21,6 +21,7 @@ import {
     BookMarked,
     FileQuestion,
     CheckSquare,
+    Clock,
 } from 'lucide-react';
 
 export default function AdminSidebar({ isMobile = false, onClose }) {
@@ -29,6 +30,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
     const isPortalAdmin = props.auth?.user?.is_admin;
     const isDiktar = role === 'Diktar';
     const isPenyelenggara = role === 'Penyelenggara';
+    const isCoordinator = role === 'Koordinator Acara' || role === 'Koordinator Jadwal';
 
     const masterItems = [
         {
@@ -112,6 +114,11 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                         href: '/admin/event',
                         icon: Calendar,
                     },
+                    {
+                        name: 'Rundown Acara',
+                        href: '/admin/rundown',
+                        icon: Clock,
+                    },
                     { name: 'Referensi Event', href: '/admin/referensi-event', icon: Layers },
                 ],
             },
@@ -151,6 +158,11 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                         href: '/admin/event',
                         icon: Calendar,
                     },
+                    {
+                        name: 'Rundown Acara',
+                        href: '/admin/rundown',
+                        icon: Clock,
+                    },
                     { name: 'Referensi Event', href: '/admin/referensi-event', icon: Layers },
                 ],
             },
@@ -180,11 +192,57 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                         href: '/admin/event',
                         icon: Calendar,
                     },
+                    {
+                        name: 'Rundown Acara',
+                        href: '/admin/rundown',
+                        icon: Clock,
+                    },
                 ],
             },
             {
                 title: 'Master Data Event & CBT',
                 items: masterItems,
+            },
+        ];
+    } else if (isCoordinator) {
+        menuGroups = [
+            {
+                title: 'Menu Utama',
+                items: [
+                    {
+                        name: 'Ringkasan',
+                        href: '/admin',
+                        icon: LayoutDashboard,
+                        exact: true,
+                    },
+                ],
+            },
+            {
+                title: 'Jadwal & Rundown Event',
+                items: [
+                    {
+                        name: 'Rundown Acara',
+                        href: '/admin/rundown',
+                        icon: Clock,
+                    },
+                    {
+                        name: 'Event Penataran',
+                        href: '/admin/event',
+                        icon: Calendar,
+                    },
+                    {
+                        name: 'Portal Pemateri & Jadwal',
+                        href: '/pemateri/jadwal',
+                        icon: Calendar,
+                    },
+                ],
+            },
+            {
+                title: 'Master Data Sesi',
+                items: [
+                    { name: 'Pemateri', href: '/admin/master/pemateri', icon: UserCheck },
+                    { name: 'Jalur Peserta', href: '/admin/master/jalur', icon: Compass },
+                ],
             },
         ];
     } else {
@@ -193,6 +251,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 title: 'Menu Utama',
                 items: [
                     { name: 'Ringkasan', href: '/admin', icon: LayoutDashboard, exact: true },
+                    { name: 'Rundown Acara', href: '/admin/rundown', icon: Clock },
                     { name: 'Event Penataran', href: '/admin/event', icon: Calendar },
                 ],
             },
@@ -211,6 +270,10 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
         brandAvatar = 'PE';
         brandTitle = 'Penyelenggara';
         brandSubtitle = 'Panitia Event';
+    } else if (isCoordinator) {
+        brandAvatar = 'KA';
+        brandTitle = 'Koordinator Acara';
+        brandSubtitle = 'Manajemen Rundown';
     }
 
     const isActive = (item) => {

@@ -121,6 +121,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     // Manajemen Penataran / Event
     Route::middleware(EnsureEventAccess::class)->group(function () {
         Route::get('/event', [EventController::class, 'index'])->name('event.index');
+        Route::get('/rundown', [EventController::class, 'rundownIndex'])->name('rundown.index');
         Route::get('/event/create', [EventController::class, 'create'])->name('event.create');
         Route::post('/event', [EventController::class, 'store'])->name('event.store');
         Route::get('/event/{event}', [EventController::class, 'show'])->name('event.show');
@@ -133,6 +134,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/event/{event}/sesi', [EventController::class, 'storeSession'])->name('event.session.store');
         Route::post('/event/{event}/kehadiran-awal', [EventController::class, 'storeArrivalSession'])->name('event.arrival.store');
         Route::put('/event/{event}/sesi/{session}', [EventController::class, 'updateSession'])->name('event.session.update');
+        Route::post('/event/{event}/sesi/{session}/reschedule', [EventController::class, 'rescheduleSession'])->name('event.session.reschedule');
         Route::delete('/event/{event}/sesi/{session}', [EventController::class, 'destroySession'])->name('event.session.destroy');
         Route::post('/event/{event}/ruang', [EventController::class, 'storeRoom'])->name('event.room.store');
         Route::delete('/event/{event}/ruang/{room}', [EventController::class, 'destroyRoom'])->name('event.room.destroy');
@@ -158,6 +160,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::delete('/event/{event}/absensi', [AttendanceController::class, 'destroyAll'])->name('event.attendance.destroy-all');
         Route::post('/event/{event}/absensi/generate', [AttendanceController::class, 'generateAll'])->name('event.attendance.generate-all');
         Route::get('/event/{event}/rundown/export-excel', [EventController::class, 'exportRundownExcel'])->name('event.rundown.export-excel');
+        Route::get('/event/{event}/rundown/cetak', [EventController::class, 'printRundown'])->name('event.rundown.print');
 
         // Event CBT Packages
         Route::post('/event/{event}/cbt', [CbtController::class, 'storePackage'])->name('event.cbt.package.store');
@@ -333,6 +336,10 @@ Route::middleware('auth')->group(function () {
 // Portal Pemateri (Jadwal & Materi Mengajar)
 Route::middleware('auth')->prefix('pemateri')->name('speaker.')->group(function () {
     Route::get('/jadwal', [SpeakerPortalController::class, 'schedule'])->name('schedule');
+    Route::post('/sesi/{session}/reschedule', [SpeakerPortalController::class, 'rescheduleSession'])->name('session.reschedule');
+    Route::post('/event/{event}/sesi', [SpeakerPortalController::class, 'storeSession'])->name('session.store');
+    Route::put('/sesi/{session}', [SpeakerPortalController::class, 'updateSession'])->name('session.update');
+    Route::delete('/sesi/{session}', [SpeakerPortalController::class, 'destroySession'])->name('session.destroy');
     Route::get('/sesi/{session}/materi/{material}/baca', [SpeakerPortalController::class, 'readMaterial'])->name('material.read');
     Route::get('/sesi/{session}/materi/{material}/unduh', [SpeakerPortalController::class, 'downloadMaterial'])->name('material.download');
     Route::get('/sesi/{session}/modul/{module}/pdf', [SpeakerPortalController::class, 'downloadModulePdf'])->name('module.download');

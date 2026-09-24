@@ -145,6 +145,7 @@ export default function Index({
 
     const roleBadges = {
         Admin: 'purple',
+        'Koordinator Acara': 'warning',
         Pemateri: 'primary',
         Pelatih: 'published',
         Penguji: 'warning',

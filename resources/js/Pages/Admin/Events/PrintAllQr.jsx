@@ -238,11 +238,9 @@ function QrPage({ session, event, compact, pageNum, totalPages }) {
 
     const badgeLabel = isArrival ? 'QR KEDATANGAN AWAL PESERTA'
         : isDaily ? `QR KEHADIRAN HARIAN — HARI KE-${session.day_number}`
-        : `QR ABSENSI SESI — HARI KE-${session.day_number}`;
+        : `QR ABSENSI SESI — HARI KE-${session.day_number}${session.session_number ? ` • SESI ${session.session_number}` : ''}`;
 
-    const badgeColor = isArrival ? { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' }
-        : isDaily ? { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' }
-        : { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' };
+    const badgeColor = { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' };
 
     const now = new Date();
     const printDate = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -386,8 +384,8 @@ function QrPage({ session, event, compact, pageNum, totalPages }) {
                     <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4, fontWeight: 500 }}>
                         Atau masukkan kode sesi secara manual:
                     </div>
-                    <div style={{ fontFamily: 'monospace', fontSize: 30, fontWeight: 900, letterSpacing: '0.15em', color: '#0C1F3D' }}>
-                        {session.qr_short_code}
+                    <div style={{ fontFamily: 'monospace', fontSize: 30, fontWeight: 900, letterSpacing: '0.25em', color: '#0C1F3D' }}>
+                        {session.qr_short_code ? session.qr_short_code.split('').join(' ') : ''}
                     </div>
                     <div style={{ fontSize: 10, color: '#64748B', marginTop: 4, fontFamily: 'monospace', wordBreak: 'break-all' }}>
                         {session.scanUrl}

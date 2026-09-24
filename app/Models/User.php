@@ -45,6 +45,11 @@ class User extends Authenticatable
         return $this->role === 'Pemateri';
     }
 
+    public function isCoordinator(): bool
+    {
+        return in_array($this->role, ['Koordinator Acara', 'Koordinator Jadwal'], true);
+    }
+
     public function speaker(): HasOne
     {
         return $this->hasOne(Speaker::class);

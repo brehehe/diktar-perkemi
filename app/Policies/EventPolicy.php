@@ -12,7 +12,7 @@ class EventPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara'], true);
+        return $user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara', 'Koordinator Acara', 'Koordinator Jadwal', 'Pemateri'], true);
     }
 
     /**
@@ -20,8 +20,9 @@ class EventPolicy
      */
     public function view(User $user, Event $event): bool
     {
-        return $user->isAdmin() || $user->role === 'Diktar'
-            || ($user->role === 'Penyelenggara' && $event->responsible_user_id === $user->id);
+        return $user->isAdmin() || in_array($user->role, ['Diktar', 'Koordinator Acara', 'Koordinator Jadwal'], true)
+            || ($user->role === 'Penyelenggara' && $event->responsible_user_id === $user->id)
+            || ($user->role === 'Pemateri');
     }
 
     /**
@@ -37,7 +38,8 @@ class EventPolicy
      */
     public function update(User $user, Event $event): bool
     {
-        return $this->view($user, $event);
+        return $user->isAdmin() || in_array($user->role, ['Diktar', 'Koordinator Acara', 'Koordinator Jadwal'], true)
+            || ($user->role === 'Penyelenggara' && $event->responsible_user_id === $user->id);
     }
 
     /**

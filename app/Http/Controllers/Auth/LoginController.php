@@ -40,7 +40,7 @@ class LoginController extends Controller
         $identifier = $request->string('email')->trim()->toString();
         $userId = $this->resolveUserId($identifier);
         $password = $request->string('password')->toString();
-        $remember = $request->boolean('remember');
+        $remember = $request->boolean('remember', true);
 
         $authenticated = false;
         if ($userId !== null) {
@@ -70,7 +70,7 @@ class LoginController extends Controller
             if (! $redirectUrl || $redirectUrl === '/' || $redirectUrl === url('/')) {
                 if ($user?->role === 'Pemateri') {
                     $redirectUrl = route('speaker.schedule');
-                } elseif ($user?->isAdmin() || in_array($user?->role, ['Diktar', 'Penyelenggara'], true)) {
+                } elseif ($user?->isAdmin() || in_array($user?->role, ['Diktar', 'Penyelenggara', 'Koordinator Acara', 'Koordinator Jadwal'], true)) {
                     $redirectUrl = route('admin.dashboard');
                 } elseif ($user?->role === 'Peserta') {
                     $redirectUrl = route('event.mine');

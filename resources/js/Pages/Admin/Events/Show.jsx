@@ -437,6 +437,7 @@ export default function Show({
     const [generateIncludeArrival, setGenerateIncludeArrival] = useState(true);
     const [generateIncludeDaily, setGenerateIncludeDaily] = useState(true);
     const [generateIncludeSessions, setGenerateIncludeSessions] = useState(true);
+    const [generateDay, setGenerateDay] = useState('all');
 
     const [attendanceSearch, setAttendanceSearch] = useState('');
     const [attendanceStatusFilter, setAttendanceStatusFilter] = useState('all');
@@ -479,6 +480,20 @@ export default function Show({
         material_id: '',
         cbt_exam_package_id: '',
         requires_attendance_before_cbt: true,
+    });
+
+    // 1b. Reschedule / Molor Form
+    const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+    const [reschedulingSession, setReschedulingSession] = useState(null);
+    const rescheduleForm = useForm({
+        day_number: selectedDay || 1,
+        start_time: '',
+        end_time: '',
+        shift_minutes: 0,
+        shift_subsequent_sessions: true,
+        status: 'scheduled',
+        speaker_id: '',
+        room: '',
     });
 
     // Master Linking Forms
@@ -627,7 +642,9 @@ export default function Show({
     };
 
     const handleOpenAttendance = (session) => {
-        router.post(`/admin/event/${event.id}/sesi/${session.id}/absensi/buka`, {}, {
+        router.post(`/admin/event/${event.id}/sesi/${session.id}/absensi/buka`, {
+            attendance_setting: session.attendance_setting === 'check_in_out' ? 'check_in_out' : 'check_in',
+        }, {
             preserveScroll: true,
         });
     };
@@ -837,7 +854,7 @@ export default function Show({
             ? session.attendance_setting
             : 'check_in';
 
-        const validStatus = ['scheduled', 'ongoing', 'completed', 'cancelled'].includes(session.status)
+        const validStatus = ['scheduled', 'ongoing', 'completed', 'cancelled', 'delayed'].includes(session.status)
             ? session.status
             : 'scheduled';
 
@@ -867,6 +884,56 @@ export default function Show({
             requires_attendance_before_cbt: session.requires_attendance_before_cbt !== undefined ? Boolean(session.requires_attendance_before_cbt) : true,
         });
         setIsSessionModalOpen(true);
+    };
+
+    const openRescheduleModal = (session) => {
+        setReschedulingSession(session);
+        rescheduleForm.clearErrors();
+        rescheduleForm.setData({
+            day_number: session.day_number || selectedDay,
+            start_time: session.start_time ? session.start_time.substring(0, 5) : '',
+            end_time: session.end_time ? session.end_time.substring(0, 5) : '',
+            shift_minutes: 0,
+            shift_subsequent_sessions: true,
+            status: session.status || 'scheduled',
+            speaker_id: session.speaker?.id || session.speaker_id || '',
+            room: session.room || '',
+        });
+        setIsRescheduleModalOpen(true);
+    };
+
+    const handleQuickShift = (mins) => {
+        const curEnd = rescheduleForm.data.end_time;
+        if (!curEnd) return;
+        const [h, m] = curEnd.split(':').map(Number);
+        const date = new Date();
+        date.setHours(h, m + mins, 0, 0);
+        const newH = String(date.getHours()).padStart(2, '0');
+        const newM = String(date.getMinutes()).padStart(2, '0');
+        const newEnd = `${newH}:${newM}`;
+
+        rescheduleForm.setData((prev) => ({
+            ...prev,
+            end_time: newEnd,
+            shift_minutes: (prev.shift_minutes || 0) + mins,
+            status: 'delayed',
+        }));
+    };
+
+    const handleSaveReschedule = (e) => {
+        e.preventDefault();
+        if (!reschedulingSession) return;
+        const targetDay = Number(rescheduleForm.data.day_number);
+        rescheduleForm.post(`/admin/event/${event.id}/sesi/${reschedulingSession.id}/reschedule`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                if (targetDay && targetDay !== selectedDay) {
+                    setSelectedDay(targetDay);
+                }
+                setIsRescheduleModalOpen(false);
+                setReschedulingSession(null);
+            },
+        });
     };
 
     const handleAttachModule = (e) => {
@@ -1203,6 +1270,7 @@ export default function Show({
             include_arrival: generateIncludeArrival,
             include_daily: generateIncludeDaily,
             include_sessions: generateIncludeSessions,
+            day_number: generateDay,
         }, {
             preserveScroll: true,
             onStart: () => setIsGeneratingAttendance(true),
@@ -1490,6 +1558,19 @@ export default function Show({
                                     </Button>
                                 </a>
                                 <a
+                                    href={`/admin/event/${event.id}/rundown/cetak`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-block"
+                                >
+                                    <Button
+                                        variant="secondary"
+                                        icon={<Printer className="w-4 h-4 text-[#0A3F82]" />}
+                                    >
+                                        Cetak Rundown
+                                    </Button>
+                                </a>
+                                <a
                                     href={`/admin/event/${event.id}/absensi/cetak-semua-qr`}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -1502,6 +1583,16 @@ export default function Show({
                                         Cetak Semua QR
                                     </Button>
                                 </a>
+                                <Button
+                                    variant="secondary"
+                                    icon={<Sparkles className="w-4 h-4 text-emerald-600" />}
+                                    onClick={() => {
+                                        setGenerateDay(String(selectedDay));
+                                        setIsGenerateAttendanceModalOpen(true);
+                                    }}
+                                >
+                                    Set Hadir Semua (Hari {selectedDay})
+                                </Button>
                             {!activeDayData.sessions.some((session) => session.session_type_code === 'KEHADIRAN_HARIAN') && <Button
                                 variant="secondary"
                                 icon={<QrCode className="w-4 h-4" />}
@@ -1645,7 +1736,14 @@ export default function Show({
                                                         <tr key={s.id} className="hover:bg-[#F8FBFF] transition-colors">
                                                             <td className="px-4 py-3 whitespace-nowrap">
                                                                 <div className="font-mono font-bold text-[#0B63CE]">{s.time_slot}</div>
-                                                                <div className="text-[11px] text-[#6B7C93]">{s.session_number} ({s.duration_jp} JP)</div>
+                                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                                    <span className="text-[11px] text-[#6B7C93]">{s.session_number} ({s.duration_jp} JP)</span>
+                                                                    {s.status === 'delayed' && (
+                                                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                                                            Molor
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                             <td className="px-4 py-3 whitespace-nowrap">
                                                                 <div className="flex flex-wrap items-center gap-1">
@@ -1707,7 +1805,7 @@ export default function Show({
                                                         {s.room || '-'}
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap">
-                                                        <div className="space-y-1">
+                                                        <div className="space-y-1.5">
                                                             {s.is_attendance_open ? (
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -1737,23 +1835,64 @@ export default function Show({
                                                                     </button>
                                                                 </div>
                                                             )}
+                                                            <div className="flex items-center gap-1.5">
+                                                                {s.attendance_setting === 'check_in_out' ? (
+                                                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                                                        Masuk & Keluar
+                                                                    </span>
+                                                                ) : s.attendance_setting === 'check_in' ? (
+                                                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                                                        Masuk Saja
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-normal bg-slate-100 text-slate-500 border border-slate-200">
+                                                                        Tidak Diperlukan
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <div className="text-[10px] text-[#6B7C93] flex items-center gap-2">
-                                                                <span>Hadir: {s.attendances_count}</span>
-                                                                <span>•</span>
-                                                                {s.is_attendance_open ? <a
-                                                                    href={`/admin/event/${event.id}/sesi/${s.id}/cetak-qr`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-[#0B63CE] hover:underline flex items-center gap-0.5 focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
-                                                                >
-                                                                    <Printer className="w-2.5 h-2.5" />
-                                                                    <span>Cetak QR</span>
-                                                                </a> : <span>QR tersedia setelah absensi dibuka</span>}
+                                                                <span>Hadir: <strong>{s.attendances_count}</strong></span>
+                                                                {s.is_attendance_open && (
+                                                                    <>
+                                                                        <span>•</span>
+                                                                        <a
+                                                                            href={`/admin/event/${event.id}/sesi/${s.id}/cetak-qr`}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="inline-flex items-center gap-1 font-bold text-xs text-[#0B63CE] bg-[#EAF5FF] hover:bg-[#D5EBFF] border border-[#B8D7FF] px-2 py-0.5 rounded transition-colors shadow-2xs"
+                                                                            title="Cetak lembar QR absensi sesi ini"
+                                                                        >
+                                                                            <QrCode className="w-3.5 h-3.5" />
+                                                                            <span>Cetak QR</span>
+                                                                        </a>
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                                                        <div className="flex items-center justify-end gap-1">
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            {s.is_attendance_open && (
+                                                                <a
+                                                                    href={`/admin/event/${event.id}/sesi/${s.id}/cetak-qr`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="p-1.5 text-[#0B63CE] hover:bg-[#EAF5FF] rounded transition-colors border border-transparent hover:border-[#B8D7FF]"
+                                                                    title={`Cetak QR Code Sesi ${s.session_number || s.id}`}
+                                                                    aria-label={`Cetak QR Code sesi ${s.topic}`}
+                                                                >
+                                                                    <QrCode className="w-3.5 h-3.5" />
+                                                                </a>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openRescheduleModal(s)}
+                                                                className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors border border-transparent hover:border-amber-200"
+                                                                title="Sesuaikan Jadwal & Pindah Sesi (Hari / Jam)"
+                                                                aria-label={`Sesuaikan jadwal sesi ${s.topic}`}
+                                                            >
+                                                                <Clock className="w-3.5 h-3.5" />
+                                                            </button>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => openEditSessionModal(s)}
@@ -5051,6 +5190,155 @@ export default function Show({
                 </form>
             </Modal>
 
+            {/* MODAL: Sesuaikan Jadwal / Penanganan Molor */}
+            <Modal
+                isOpen={isRescheduleModalOpen}
+                onClose={() => {
+                    setIsRescheduleModalOpen(false);
+                    setReschedulingSession(null);
+                }}
+                title={reschedulingSession ? `Sesuaikan Jadwal / Sesi Molor (${reschedulingSession.session_number})` : 'Sesuaikan Jadwal'}
+                size="md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => {
+                                setIsRescheduleModalOpen(false);
+                                setReschedulingSession(null);
+                            }}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="submit"
+                            form="reschedule-session-form"
+                            variant="primary"
+                            loading={rescheduleForm.processing}
+                        >
+                            Simpan Perubahan Jadwal
+                        </Button>
+                    </>
+                }
+            >
+                {reschedulingSession && (
+                    <form id="reschedule-session-form" onSubmit={handleSaveReschedule} className="space-y-4">
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-1">
+                            <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                                <Clock className="w-4 h-4 text-amber-700" />
+                                <span>Penyesuaian Jadwal & Pemindahan Sesi</span>
+                            </div>
+                            <p className="text-amber-800">
+                                Sesi: <strong>{reschedulingSession.topic}</strong> (Hari ke-{reschedulingSession.day_number})
+                            </p>
+                        </div>
+
+                        {/* Pindah ke Hari */}
+                        <FormField label="Pindah ke Hari (Jadwal Hari)" error={rescheduleForm.errors.day_number}>
+                            <Select
+                                value={rescheduleForm.data.day_number}
+                                onChange={(e) => rescheduleForm.setData('day_number', Number(e.target.value))}
+                            >
+                                {daysList.map((d) => (
+                                    <option key={d} value={d}>
+                                        Hari ke-{d} {getDayDateObj(d) ? `(${formatDateId(getDayDateObj(d))})` : ''}
+                                    </option>
+                                ))}
+                            </Select>
+                        </FormField>
+
+                        {/* Quick Add Delay Buttons */}
+                        <div>
+                            <label className="block text-xs font-semibold text-[#112743] mb-1.5">
+                                Tambah Waktu Keterlambatan (Molor):
+                            </label>
+                            <div className="grid grid-cols-4 gap-2">
+                                {[15, 30, 45, 60].map((mins) => (
+                                    <button
+                                        key={mins}
+                                        type="button"
+                                        onClick={() => handleQuickShift(mins)}
+                                        className="py-1.5 px-2 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs text-center transition-colors shadow-2xs"
+                                    >
+                                        +{mins} menit
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField label="Waktu Mulai" required error={rescheduleForm.errors.start_time}>
+                                <Input
+                                    type="time"
+                                    value={rescheduleForm.data.start_time}
+                                    onChange={(e) => rescheduleForm.setData('start_time', e.target.value)}
+                                    required
+                                />
+                            </FormField>
+                            <FormField label="Waktu Selesai" required error={rescheduleForm.errors.end_time}>
+                                <Input
+                                    type="time"
+                                    value={rescheduleForm.data.end_time}
+                                    onChange={(e) => rescheduleForm.setData('end_time', e.target.value)}
+                                    required
+                                />
+                            </FormField>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField label="Status Sesi" required error={rescheduleForm.errors.status}>
+                                <Select
+                                    value={rescheduleForm.data.status}
+                                    onChange={(e) => rescheduleForm.setData('status', e.target.value)}
+                                >
+                                    <option value="scheduled">Terjadwal</option>
+                                    <option value="ongoing">Sedang Berlangsung</option>
+                                    <option value="delayed">Molor / Mundur</option>
+                                    <option value="completed">Selesai</option>
+                                    <option value="cancelled">Dibatalkan</option>
+                                </Select>
+                            </FormField>
+
+                            <FormField label="Ruangan / Dojo" error={rescheduleForm.errors.room}>
+                                <Input
+                                    value={rescheduleForm.data.room}
+                                    onChange={(e) => rescheduleForm.setData('room', e.target.value)}
+                                    placeholder="Contoh: Dojo Utama"
+                                />
+                            </FormField>
+                        </div>
+
+                        <FormField label="Pemateri Pengampu" error={rescheduleForm.errors.speaker_id}>
+                            <Select
+                                value={rescheduleForm.data.speaker_id}
+                                onChange={(e) => rescheduleForm.setData('speaker_id', e.target.value)}
+                            >
+                                <option value="">-- Tetap / Pilih Pemateri --</option>
+                                {speakers.map((sp) => (
+                                    <option key={sp.id} value={sp.id}>
+                                        {sp.name} ({sp.type_label})
+                                    </option>
+                                ))}
+                            </Select>
+                        </FormField>
+
+                        <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                            <label className="flex items-start gap-2.5 text-xs text-sky-950 font-medium cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={rescheduleForm.data.shift_subsequent_sessions}
+                                    onChange={(e) => rescheduleForm.setData('shift_subsequent_sessions', e.target.checked)}
+                                    className="mt-0.5 rounded border-sky-300 text-[#0B63CE] focus:ring-[#0B63CE]"
+                                />
+                                <span>
+                                    <strong>Mundurkan otomatis sesi-sesi berikutnya</strong> pada Hari {reschedulingSession.day_number} sebanyak selisih waktu keterlambatan agar seluruh jadwal berikutnya tetap sinkron.
+                                </span>
+                            </label>
+                        </div>
+                    </form>
+                )}
+            </Modal>
+
             {/* MODAL: Override Kehadiran Manual */}
             <Modal
                 isOpen={isOverrideModalOpen}
@@ -5305,6 +5593,20 @@ export default function Show({
                                     </option>
                                 );
                             })}
+                        </Select>
+                    </FormField>
+
+                    <FormField label="Pilih Hari Kegiatan">
+                        <Select
+                            value={generateDay}
+                            onChange={(e) => setGenerateDay(e.target.value)}
+                        >
+                            <option value="all">Semua Hari (Hari 1 s/d {event.total_days || 4})</option>
+                            {daysList.map((day) => (
+                                <option key={day} value={String(day)}>
+                                    Khusus Hari ke-{day}
+                                </option>
+                            ))}
                         </Select>
                     </FormField>
 

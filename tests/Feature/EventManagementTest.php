@@ -351,3 +351,80 @@ test('admin can update and delete an event module', function () {
         'id' => $module->id,
     ]);
 });
+
+test('admin can view dedicated rundown page with event filter and default active event', function () {
+    $event = Event::firstOrFail();
+
+    $response = $this->actingAs($this->admin)->get('/admin/rundown');
+
+    $response->assertStatus(200);
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Admin/Rundown/Index')
+        ->has('availableEvents')
+        ->has('event')
+        ->where('event.id', $event->id)
+        ->has('sessionsByDay')
+    );
+});
+
+test('koordinator and pemateri can access admin rundown page and filter by event', function () {
+    $event = Event::firstOrFail();
+    $coordinator = User::factory()->create(['role' => 'Koordinator Acara']);
+
+    $response = $this->actingAs($coordinator)->get("/admin/rundown?event_id={$event->id}&day=1");
+
+    $response->assertStatus(200);
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Admin/Rundown/Index')
+        ->where('selectedEventId', $event->id)
+        ->where('initialDay', 1)
+        ->has('sessionsByDay')
+    );
+});
+
+test('admin and coordinator can view printable rundown document without authorization error', function () {
+    $event = Event::firstOrFail();
+
+    $response = $this->actingAs($this->admin)->get("/admin/event/{$event->id}/rundown/cetak");
+
+    $response->assertStatus(200);
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Admin/Events/PrintRundown')
+        ->where('event.id', $event->id)
+        ->has('sessions')
+    );
+});
+
+test('admin can move session to another day and adjust schedule', function () {
+    $event = Event::firstOrFail();
+    $session = $event->sessions()->where('session_type_code', '!=', 'KEHADIRAN_AWAL')->firstOrFail();
+
+    $targetDay = $session->day_number === 1 ? 2 : 1;
+
+    $this->actingAs($this->admin)->post("/admin/event/{$event->id}/sesi/{$session->id}/reschedule", [
+        'day_number' => $targetDay,
+        'start_time' => '10:00',
+        'end_time' => '11:30',
+        'status' => 'scheduled',
+    ])->assertSessionHasNoErrors();
+
+    $session->refresh();
+    expect($session->day_number)->toBe($targetDay)
+        ->and(substr($session->start_time, 0, 5))->toBe('10:00')
+        ->and(substr($session->end_time, 0, 5))->toBe('11:30');
+});
+
+test('admin can print QR filtered to a specific session', function () {
+    $event = Event::firstOrFail();
+    $session = $event->sessions()->where('session_type_code', '!=', 'KEHADIRAN_AWAL')->firstOrFail();
+    $session->update(['attendance_setting' => 'none']);
+
+    $response = $this->actingAs($this->admin)->get("/admin/event/{$event->id}/absensi/cetak-semua-qr?session_id={$session->id}");
+
+    $response->assertStatus(200);
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Admin/Events/PrintAllQr')
+        ->has('sessions', 1)
+        ->where('sessions.0.id', $session->id)
+    );
+});

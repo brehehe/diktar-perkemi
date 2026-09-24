@@ -78,21 +78,63 @@ class ActivityLog extends Model
     }
 
     /**
-     * Human readable event description in Indonesian.
+     * Human readable description of the activity.
+     */
+    public function getDescriptionAttribute(): string
+    {
+        if (! empty($this->properties['description'])) {
+            return (string) $this->properties['description'];
+        }
+
+        $actorName = $this->actor?->name ?? 'Sistem';
+        $eventLabel = $this->event_label;
+
+        return "{$eventLabel} oleh {$actorName}";
+    }
+
+    /**
+     * Human readable event label in Indonesian.
      */
     public function getEventLabelAttribute(): string
     {
         return match ($this->event) {
+            'auth.login' => 'Pengguna Masuk (Login)',
+            'auth.logout' => 'Pengguna Keluar (Logout)',
+            'menu.event_accessed' => 'Akses Menu Event',
+            'event.viewed' => 'Akses Rincian Event',
+            'menu.materials_accessed' => 'Akses Menu Koleksi Digital',
+            'menu.users_accessed' => 'Akses Menu Pengguna',
+            'menu.permissions_accessed' => 'Akses Menu Hak Akses',
+            'menu.settings_accessed' => 'Akses Menu Pengaturan',
+            'menu.event_references_accessed' => 'Akses Menu Referensi Event',
+            'menu.speakers_accessed' => 'Akses Menu Pemateri',
+            'menu.speaker_schedule_accessed' => 'Akses Jadwal Mengajar Pemateri',
+            'menu.participant_event_accessed' => 'Akses Menu Event Peserta',
+            'user.created' => 'Pengguna Baru Dibuat',
+            'user.role_updated' => 'Peran Pengguna Diubah',
+            'user.password_updated' => 'Kata Sandi Pengguna Diubah',
+            'user.status_toggled' => 'Status Pengguna Diubah',
+            'speaker.supervisor_toggled' => 'Status Supervisor Pemateri Diubah',
+            'speaker.account_provisioned' => 'Akun Login Pemateri Dibuat',
             'material.created' => 'Materi Baru Dibuat',
             'material.updated' => 'Materi Diperbarui',
             'material.published' => 'Materi Diterbitkan',
             'material.archived' => 'Materi Diarsipkan',
             'material.deleted' => 'Materi Dihapus',
-            'material.viewed' => 'Materi Dibaca',
+            'material.file_replaced' => 'Berkas Materi Diganti',
+            'material.status_updated' => 'Status Materi Diperbarui',
+            'material.sync_peserta_audience' => 'Sinkronisasi Akses Peserta Materi',
+            'material.read' => 'Materi Dibaca',
+            'material.download' => 'Materi Diunduh',
             'category.created' => 'Kategori Baru Dibuat',
             'category.updated' => 'Kategori Diperbarui',
-            'user.role_updated' => 'Peran Pengguna Diubah',
-            'user.status_toggled' => 'Status Pengguna Diubah',
+            'category.deleted' => 'Kategori Dihapus',
+            'question_module.created' => 'Modul Soal Dibuat',
+            'question_module.updated' => 'Modul Soal Diperbarui',
+            'question_module.deleted' => 'Modul Soal Dihapus',
+            'question_module.imported' => 'Modul Soal Diimpor',
+            'showcase.updated' => 'Showcase Beranda Diperbarui',
+            'showcase.reset' => 'Showcase Beranda Direset',
             'settings.updated' => 'Pengaturan Portal Diperbarui',
             'permissions.updated' => 'Matriks Hak Akses Diperbarui',
             'event.participant_results.reset' => 'Hasil Peserta Event Direset',

@@ -26,6 +26,7 @@ class StoreUserRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'role' => ['required', 'string', 'in:Peserta,Pelatih,Penguji,Wasit,Pemateri,Penyelenggara,Diktar,Admin'],
+            'is_supervisor' => ['nullable', 'boolean'],
             'password' => ['required', 'string', 'min:8'],
         ];
     }

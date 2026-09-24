@@ -21,6 +21,7 @@ import {
     Archive,
     Clock,
     FileText,
+    CheckSquare,
 } from 'lucide-react';
 
 import MaterialSourceBadge from '../../../Components/portal/MaterialSourceBadge';
@@ -33,6 +34,8 @@ export default function Index({
     source_types = [],
     material_types = [],
     status_options = [],
+    audiences_list = [],
+    sync_peserta_stats = { total: 0, with_peserta: 0 },
 }) {
     const [search, setSearch] = useState(filters.q || '');
     const [selectedCategory, setSelectedCategory] = useState(filters.category || '');
@@ -48,6 +51,21 @@ export default function Index({
     // State for Status Change Alert Dialog
     const [statusChangeTarget, setStatusChangeTarget] = useState(null); // { material, newStatus, label }
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+    // State for Sync Peserta Alert Dialog
+    const [isSyncPesertaDialogOpen, setIsSyncPesertaDialogOpen] = useState(false);
+    const [isSyncingPeserta, setIsSyncingPeserta] = useState(false);
+
+    const handleSyncPesertaAll = () => {
+        setIsSyncingPeserta(true);
+        router.post('/admin/koleksi/sync-peserta', {}, {
+            preserveScroll: true,
+            onFinish: () => {
+                setIsSyncingPeserta(false);
+                setIsSyncPesertaDialogOpen(false);
+            },
+        });
+    };
 
     const applyFilters = (customParams = {}) => {
         const params = {
@@ -254,6 +272,35 @@ export default function Index({
             ),
         },
         {
+            header: 'Hak Akses Peran',
+            cell: (row) => {
+                const auds = row.audiences || [];
+                if (auds.length === 0) {
+                    return (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#F1F3F5] text-[#495057]">
+                            Semua Kenshi
+                        </span>
+                    );
+                }
+                return (
+                    <div className="flex flex-wrap gap-1 max-w-[170px]">
+                        {auds.map((aud) => (
+                            <span
+                                key={aud.id}
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                    aud.code === 'participant' || aud.name === 'Peserta'
+                                        ? 'bg-[#EBFBEE] text-[#2B8A3E] font-semibold border border-[#D3F9D8]'
+                                        : 'bg-[#EAF5FF] text-[#0B63CE] border border-[#DCE7F3]'
+                                }`}
+                            >
+                                {aud.name}
+                            </span>
+                        ))}
+                    </div>
+                );
+            },
+        },
+        {
             header: 'Terakhir Diperbarui',
             accessor: 'updated_at',
             className: 'text-xs text-[#6B7C93]',
@@ -359,9 +406,21 @@ export default function Index({
                 description="Kelola buku digital, modul penataran, pedoman teknis, dan bahan ajar pemateri PERKEMI."
                 breadcrumbs={[{ label: 'Koleksi' }]}
                 action={
-                    <Button as={Link} href="/admin/koleksi/create" variant="primary" size="sm" icon={Plus}>
-                        Tambah Materi
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            icon={CheckSquare}
+                            onClick={() => setIsSyncPesertaDialogOpen(true)}
+                            title="Checklist peran sasaran Peserta ke seluruh materi koleksi"
+                        >
+                            Checklist Peserta ke Semua
+                        </Button>
+                        <Button as={Link} href="/admin/koleksi/create" variant="primary" size="sm" icon={Plus}>
+                            Tambah Materi
+                        </Button>
+                    </div>
                 }
             />
 
@@ -480,6 +539,19 @@ export default function Index({
                 cancelText="Batal"
                 variant="info"
                 loading={isUpdatingStatus}
+            />
+
+            {/* Alert Dialog for Syncing Peserta to All Materials */}
+            <AlertDialog
+                isOpen={isSyncPesertaDialogOpen}
+                onClose={() => setIsSyncPesertaDialogOpen(false)}
+                onConfirm={handleSyncPesertaAll}
+                title="Checklist Hak Akses Peserta ke Seluruh Koleksi?"
+                description={`Aksi ini akan memastikan seluruh ${sync_peserta_stats?.total || 'materi'} koleksi buku digital dan modul memiliki peran sasaran 'Peserta'. Seluruh kenshi peserta penataran akan dapat mengakses dan membaca seluruh materi di portal.`}
+                confirmText={isSyncingPeserta ? 'Menerapkan...' : 'Ya, Checklist untuk Semua'}
+                cancelText="Batal"
+                variant="primary"
+                loading={isSyncingPeserta}
             />
         </AdminLayout>
     );

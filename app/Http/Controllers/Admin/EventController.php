@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\SaveEventSessionRequest;
 use App\Http\Requests\Admin\StoreEventParticipantRequest;
 use App\Http\Requests\Admin\StoreEventRequest;
 use App\Http\Requests\Admin\UpdateEventRequest;
+use App\Models\ActivityLog;
 use App\Models\CbtExamPackage;
 use App\Models\Event;
 use App\Models\EventLegend;
@@ -28,6 +29,7 @@ use App\Services\MaterialSourceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -322,11 +324,89 @@ class EventController extends Controller
             'type' => ['required', 'in:internal,external'],
             'title_degree' => ['nullable', 'string', 'max:100'],
             'specialization' => ['nullable', 'string', 'max:255'],
+            'contact_email' => ['nullable', 'email', 'max:255'],
+            'is_supervisor' => ['nullable', 'boolean'],
         ]);
 
-        $event->ownedSpeakers()->create([...$validated, 'is_active' => true]);
+        $event->ownedSpeakers()->create([
+            'name' => $validated['name'],
+            'type' => $validated['type'],
+            'title_degree' => $validated['title_degree'] ?? null,
+            'specialization' => $validated['specialization'] ?? null,
+            'contact_email' => $validated['contact_email'] ?? null,
+            'is_supervisor' => (bool) ($validated['is_supervisor'] ?? false),
+            'is_active' => true,
+        ]);
 
         return back()->with('success', 'Pemateri event berhasil ditambahkan.');
+    }
+
+    public function toggleSpeakerSupervisor(Event $event, Speaker $speaker): RedirectResponse
+    {
+        $speaker->is_supervisor = ! $speaker->is_supervisor;
+        $speaker->save();
+
+        ActivityLog::record('speaker.supervisor_toggled', $speaker, [
+            'speaker_name' => $speaker->name,
+            'is_supervisor' => $speaker->is_supervisor,
+            'event_id' => $event->id,
+            'event_title' => $event->title,
+        ]);
+
+        $status = $speaker->is_supervisor ? 'dijadikan Pemateri Supervisor' : 'dikembalikan menjadi Pemateri Reguler';
+
+        return back()->with('success', "Pemateri {$speaker->name} berhasil {$status}.");
+    }
+
+    public function createSpeakerAccount(Request $request, Event $event, Speaker $speaker): RedirectResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($speaker->user_id)],
+            'password' => ['required', 'string', 'min:8'],
+        ], [
+            'email.required' => 'Alamat email wajib diisi untuk akun login.',
+            'email.unique' => 'Alamat email ini sudah terdaftar pada akun lain.',
+            'password.required' => 'Password wajib diisi.',
+            'password.min' => 'Password minimal 8 karakter.',
+        ]);
+
+        DB::transaction(function () use ($speaker, $validated, $event): void {
+            if ($speaker->user_id && $speaker->user) {
+                $user = $speaker->user;
+                $user->email = $validated['email'];
+                $user->password = Hash::make($validated['password']);
+                $user->save();
+            } else {
+                $existingUser = User::where('email', $validated['email'])->first();
+                if ($existingUser) {
+                    $existingUser->role = 'Pemateri';
+                    $existingUser->password = Hash::make($validated['password']);
+                    $existingUser->save();
+                    $user = $existingUser;
+                } else {
+                    $user = User::create([
+                        'name' => $speaker->name,
+                        'email' => $validated['email'],
+                        'password' => Hash::make($validated['password']),
+                        'role' => 'Pemateri',
+                        'email_verified_at' => now(),
+                    ]);
+                }
+
+                $speaker->user_id = $user->id;
+            }
+
+            $speaker->contact_email = $validated['email'];
+            $speaker->save();
+
+            ActivityLog::record('speaker.account_provisioned', $speaker, [
+                'speaker_name' => $speaker->name,
+                'email' => $speaker->contact_email,
+                'event_id' => $event->id,
+            ]);
+        });
+
+        return back()->with('success', "Akun login untuk pemateri {$speaker->name} ({$speaker->contact_email}) berhasil dibuat/diperbarui. Pemateri kini dapat login dengan password yang telah ditentukan.");
     }
 
     public function destroySpeaker(Event $event, Speaker $speaker): RedirectResponse

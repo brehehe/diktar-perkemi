@@ -79,6 +79,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/koleksi', [MaterialController::class, 'index'])->name('materials.index');
         Route::get('/koleksi/create', [MaterialController::class, 'create'])->name('materials.create');
         Route::post('/koleksi', [MaterialController::class, 'store'])->name('materials.store');
+        Route::post('/koleksi/sync-peserta', [MaterialController::class, 'syncPesertaAudienceToAll'])->name('materials.sync-peserta');
         Route::get('/koleksi/{material}/edit', [MaterialController::class, 'edit'])->name('materials.edit');
         Route::put('/koleksi/{material}', [MaterialController::class, 'update'])->name('materials.update');
         Route::post('/koleksi/{material}/replace-file', [MaterialController::class, 'replaceFile'])->name('materials.replace-file');
@@ -95,6 +96,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/pengguna', [UserController::class, 'index'])->name('users.index');
         Route::post('/pengguna', [UserController::class, 'store'])->name('users.store');
         Route::patch('/pengguna/{user}/role', [UserController::class, 'updateRole'])->name('users.role');
+        Route::patch('/pengguna/{user}/password', [UserController::class, 'updatePassword'])->name('users.password');
 
         // Hak Akses (Permissions)
         Route::get('/hak-akses', [PermissionController::class, 'index'])->name('permissions.index');
@@ -137,6 +139,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/event/{event}/legenda', [EventController::class, 'storeLegend'])->name('event.legend.store');
         Route::delete('/event/{event}/legenda/{legend}', [EventController::class, 'destroyLegend'])->name('event.legend.destroy');
         Route::post('/event/{event}/pemateri', [EventController::class, 'storeSpeaker'])->name('event.speaker.store');
+        Route::patch('/event/{event}/pemateri/{speaker}/toggle-supervisor', [EventController::class, 'toggleSpeakerSupervisor'])->name('event.speaker.toggle-supervisor');
+        Route::post('/event/{event}/pemateri/{speaker}/buat-akun', [EventController::class, 'createSpeakerAccount'])->name('event.speaker.create-account');
         Route::delete('/event/{event}/pemateri/{speaker}', [EventController::class, 'destroySpeaker'])->name('event.speaker.destroy');
         Route::post('/event/{event}/persyaratan', [EventController::class, 'storeRequirement'])->name('event.requirement.store');
         Route::delete('/event/{event}/persyaratan/{index}', [EventController::class, 'destroyRequirement'])->whereNumber('index')->name('event.requirement.destroy');
@@ -213,6 +217,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/master/pemateri/ekspor', [SpeakerController::class, 'export'])->name('master.pemateri.export');
         Route::post('/master/pemateri', [SpeakerController::class, 'store'])->name('master.pemateri.store');
         Route::put('/master/pemateri/{speaker}', [SpeakerController::class, 'update'])->name('master.pemateri.update');
+        Route::patch('/master/pemateri/{speaker}/toggle-supervisor', [SpeakerController::class, 'toggleSupervisor'])->name('master.pemateri.toggle-supervisor');
+        Route::post('/master/pemateri/{speaker}/buat-akun', [SpeakerController::class, 'createAccount'])->name('master.pemateri.create-account');
         Route::delete('/master/pemateri/{speaker}', [SpeakerController::class, 'destroy'])->name('master.pemateri.destroy');
 
         // Master Peserta

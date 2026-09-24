@@ -26,6 +26,7 @@ class Speaker extends Model
         'contact_phone',
         'contact_email',
         'is_active',
+        'is_supervisor',
         'event_id',
     ];
 
@@ -42,12 +43,14 @@ class Speaker extends Model
         'dan_roman',
         'type_label',
         'role_info',
+        'is_supervisor_label',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'is_supervisor' => 'boolean',
         ];
     }
 
@@ -190,5 +193,10 @@ class Speaker extends Model
         }
 
         return $this->organization ?? 'Pakar Eksternal';
+    }
+
+    public function getIsSupervisorLabelAttribute(): string
+    {
+        return $this->is_supervisor ? 'Supervisor' : 'Reguler';
     }
 }

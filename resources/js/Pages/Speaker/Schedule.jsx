@@ -29,15 +29,18 @@ import EmptyState from '@/Components/ui/EmptyState';
 
 export default function Schedule({
     speaker,
+    isSupervisorMode = false,
     sessions = [],
     stats = {},
     availableEvents = [],
     availableDays = [],
+    availableSpeakers = [],
     filters = {},
 }) {
     const [search, setSearch] = useState(filters.q || '');
     const [selectedEvent, setSelectedEvent] = useState(filters.event_id || '');
     const [selectedDay, setSelectedDay] = useState(filters.day || '');
+    const [selectedSpeaker, setSelectedSpeaker] = useState(filters.speaker_id || '');
     const [selectedSessionForModal, setSelectedSessionForModal] = useState(null);
 
     // Filter submissions
@@ -45,6 +48,7 @@ export default function Schedule({
         const merged = {
             event_id: selectedEvent || undefined,
             day: selectedDay || undefined,
+            speaker_id: selectedSpeaker || undefined,
             q: search || undefined,
             ...newFilters,
         };
@@ -73,6 +77,11 @@ export default function Schedule({
         updateFilters({ day: dayNum });
     };
 
+    const handleSpeakerChange = (speakerId) => {
+        setSelectedSpeaker(speakerId);
+        updateFilters({ speaker_id: speakerId });
+    };
+
     const handleSearchSubmit = (e) => {
         e.preventDefault();
         updateFilters({ q: search });
@@ -82,6 +91,7 @@ export default function Schedule({
         setSearch('');
         setSelectedEvent('');
         setSelectedDay('');
+        setSelectedSpeaker('');
         router.get('/pemateri/jadwal', {}, {
             preserveState: true,
             preserveScroll: true,
@@ -92,7 +102,7 @@ export default function Schedule({
         window.print();
     };
 
-    const hasActiveFilters = Boolean(search || selectedEvent || selectedDay);
+    const hasActiveFilters = Boolean(search || selectedEvent || selectedDay || selectedSpeaker);
 
     // Group sessions by Event for structured roster layout
     const groupedSessions = useMemo(() => {
@@ -204,6 +214,16 @@ export default function Schedule({
                                             <CheckCircle2 className="size-3" />
                                             {speaker?.type_label || 'Pemateri Resmi'}
                                         </span>
+                                        {speaker?.is_supervisor ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-bold bg-[#F59E0B] text-slate-900 border border-amber-300 shadow-xs">
+                                                <Sparkles className="size-3.5 fill-current text-slate-900" />
+                                                Pemateri Supervisor
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#0A3F82] text-[#EAF5FF] border border-[#0B63CE]/40">
+                                                Pemateri Reguler
+                                            </span>
+                                        )}
                                     </div>
 
                                     <p className="text-sm text-[#EAF5FF]/80 flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -419,6 +439,37 @@ export default function Schedule({
                                 </button>
                             )}
                         </div>
+
+                        {/* Supervisor Speaker Filter */}
+                        {isSupervisorMode && availableSpeakers.length > 0 && (
+                            <div className="pt-3 border-t border-[#DCE7F3]/70 flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-semibold text-[#112743] flex items-center gap-1.5 shrink-0">
+                                    <User className="size-3.5 text-[#0B63CE]" />
+                                    Filter Pemateri:
+                                </span>
+                                <select
+                                    value={selectedSpeaker}
+                                    onChange={(e) => handleSpeakerChange(e.target.value)}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#F8FBFF] border border-[#DCE7F3] text-[#112743] focus:outline-none focus:border-[#0B63CE] focus:bg-white"
+                                >
+                                    <option value="">Semua Pemateri ({availableSpeakers.length} Sensei)</option>
+                                    {availableSpeakers.map((sp) => (
+                                        <option key={sp.id} value={sp.id}>
+                                            {sp.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {selectedSpeaker ? (
+                                    <span className="text-xs text-[#0B63CE] bg-[#EAF5FF] px-2 py-0.5 rounded border border-[#BCE0FD]">
+                                        Menampilkan jadwal pemateri terpilih
+                                    </span>
+                                ) : (
+                                    <span className="text-[11px] text-[#6B7C93]">
+                                        (Sebagai supervisor, Anda dapat melihat seluruh jadwal pengajar)
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Master Roster List */}
@@ -513,6 +564,33 @@ export default function Schedule({
                                                             <span className="font-semibold text-slate-600">Metode:</span>
                                                             <span>{session.method}</span>
                                                         </div>
+
+                                                        {session.speaker && (
+                                                            <div className="pt-2 border-t border-[#DCE7F3]/70 space-y-1">
+                                                                <span className="text-[10px] font-mono uppercase tracking-wider text-[#6B7C93] block">
+                                                                    Sensei Pengampu:
+                                                                </span>
+                                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                                    <span className="font-semibold text-xs text-[#112743]">
+                                                                        {session.speaker.full_name || session.speaker.name}
+                                                                    </span>
+                                                                    {session.speaker.dan_rank && (
+                                                                        <span className="text-[10px] font-mono px-1 rounded bg-[#EAF5FF] text-[#0A3F82] border border-[#BCE0FD]">
+                                                                            {session.speaker.dan_rank}
+                                                                        </span>
+                                                                    )}
+                                                                    {session.is_own_session ? (
+                                                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#20A47A]/15 text-[#20A47A] border border-[#20A47A]/30">
+                                                                            Sesi Anda
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                                                                            Pengampu Lain
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     {/* Middle: Topic, Subtopic, Track Codes & Module */}
@@ -855,11 +933,12 @@ export default function Schedule({
                             <tr>
                                 <th style={{ width: '5%' }}>No</th>
                                 <th style={{ width: '12%' }}>Hari & Tanggal</th>
-                                <th style={{ width: '15%' }}>Waktu (WIB)</th>
-                                <th style={{ width: '15%' }}>Ruangan / Dojo</th>
-                                <th style={{ width: '30%' }}>Materi / Topik Pelajaran</th>
-                                <th style={{ width: '15%' }}>Sasaran Peserta</th>
-                                <th style={{ width: '8%' }}>JP</th>
+                                <th style={{ width: '13%' }}>Waktu (WIB)</th>
+                                <th style={{ width: '12%' }}>Ruangan / Dojo</th>
+                                {isSupervisorMode && <th style={{ width: '15%' }}>Sensei Pengampu</th>}
+                                <th style={{ width: isSupervisorMode ? '25%' : '30%' }}>Materi / Topik Pelajaran</th>
+                                <th style={{ width: '12%' }}>Sasaran Peserta</th>
+                                <th style={{ width: '6%' }}>JP</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -877,6 +956,16 @@ export default function Schedule({
                                         {session.time_range}
                                     </td>
                                     <td>{session.room}</td>
+                                    {isSupervisorMode && (
+                                        <td>
+                                            <strong>{session.speaker?.full_name || session.speaker?.name || '-'}</strong>
+                                            {session.speaker?.dan_rank && (
+                                                <div style={{ fontSize: '8pt', color: '#555' }}>
+                                                    {session.speaker.dan_rank}
+                                                </div>
+                                            )}
+                                        </td>
+                                    )}
                                     <td>
                                         <strong>{session.topic}</strong>
                                         {session.subtopic && (

@@ -66,8 +66,10 @@ export default function Index({ speakers, filters = {}, stats = {}, availableEve
         primary_expertise: '',
         bio: '',
         internal_contact: '',
+        contact_email: '',
         photo_url: '',
         is_active: true,
+        is_supervisor: false,
         event_id: '',
     });
 
@@ -119,8 +121,10 @@ export default function Index({ speakers, filters = {}, stats = {}, availableEve
             primary_expertise: '',
             bio: '',
             internal_contact: '',
+            contact_email: '',
             photo_url: '',
             is_active: true,
+            is_supervisor: false,
             event_id: '',
         });
         setIsModalOpen(true);
@@ -138,8 +142,10 @@ export default function Index({ speakers, filters = {}, stats = {}, availableEve
             primary_expertise: s.primary_expertise || '',
             bio: s.bio || '',
             internal_contact: s.internal_contact || '',
+            contact_email: s.contact_email || '',
             photo_url: s.photo_url || '',
             is_active: Boolean(s.is_active),
+            is_supervisor: Boolean(s.is_supervisor),
             event_id: s.event_id ? String(s.event_id) : '',
         });
         setIsModalOpen(true);
@@ -185,7 +191,15 @@ export default function Index({ speakers, filters = {}, stats = {}, availableEve
                         {row.name.substring(0, 2).toUpperCase()}
                     </div>
                     <div>
-                        <div className="font-semibold text-xs text-[#0E2747]">{row.full_name}</div>
+                        <div className="font-semibold text-xs text-[#0E2747] flex items-center gap-1.5">
+                            {row.full_name}
+                            {row.is_supervisor && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#F59E0B] text-slate-900 border border-amber-300">
+                                    <Sparkles className="w-2.5 h-2.5 fill-current" />
+                                    Supervisor
+                                </span>
+                            )}
+                        </div>
                         <div className="text-[11px] text-[#6B7C93]">{row.role_info}</div>
                     </div>
                 </div>
@@ -556,19 +570,42 @@ export default function Index({ speakers, filters = {}, stats = {}, availableEve
                         />
                     </FormField>
 
-                    {/* Protected internal contact */}
-                    <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-2">
+                    {/* Protected internal contact & supervisor privilege */}
+                    <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-3">
                         <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
                             <Shield className="w-3.5 h-3.5 text-[#EE9B25]" />
-                            Kontak Internal Pengurus (Admin Only)
+                            Kontak & Hak Akses Pengawas (Admin Only)
                         </div>
-                        <FormField label="Nomor Telepon / WhatsApp Internal">
-                            <Input
-                                value={form.data.internal_contact}
-                                onChange={(e) => form.setData('internal_contact', e.target.value)}
-                                placeholder="0812-XXXX-XXXX (Hanya tampil untuk admin)"
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FormField label="Nomor Telepon / WhatsApp Internal">
+                                <Input
+                                    value={form.data.internal_contact}
+                                    onChange={(e) => form.setData('internal_contact', e.target.value)}
+                                    placeholder="0812-XXXX-XXXX"
+                                />
+                            </FormField>
+                            <FormField label="Email Kontak / Akun Login" error={form.errors.contact_email}>
+                                <Input
+                                    type="email"
+                                    value={form.data.contact_email}
+                                    onChange={(e) => form.setData('contact_email', e.target.value)}
+                                    placeholder="pemateri@perkemi.id"
+                                />
+                            </FormField>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1 border-t border-amber-200/60">
+                            <input
+                                type="checkbox"
+                                id="master-speaker-is-supervisor"
+                                checked={form.data.is_supervisor}
+                                onChange={(e) => form.setData('is_supervisor', e.target.checked)}
+                                className="rounded border-amber-300 text-[#0B63CE] focus:ring-[#0B63CE]"
                             />
-                        </FormField>
+                            <label htmlFor="master-speaker-is-supervisor" className="text-xs font-semibold text-amber-950 flex items-center gap-1.5 cursor-pointer">
+                                <Sparkles className="w-3.5 h-3.5 text-[#F59E0B]" />
+                                Tetapkan sebagai Pemateri Supervisor (Dapat memantau & mengakses seluruh jadwal pemateri)
+                            </label>
+                        </div>
                     </div>
                 </form>
             </Modal>

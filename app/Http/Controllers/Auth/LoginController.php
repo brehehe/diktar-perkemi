@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\ActivityLog;
 use App\Models\Participant;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -54,6 +55,15 @@ class LoginController extends Controller
             $request->session()->regenerate();
 
             $user = Auth::user();
+            if ($user) {
+                ActivityLog::record('auth.login', $user, [
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'name' => $user->name,
+                    'description' => "Pengguna {$user->name} ({$user->role}) berhasil masuk ke portal",
+                ]);
+            }
+
             $intended = session()->pull('url.intended');
             $redirectUrl = $intended;
 
@@ -155,6 +165,16 @@ class LoginController extends Controller
      */
     public function logout(Request $request): RedirectResponse
     {
+        $user = Auth::user();
+        if ($user) {
+            ActivityLog::record('auth.logout', $user, [
+                'email' => $user->email,
+                'role' => $user->role,
+                'name' => $user->name,
+                'description' => "Pengguna {$user->name} ({$user->role}) keluar dari portal",
+            ]);
+        }
+
         Auth::logout();
 
         $request->session()->invalidate();

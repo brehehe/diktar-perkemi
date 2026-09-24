@@ -69,10 +69,13 @@ class SpeakerPortalController extends Controller
             return redirect()->route('home')->with('error', 'Profil pemateri belum terdaftar. Silakan hubungi sekretariat PB PERKEMI.');
         }
 
+        $isSupervisor = (bool) ($speaker?->is_supervisor || $user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara'], true));
+
         $query = EventSession::query()
             ->with([
                 'event:id,title,slug,start_date,end_date,location',
                 'eventRoom:id,name',
+                'speaker:id,name,title_degree,dan_rank,type,position,organization',
                 'learningModule.materials.activeFile',
                 'learningModule.materials.categories',
                 'module',
@@ -80,8 +83,10 @@ class SpeakerPortalController extends Controller
                 'material.categories',
             ]);
 
-        if ($speaker) {
+        if (! $isSupervisor && $speaker) {
             $query->where('speaker_id', $speaker->id);
+        } elseif ($isSupervisor && $request->filled('speaker_id') && $request->input('speaker_id') !== 'all') {
+            $query->where('speaker_id', (int) $request->input('speaker_id'));
         }
 
         if ($request->filled('event_id')) {
@@ -104,7 +109,7 @@ class SpeakerPortalController extends Controller
 
         $allSessions = (clone $query)->orderBy('date')->orderBy('start_time')->get();
 
-        $mappedSessions = $allSessions->map(function (EventSession $session) {
+        $mappedSessions = $allSessions->map(function (EventSession $session) use ($speaker) {
             $materials = collect();
 
             if ($session->learningModule) {
@@ -188,6 +193,15 @@ class SpeakerPortalController extends Controller
                     'download_url' => route('speaker.module.download', [$session->id, $session->module->id]),
                 ] : null,
                 'materials' => $materials->values(),
+                'speaker' => $session->speaker ? [
+                    'id' => $session->speaker->id,
+                    'name' => $session->speaker->name,
+                    'full_name' => $session->speaker->full_name_with_title,
+                    'dan_rank' => $session->speaker->dan_rank,
+                    'type' => $session->speaker->type,
+                    'role_info' => $session->speaker->role_info,
+                ] : null,
+                'is_own_session' => $speaker ? ($session->speaker_id === $speaker->id) : false,
             ];
         });
 
@@ -198,7 +212,7 @@ class SpeakerPortalController extends Controller
         $totalMaterials = $mappedSessions->flatMap(fn ($s) => $s['materials'])->unique('id')->count();
 
         // Available events for filtering
-        $eventIds = EventSession::when($speaker, fn ($q) => $q->where('speaker_id', $speaker->id))
+        $eventIds = EventSession::when(! $isSupervisor && $speaker, fn ($q) => $q->where('speaker_id', $speaker->id))
             ->distinct()
             ->pluck('event_id');
         $availableEvents = Event::whereIn('id', $eventIds)
@@ -211,13 +225,26 @@ class SpeakerPortalController extends Controller
             ]);
 
         // Available days for filtering
-        $availableDays = EventSession::when($speaker, fn ($q) => $q->where('speaker_id', $speaker->id))
+        $availableDays = EventSession::when(! $isSupervisor && $speaker, fn ($q) => $q->where('speaker_id', $speaker->id))
             ->when($request->filled('event_id'), fn ($q) => $q->where('event_id', (int) $request->input('event_id')))
             ->whereNotNull('day_number')
             ->distinct()
             ->orderBy('day_number')
             ->pluck('day_number')
             ->values();
+
+        // Available speakers for supervisor filter
+        $availableSpeakers = $isSupervisor
+            ? Speaker::whereHas('sessions')
+                ->select('id', 'name', 'title_degree', 'dan_rank')
+                ->orderBy('name')
+                ->get()
+                ->map(fn ($s) => [
+                    'id' => $s->id,
+                    'name' => $s->full_name_with_title ?: $s->name,
+                ])
+                ->values()
+            : [];
 
         return Inertia::render('Speaker/Schedule', [
             'speaker' => $speaker ? [
@@ -236,7 +263,9 @@ class SpeakerPortalController extends Controller
                 'role_info' => $speaker->role_info,
                 'contact_email' => $speaker->contact_email ?? $request->user()->email,
                 'contact_phone' => $speaker->contact_phone,
+                'is_supervisor' => (bool) $speaker->is_supervisor,
             ] : null,
+            'isSupervisorMode' => $isSupervisor,
             'sessions' => $mappedSessions,
             'stats' => [
                 'total_sessions' => $totalSessions,
@@ -246,7 +275,13 @@ class SpeakerPortalController extends Controller
             ],
             'availableEvents' => $availableEvents,
             'availableDays' => $availableDays,
-            'filters' => $request->only(['event_id', 'day', 'q']),
+            'availableSpeakers' => $availableSpeakers,
+            'filters' => [
+                'event_id' => $request->input('event_id', ''),
+                'day' => $request->input('day', ''),
+                'speaker_id' => $request->input('speaker_id', ''),
+                'q' => $request->input('q', ''),
+            ],
         ]);
     }
 
@@ -258,10 +293,15 @@ class SpeakerPortalController extends Controller
         $user = $request->user();
         $speaker = $this->resolveSpeaker($request);
 
+        $canAccess = $user->isAdmin()
+            || in_array($user->role, ['Diktar', 'Penyelenggara'], true)
+            || ($speaker && $speaker->is_supervisor)
+            || ($speaker && $session->speaker_id === $speaker->id);
+
         abort_unless(
-            $user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara'], true) || ($speaker && $session->speaker_id === $speaker->id),
+            $canAccess,
             403,
-            'Akses ditolak. Anda bukan pemateri yang ditugaskan untuk sesi ini.'
+            'Akses ditolak. Anda bukan pemateri yang ditugaskan untuk sesi ini atau belum memiliki akses supervisor.'
         );
 
         return redirect()->route('reader.show', $material->slug);
@@ -275,23 +315,28 @@ class SpeakerPortalController extends Controller
         $user = $request->user();
         $speaker = $this->resolveSpeaker($request);
 
+        $canAccess = $user->isAdmin()
+            || in_array($user->role, ['Diktar', 'Penyelenggara'], true)
+            || ($speaker && $speaker->is_supervisor)
+            || ($speaker && $session->speaker_id === $speaker->id);
+
         abort_unless(
-            $user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara'], true) || ($speaker && $session->speaker_id === $speaker->id),
+            $canAccess,
             403,
-            'Akses ditolak. Anda bukan pemateri yang ditugaskan untuk sesi ini.'
+            'Akses ditolak. Anda bukan pemateri yang ditugaskan untuk sesi ini atau belum memiliki akses supervisor.'
         );
 
         $activeFile = $material->activeFile;
-        if (! $activeFile || ! $activeFile->file_path) {
+        if (! $activeFile || ! $activeFile->path) {
             return back()->with('error', 'Berkas materi tidak tersedia untuk diunduh.');
         }
 
-        $disk = config('pustaka.disk', 'local');
-        abort_unless(Storage::disk($disk)->exists($activeFile->file_path), 404, 'Berkas materi tidak ditemukan pada penyimpanan.');
+        $disk = $activeFile->disk ?: config('pustaka.disk', 'local');
+        abort_unless(Storage::disk($disk)->exists($activeFile->path), 404, 'Berkas materi tidak ditemukan pada penyimpanan.');
 
         $filename = "Materi-{$material->code}-{$material->slug}.pdf";
 
-        return Storage::disk($disk)->download($activeFile->file_path, $filename, [
+        return Storage::disk($disk)->download($activeFile->path, $filename, [
             'Content-Type' => 'application/pdf',
         ]);
     }
@@ -304,10 +349,15 @@ class SpeakerPortalController extends Controller
         $user = $request->user();
         $speaker = $this->resolveSpeaker($request);
 
+        $canAccess = $user->isAdmin()
+            || in_array($user->role, ['Diktar', 'Penyelenggara'], true)
+            || ($speaker && $speaker->is_supervisor)
+            || ($speaker && $session->speaker_id === $speaker->id);
+
         abort_unless(
-            $user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara'], true) || ($speaker && $session->speaker_id === $speaker->id),
+            $canAccess,
             403,
-            'Akses ditolak. Anda bukan pemateri yang ditugaskan untuk sesi ini.'
+            'Akses ditolak. Anda bukan pemateri yang ditugaskan untuk sesi ini atau belum memiliki akses supervisor.'
         );
 
         if (! $module->source_file_path || ! Storage::disk('local')->exists($module->source_file_path)) {

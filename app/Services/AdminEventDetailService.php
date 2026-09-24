@@ -23,6 +23,7 @@ use App\Models\Participant;
 use App\Models\ParticipantTrack;
 use App\Models\QuestionModule;
 use App\Models\Speaker;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 class AdminEventDetailService
@@ -136,18 +137,31 @@ class AdminEventDetailService
             ]);
 
         // Speakers mapped
-        $speakers = Speaker::whereNull('event_id')->orWhere('event_id', $event->id)
+        $speakers = Speaker::with('user:id,name,email,role')
+            ->where(function ($q) use ($event) {
+                $q->whereNull('event_id')->orWhere('event_id', $event->id);
+            })
             ->orderBy('type')->orderBy('name')->get()->map(fn (Speaker $s) => [
                 'id' => $s->id,
                 'name' => $s->full_name_with_title,
+                'raw_name' => $s->name,
                 'type' => $s->type,
                 'type_label' => $s->type_label,
                 'dan_level' => $s->dan_level,
                 'dan_roman' => $s->dan_roman,
+                'dan_rank' => $s->dan_rank,
                 'role_info' => $s->role_info,
                 'primary_expertise' => $s->primary_expertise,
                 'bio' => $s->bio,
                 'is_active' => $s->is_active,
+                'is_supervisor' => (bool) $s->is_supervisor,
+                'is_supervisor_label' => $s->is_supervisor ? 'Supervisor' : 'Reguler',
+                'contact_email' => $s->contact_email,
+                'contact_phone' => $s->contact_phone,
+                'user_id' => $s->user_id,
+                'has_account' => (bool) ($s->user_id || ($s->contact_email && User::where('email', $s->contact_email)->exists())),
+                'user_email' => $s->user?->email ?? $s->contact_email,
+                'user_name' => $s->user?->name,
                 'event_id' => $s->event_id,
                 'modules_count' => $event->modules->where('speaker_id', $s->id)->count(),
                 'sessions_count' => $event->sessions->where('speaker_id', $s->id)->count(),

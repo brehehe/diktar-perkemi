@@ -732,3 +732,81 @@ test('portal detail page passes embed_url for embeddable external links', functi
             ->where('material.embed_url', 'https://drive.google.com/file/d/1a2b3c4d5e/preview')
         );
 });
+
+test('admin can sync Peserta audience to all materials at once', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $pesertaAudience = Audience::create(['name' => 'Peserta', 'code' => 'participant']);
+    $pelatihAudience = Audience::create(['name' => 'Pelatih', 'code' => 'coach']);
+
+    $m1 = Material::create([
+        'title' => 'Materi Satu',
+        'slug' => 'materi-satu',
+        'code' => 'M-01',
+        'type' => 'book',
+        'status' => 'published',
+        'created_by' => $admin->id,
+    ]);
+    $m1->audiences()->sync([$pelatihAudience->id]);
+
+    $m2 = Material::create([
+        'title' => 'Materi Dua',
+        'slug' => 'materi-dua',
+        'code' => 'M-02',
+        'type' => 'book',
+        'status' => 'published',
+        'created_by' => $admin->id,
+    ]);
+
+    expect($m1->audiences()->where('audiences.id', $pesertaAudience->id)->exists())->toBeFalse();
+    expect($m2->audiences()->where('audiences.id', $pesertaAudience->id)->exists())->toBeFalse();
+
+    $response = $this->actingAs($admin)->post('/admin/koleksi/sync-peserta');
+    $response->assertRedirect();
+    $response->assertSessionHas('success');
+
+    expect($m1->fresh()->audiences()->where('audiences.id', $pesertaAudience->id)->exists())->toBeTrue();
+    expect($m2->fresh()->audiences()->where('audiences.id', $pesertaAudience->id)->exists())->toBeTrue();
+    // Existing audience pelatih should remain intact
+    expect($m1->fresh()->audiences()->where('audiences.id', $pelatihAudience->id)->exists())->toBeTrue();
+});
+
+test('collections index renders audiences list and sync stats via Inertia', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $pesertaAudience = Audience::create(['name' => 'Peserta', 'code' => 'participant']);
+
+    $material = Material::create([
+        'title' => 'Materi Tes Akses',
+        'slug' => 'materi-tes-akses',
+        'code' => 'MTA-01',
+        'type' => 'book',
+        'status' => 'published',
+        'created_by' => $admin->id,
+    ]);
+    $material->audiences()->sync([$pesertaAudience->id]);
+
+    $response = $this->actingAs($admin)->get('/admin/koleksi');
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Collections/Index')
+            ->has('audiences_list')
+            ->has('sync_peserta_stats')
+            ->where('sync_peserta_stats.total', 1)
+            ->where('sync_peserta_stats.with_peserta', 1)
+            ->where('materials.data.0.has_peserta_audience', true)
+        );
+});
+
+test('unauthenticated Inertia request returns 409 with X-Inertia-Location to login route', function () {
+    $response = $this->withHeaders([
+        'X-Inertia' => 'true',
+    ])->delete('/admin/koleksi/1');
+
+    $response->assertStatus(409);
+    $response->assertHeader('X-Inertia-Location', route('login'));
+});
+
+test('MethodNotAllowedHttpException on login route redirects to login GET route', function () {
+    $response = $this->delete('/login');
+
+    $response->assertRedirect(route('login'));
+});

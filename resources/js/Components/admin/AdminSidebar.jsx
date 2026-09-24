@@ -124,7 +124,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 items: [
                     { name: 'Pengguna', href: '/admin/pengguna', icon: Users },
                     { name: 'Hak Akses', href: '/admin/hak-akses', icon: ShieldCheck },
-                    { name: 'Aktivitas', href: '/admin/aktivitas', icon: History },
+                    { name: 'Master Log', href: '/admin/aktivitas', icon: History },
                     { name: 'Pengaturan Portal', href: '/admin/pengaturan', icon: Settings },
                     { name: 'Bantuan Admin', href: '/admin/bantuan', icon: HelpCircle },
                 ],

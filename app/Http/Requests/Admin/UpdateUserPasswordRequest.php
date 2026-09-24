@@ -5,14 +5,14 @@ namespace App\Http\Requests\Admin;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateUserRoleRequest extends FormRequest
+class UpdateUserPasswordRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return $this->user() && $this->user()->isAdmin();
+        return $this->user()?->isAdmin() ?? false;
     }
 
     /**
@@ -23,8 +23,7 @@ class UpdateUserRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'role' => ['required', 'string', 'in:Peserta,Pelatih,Penguji,Wasit,Pemateri,Penyelenggara,Diktar,Admin'],
-            'is_supervisor' => ['nullable', 'boolean'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
         ];
     }
 
@@ -36,8 +35,9 @@ class UpdateUserRoleRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'role.required' => 'Pilih peran pengguna.',
-            'role.in' => 'Peran pengguna yang dipilih tidak valid.',
+            'password.required' => 'Password baru wajib diisi.',
+            'password.min' => 'Password baru minimal 8 karakter.',
+            'password.confirmed' => 'Konfirmasi password baru tidak cocok.',
         ];
     }
 }

@@ -36,7 +36,7 @@ class MaterialController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = Material::query()->with(['categories', 'creator', 'activeFile'])->latest('updated_at');
+        $query = Material::query()->with(['categories', 'creator', 'activeFile', 'audiences'])->latest('updated_at');
 
         if ($request->filled('q')) {
             $search = trim((string) $request->input('q'));
@@ -107,6 +107,12 @@ class MaterialController extends Controller
                 'name' => $m->categories->first()->name,
                 'color' => $m->categories->first()->color,
             ] : null,
+            'audiences' => $m->audiences->map(fn (Audience $aud) => [
+                'id' => $aud->id,
+                'name' => $aud->name,
+                'code' => $aud->code,
+            ])->values()->all(),
+            'has_peserta_audience' => $m->audiences->contains(fn ($aud) => $aud->code === 'participant' || $aud->name === 'Peserta'),
             'updated_at' => $m->updated_at?->format('d M Y, H:i') ?? '-',
         ]);
 
@@ -152,6 +158,11 @@ class MaterialController extends Controller
                 ['value' => 'review', 'label' => 'Dalam Tinjauan'],
                 ['value' => 'published', 'label' => 'Terbit'],
                 ['value' => 'archived', 'label' => 'Diarsipkan'],
+            ],
+            'audiences_list' => Audience::where('is_active', true)->orderBy('id')->get(['id', 'name', 'code']),
+            'sync_peserta_stats' => [
+                'total' => Material::count(),
+                'with_peserta' => Material::whereHas('audiences', fn ($q) => $q->where('audiences.code', 'participant')->orWhere('audiences.name', 'Peserta'))->count(),
             ],
         ]);
     }
@@ -431,5 +442,41 @@ class MaterialController extends Controller
         });
 
         return redirect()->route('admin.materials.index')->with('success', 'Materi "'.$title.'" berhasil dihapus dari sistem.');
+    }
+
+    /**
+     * Ensure Peserta role audience is attached to all existing materials.
+     */
+    public function syncPesertaAudienceToAll(Request $request): RedirectResponse
+    {
+        $pesertaAudience = Audience::where('code', 'participant')
+            ->orWhere('name', 'Peserta')
+            ->first();
+
+        if (! $pesertaAudience) {
+            return back()->with('error', 'Peran sasaran Peserta tidak ditemukan di sistem.');
+        }
+
+        $materials = Material::all();
+        $updatedCount = 0;
+
+        foreach ($materials as $material) {
+            $currentAudienceIds = $material->audiences()->pluck('audiences.id')->all();
+            if (! in_array($pesertaAudience->id, $currentAudienceIds, true)) {
+                $material->audiences()->syncWithoutDetaching([$pesertaAudience->id]);
+                $updatedCount++;
+            }
+        }
+
+        ActivityLog::record('material.sync_peserta_audience', null, [
+            'total_materials' => $materials->count(),
+            'updated_materials' => $updatedCount,
+            'audience_id' => $pesertaAudience->id,
+        ]);
+
+        return back()->with(
+            'success',
+            "Hak akses peran Peserta berhasil di-checklist untuk seluruh {$materials->count()} materi koleksi ({$updatedCount} materi baru ditambahkan)."
+        );
     }
 }

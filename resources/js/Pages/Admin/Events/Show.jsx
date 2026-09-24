@@ -62,6 +62,7 @@ import {
     Download,
     Upload,
     FileEdit,
+    Key,
 } from 'lucide-react';
 
 export default function Show({
@@ -383,7 +384,19 @@ export default function Show({
     const legendForm = useForm({ acronym: '', full_name: '', category: 'istilah', description: '' });
     const requirementForm = useForm({ item: '', mandatory: true });
     const facilityForm = useForm({ name: '', status: 'prepared', notes: '' });
-    const speakerForm = useForm({ name: '', type: 'internal', title_degree: '', specialization: '' });
+    const speakerForm = useForm({
+        name: '',
+        type: 'internal',
+        title_degree: '',
+        specialization: '',
+        contact_email: '',
+        is_supervisor: false,
+    });
+    const [accountTargetSpeaker, setAccountTargetSpeaker] = useState(null);
+    const speakerAccountForm = useForm({
+        email: '',
+        password: 'Pemateri2026!',
+    });
 
     // Modals
     const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
@@ -4023,38 +4036,143 @@ export default function Show({
                             <div><label htmlFor="event-speaker-type" className="mb-1 block text-xs font-semibold text-[#112743]">Jenis</label><Select id="event-speaker-type" value={speakerForm.data.type} onChange={(change) => speakerForm.setData('type', change.target.value)}><option value="internal">Internal</option><option value="external">Eksternal</option></Select></div>
                             <div><label htmlFor="event-speaker-degree" className="mb-1 block text-xs font-semibold text-[#112743]">Gelar</label><Input id="event-speaker-degree" value={speakerForm.data.title_degree} onChange={(change) => speakerForm.setData('title_degree', change.target.value)} /></div>
                             <div><label htmlFor="event-speaker-expertise" className="mb-1 block text-xs font-semibold text-[#112743]">Keahlian</label><Input id="event-speaker-expertise" value={speakerForm.data.specialization} onChange={(change) => speakerForm.setData('specialization', change.target.value)} /></div>
-                            <Button type="submit" loading={speakerForm.processing}>Tambah pemateri</Button>
+                            <div className="sm:col-span-2"><label htmlFor="event-speaker-email" className="mb-1 block text-xs font-semibold text-[#112743]">Email Kontak / Akun Login (opsional)</label><Input id="event-speaker-email" type="email" placeholder="pemateri@perkemi.id" value={speakerForm.data.contact_email} onChange={(change) => speakerForm.setData('contact_email', change.target.value)} /></div>
+                            <div className="sm:col-span-2 flex items-center gap-2 pt-1">
+                                <input
+                                    type="checkbox"
+                                    id="event-speaker-supervisor"
+                                    checked={speakerForm.data.is_supervisor}
+                                    onChange={(e) => speakerForm.setData('is_supervisor', e.target.checked)}
+                                    className="rounded border-[#DCE7F3] text-[#0B63CE] focus:ring-[#0B63CE]"
+                                />
+                                <label htmlFor="event-speaker-supervisor" className="text-xs font-semibold text-[#112743] flex items-center gap-1.5 cursor-pointer">
+                                    <Sparkles className="w-3.5 h-3.5 text-[#F59E0B]" />
+                                    Tetapkan sebagai Pemateri Supervisor (dapat memantau & mengakses seluruh jadwal pemateri)
+                                </label>
+                            </div>
+                            <div className="sm:col-span-2 pt-2">
+                                <Button type="submit" loading={speakerForm.processing}>Tambah pemateri</Button>
+                            </div>
                         </form>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {speakers.filter((speaker) => speaker.event_id === event.id || speaker.sessions_count > 0 || speaker.modules_count > 0).map((sp) => (
                                 <div
                                     key={sp.id}
-                                    className="p-5 rounded-xl bg-white border border-[#DCE7F3] shadow-xs flex items-start gap-4"
+                                    className="p-5 rounded-xl bg-white border border-[#DCE7F3] shadow-xs flex flex-col justify-between"
                                 >
-                                    <div className="w-12 h-12 rounded-xl bg-[#EAF5FF] text-[#0B63CE] flex items-center justify-center font-bold text-sm shrink-0 border border-[#0B63CE]/20">
-                                        {sp.dan_roman ? sp.dan_roman : 'INST'}
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-12 h-12 rounded-xl bg-[#EAF5FF] text-[#0B63CE] flex items-center justify-center font-bold text-sm shrink-0 border border-[#0B63CE]/20">
+                                            {sp.dan_roman ? sp.dan_roman : 'INST'}
+                                        </div>
+                                        <div className="space-y-1 min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                                <h4 className="font-bold text-xs sm:text-sm text-[#0E2747] truncate">
+                                                    {sp.name}
+                                                </h4>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                                                        sp.type === 'internal'
+                                                            ? 'bg-blue-100 text-blue-800'
+                                                            : 'bg-emerald-100 text-emerald-800'
+                                                    }`}>
+                                                        {sp.type_label}
+                                                    </span>
+                                                    {sp.is_supervisor ? (
+                                                        <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-[#F59E0B] text-slate-900 border border-amber-300 flex items-center gap-1">
+                                                            <Sparkles className="w-2.5 h-2.5 fill-current" />
+                                                            Supervisor
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-slate-100 text-slate-600">
+                                                            Reguler
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <p className="text-xs text-[#6B7C93]">{sp.role_info}</p>
+                                            <div className="pt-1 flex items-center gap-3 text-[11px] text-[#0A3F82] font-mono">
+                                                <span>{sp.sessions_count} Sesi Rundown</span>
+                                                <span>•</span>
+                                                <span>{sp.total_jp} JP Diajarkan</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-1 min-w-0 flex-1">
-                                        <div className="flex items-center justify-between">
-                                            <h4 className="font-bold text-xs sm:text-sm text-[#0E2747] truncate">
-                                                {sp.name}
-                                            </h4>
-                                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                                                sp.type === 'internal'
-                                                    ? 'bg-blue-100 text-blue-800'
-                                                    : 'bg-emerald-100 text-emerald-800'
-                                            }`}>
-                                                {sp.type_label}
-                                            </span>
+
+                                    {/* Account Management & Supervisor Toggle Area */}
+                                    <div className="pt-3 mt-3 border-t border-[#DCE7F3] space-y-2">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <div className="flex items-center gap-1.5">
+                                                <UserCheck className="w-3.5 h-3.5 text-[#0B63CE]" />
+                                                {sp.has_account ? (
+                                                    <span className="text-[#20A47A] font-medium text-[11px] flex items-center gap-1">
+                                                        Akun: <strong className="font-mono text-[#112743]">{sp.user_email}</strong>
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[#6B7C93] text-[11px]">
+                                                        Belum ada akun login
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {sp.event_id === event.id && (
+                                                <button
+                                                    type="button"
+                                                    disabled={sp.sessions_count > 0 || sp.modules_count > 0}
+                                                    onClick={() => router.delete(`/admin/event/${event.id}/pemateri/${sp.id}`)}
+                                                    className="text-[11px] text-[#DD4D7C] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                                                    title="Hapus pemateri dari event ini"
+                                                >
+                                                    Hapus
+                                                </button>
+                                            )}
                                         </div>
-                                        <p className="text-xs text-[#6B7C93]">{sp.role_info}</p>
-                                        <div className="pt-2 flex items-center gap-3 text-[11px] text-[#0A3F82] font-mono">
-                                            <span>{sp.sessions_count} Sesi Rundown</span>
-                                            <span>•</span>
-                                            <span>{sp.total_jp} JP Diajarkan</span>
+
+                                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    router.patch(`/admin/event/${event.id}/pemateri/${sp.id}/toggle-supervisor`, {}, {
+                                                        preserveScroll: true,
+                                                    });
+                                                }}
+                                                className={`text-[11px] font-semibold px-2.5 py-1 rounded transition-colors ${
+                                                    sp.is_supervisor
+                                                        ? 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300'
+                                                        : 'bg-[#F8FBFF] text-[#0B63CE] hover:bg-[#EAF5FF] border border-[#BCE0FD]'
+                                                }`}
+                                                title={sp.is_supervisor ? "Cabut wewenang supervisor" : "Jadikan pemateri supervisor untuk melihat semua jadwal"}
+                                            >
+                                                {sp.is_supervisor ? 'Hapus Status Supervisor' : 'Jadikan Supervisor'}
+                                            </button>
+
+                                            {sp.has_account ? (
+                                                <Link
+                                                    href={`/admin/pengguna?q=${encodeURIComponent(sp.user_email || sp.raw_name || sp.name)}`}
+                                                    className="text-[11px] font-semibold px-2.5 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 flex items-center gap-1"
+                                                    title="Buka panel admin pengguna untuk ubah password"
+                                                >
+                                                    <Key className="w-3 h-3 text-[#0B63CE]" />
+                                                    Ubah Password di Pengguna
+                                                </Link>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setAccountTargetSpeaker(sp);
+                                                        speakerAccountForm.setData({
+                                                            email: sp.contact_email || sp.user_email || '',
+                                                            password: 'Pemateri2026!',
+                                                        });
+                                                        speakerAccountForm.clearErrors();
+                                                    }}
+                                                    className="text-[11px] font-semibold px-2.5 py-1 rounded bg-[#0B63CE] text-white hover:bg-[#0A3F82] flex items-center gap-1 shadow-xs"
+                                                >
+                                                    <Key className="w-3 h-3" />
+                                                    Buatkan Akun Login
+                                                </button>
+                                            )}
                                         </div>
-                                        {sp.event_id === event.id && <button type="button" disabled={sp.sessions_count > 0 || sp.modules_count > 0} onClick={() => router.delete(`/admin/event/${event.id}/pemateri/${sp.id}`)} className="mt-2 min-h-11 px-2 text-xs font-semibold text-[#DD4D7C] hover:bg-[#FDE8EF] focus-visible:outline-2 focus-visible:outline-[#0B63CE] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Hapus pemateri ${sp.name}`}>Hapus</button>}
                                     </div>
                                 </div>
                             ))}
@@ -6748,6 +6866,80 @@ export default function Show({
                 loading={isDeletingExam}
                 onConfirm={handleDeleteExam}
             />
+
+            {/* Modal Buatkan Akun Login Pemateri */}
+            <Modal
+                isOpen={Boolean(accountTargetSpeaker)}
+                onClose={() => setAccountTargetSpeaker(null)}
+                title="Buatkan Akun Login Pemateri"
+                description={`Buat atau hubungkan akun portal untuk Sensei "${accountTargetSpeaker?.name}".`}
+                isProcessing={speakerAccountForm.processing}
+            >
+                <form
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!accountTargetSpeaker) return;
+                        speakerAccountForm.post(`/admin/event/${event.id}/pemateri/${accountTargetSpeaker.id}/buat-akun`, {
+                            onSuccess: () => {
+                                setAccountTargetSpeaker(null);
+                                speakerAccountForm.reset();
+                            },
+                        });
+                    }}
+                    className="space-y-4"
+                >
+                    <div className="p-3 rounded-lg bg-[#F8FBFF] border border-[#DCE7F3] text-xs space-y-1">
+                        <p><span className="text-[#6B7C93]">Nama Pemateri:</span> <strong className="text-[#112743]">{accountTargetSpeaker?.name}</strong></p>
+                        <p><span className="text-[#6B7C93]">Peran Akun:</span> <span className="text-[#0B63CE] font-bold">Pemateri</span></p>
+                        <p><span className="text-[#6B7C93]">Status:</span> <span className="font-semibold text-amber-700">{accountTargetSpeaker?.is_supervisor ? 'Pemateri Supervisor (Akses Seluruh Jadwal)' : 'Pemateri Reguler'}</span></p>
+                    </div>
+
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold text-[#112743]">Alamat Email Login</label>
+                        <Input
+                            type="email"
+                            value={speakerAccountForm.data.email}
+                            onChange={(e) => speakerAccountForm.setData('email', e.target.value)}
+                            placeholder="pemateri@perkemi.id"
+                            required
+                            error={speakerAccountForm.errors.email}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold text-[#112743]">Kata Sandi Awal</label>
+                        <Input
+                            type="text"
+                            value={speakerAccountForm.data.password}
+                            onChange={(e) => speakerAccountForm.setData('password', e.target.value)}
+                            placeholder="Minimal 8 karakter"
+                            required
+                            error={speakerAccountForm.errors.password}
+                            helperText="Password dapat diubah kapan saja melalui menu Pengguna atau oleh pemateri sendiri."
+                        />
+                    </div>
+
+                    <div className="pt-4 border-t border-[#DCE7F3] flex justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={speakerAccountForm.processing}
+                            onClick={() => setAccountTargetSpeaker(null)}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            size="sm"
+                            loading={speakerAccountForm.processing}
+                        >
+                            Simpan & Aktifkan Akun
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
         </AdminLayout>
     );
 }

@@ -36,6 +36,10 @@ export default function Create({
     status_options = [],
     max_file_size_mb = 50,
 }) {
+    const pesertaAudience = audiences.find(
+        (a) => a.code === 'participant' || a.name?.toLowerCase() === 'peserta'
+    );
+
     const { data, setData, post, processing, errors, transform } = useForm({
         title: '',
         code: '',
@@ -60,7 +64,7 @@ export default function Create({
         allow_download: true,
         is_downloadable: true,
         is_featured: false,
-        audiences: [],
+        audiences: pesertaAudience ? [pesertaAudience.id] : [],
         key_points: ['', '', ''],
         learning_objectives: ['', ''],
     });
@@ -103,6 +107,14 @@ export default function Create({
             current.push(audienceId);
         }
         setData('audiences', current);
+    };
+
+    const selectAllAudiences = () => {
+        setData('audiences', audiences.map((a) => a.id));
+    };
+
+    const clearAllAudiences = () => {
+        setData('audiences', []);
     };
 
     // Key points helpers
@@ -490,11 +502,47 @@ export default function Create({
                                     Hak Akses Peran Sasaran
                                 </label>
                                 <span className="text-[10px] text-[#6B7C93]">
-                                    {data.audiences.length === 0 ? 'Semua Kenshi' : `${data.audiences.length} Dipilih`}
+                                    {data.audiences.length === 0 ? 'Semua Kenshi (Publik)' : `${data.audiences.length} dari ${audiences.length} Dipilih`}
                                 </span>
                             </div>
+
+                            {/* Quick Action Buttons */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                <button
+                                    type="button"
+                                    onClick={selectAllAudiences}
+                                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#EAF5FF] text-[#0B63CE] hover:bg-[#D5E9FE] transition-colors"
+                                >
+                                    Checklist Semua
+                                </button>
+                                {pesertaAudience && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!data.audiences.includes(pesertaAudience.id)) {
+                                                toggleAudience(pesertaAudience.id);
+                                            }
+                                        }}
+                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                                            data.audiences.includes(pesertaAudience.id)
+                                                ? 'bg-[#EBFBEE] text-[#2B8A3E] font-semibold'
+                                                : 'bg-[#F1F3F5] text-[#495057] hover:bg-[#E9ECEF]'
+                                        }`}
+                                    >
+                                        {data.audiences.includes(pesertaAudience.id) ? '✓ Peserta Aktif' : '+ Checklist Peserta'}
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={clearAllAudiences}
+                                    className="px-2 py-0.5 rounded text-[11px] font-medium text-[#6B7C93] hover:text-[#FA5252] hover:bg-[#FFF5F5] transition-colors ml-auto"
+                                >
+                                    Kosongkan
+                                </button>
+                            </div>
+
                             <p className="text-[11px] text-[#6B7C93]">
-                                Kosongkan pilihan jika materi ditujukan untuk seluruh anggota kenshi PERKEMI.
+                                Kosongkan pilihan jika materi ditujukan untuk seluruh anggota kenshi PERKEMI, atau centang peran sasaran spesifik.
                             </p>
 
                             <div className="space-y-2 pt-1 max-h-48 overflow-y-auto pr-1">

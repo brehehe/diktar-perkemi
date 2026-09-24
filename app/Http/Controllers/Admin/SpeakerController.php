@@ -3,10 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Event;
 use App\Models\Speaker;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -18,7 +23,7 @@ class SpeakerController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = Speaker::query()->with('event:id,title')->withCount(['modules', 'sessions']);
+        $query = Speaker::query()->with(['event:id,title', 'user:id,name,email,role'])->withCount(['modules', 'sessions']);
 
         if ($request->filled('q')) {
             $search = trim((string) $request->input('q'));
@@ -77,7 +82,13 @@ class SpeakerController extends Controller
             'bio' => $s->bio,
             'photo_url' => $s->photo_url,
             'internal_contact' => $s->internal_contact,
+            'contact_email' => $s->contact_email,
             'is_active' => $s->is_active,
+            'is_supervisor' => (bool) $s->is_supervisor,
+            'is_supervisor_label' => $s->is_supervisor ? 'Supervisor' : 'Reguler',
+            'user_id' => $s->user_id,
+            'has_account' => (bool) ($s->user_id || ($s->contact_email && User::where('email', $s->contact_email)->exists())),
+            'user_email' => $s->user?->email ?? $s->contact_email,
             'modules_count' => $s->modules_count,
             'sessions_count' => $s->sessions_count,
         ]);
@@ -124,8 +135,10 @@ class SpeakerController extends Controller
             'primary_expertise' => ['required', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
             'internal_contact' => ['nullable', 'string', 'max:255'],
+            'contact_email' => ['nullable', 'email', 'max:255'],
             'photo_url' => ['nullable', 'string'],
             'is_active' => ['required', 'boolean'],
+            'is_supervisor' => ['nullable', 'boolean'],
         ]);
 
         $speakerData = [
@@ -139,8 +152,10 @@ class SpeakerController extends Controller
             'specialization' => $validated['primary_expertise'],
             'bio' => $validated['bio'] ?? null,
             'contact_phone' => $validated['internal_contact'] ?? null,
+            'contact_email' => $validated['contact_email'] ?? null,
             'avatar_path' => $validated['photo_url'] ?? null,
             'is_active' => $validated['is_active'],
+            'is_supervisor' => (bool) ($validated['is_supervisor'] ?? false),
         ];
 
         Speaker::create($speakerData);
@@ -164,8 +179,10 @@ class SpeakerController extends Controller
             'primary_expertise' => ['required', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
             'internal_contact' => ['nullable', 'string', 'max:255'],
+            'contact_email' => ['nullable', 'email', 'max:255'],
             'photo_url' => ['nullable', 'string'],
             'is_active' => ['required', 'boolean'],
+            'is_supervisor' => ['nullable', 'boolean'],
         ]);
 
         $speakerData = [
@@ -179,13 +196,86 @@ class SpeakerController extends Controller
             'specialization' => $validated['primary_expertise'],
             'bio' => $validated['bio'] ?? null,
             'contact_phone' => $validated['internal_contact'] ?? null,
+            'contact_email' => array_key_exists('contact_email', $validated) ? $validated['contact_email'] : $speaker->contact_email,
             'avatar_path' => $validated['photo_url'] ?? null,
             'is_active' => $validated['is_active'],
+            'is_supervisor' => array_key_exists('is_supervisor', $validated) ? (bool) $validated['is_supervisor'] : $speaker->is_supervisor,
         ];
 
         $speaker->update($speakerData);
 
         return back()->with('success', 'Data pemateri berhasil diperbarui.');
+    }
+
+    /**
+     * Toggle supervisor status for the speaker.
+     */
+    public function toggleSupervisor(Speaker $speaker): RedirectResponse
+    {
+        $speaker->is_supervisor = ! $speaker->is_supervisor;
+        $speaker->save();
+
+        ActivityLog::record('speaker.supervisor_toggled', $speaker, [
+            'speaker_name' => $speaker->name,
+            'is_supervisor' => $speaker->is_supervisor,
+        ]);
+
+        $status = $speaker->is_supervisor ? 'dijadikan Pemateri Supervisor' : 'dikembalikan menjadi Pemateri Reguler';
+
+        return back()->with('success', "Pemateri {$speaker->name} berhasil {$status}.");
+    }
+
+    /**
+     * Create or connect login user account for the speaker.
+     */
+    public function createAccount(Request $request, Speaker $speaker): RedirectResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($speaker->user_id)],
+            'password' => ['required', 'string', 'min:8'],
+        ], [
+            'email.required' => 'Alamat email wajib diisi untuk akun login.',
+            'email.unique' => 'Alamat email ini sudah terdaftar pada akun lain.',
+            'password.required' => 'Password wajib diisi.',
+            'password.min' => 'Password minimal 8 karakter.',
+        ]);
+
+        DB::transaction(function () use ($speaker, $validated): void {
+            if ($speaker->user_id && $speaker->user) {
+                $user = $speaker->user;
+                $user->email = $validated['email'];
+                $user->password = Hash::make($validated['password']);
+                $user->save();
+            } else {
+                $existingUser = User::where('email', $validated['email'])->first();
+                if ($existingUser) {
+                    $existingUser->role = 'Pemateri';
+                    $existingUser->password = Hash::make($validated['password']);
+                    $existingUser->save();
+                    $user = $existingUser;
+                } else {
+                    $user = User::create([
+                        'name' => $speaker->name,
+                        'email' => $validated['email'],
+                        'password' => Hash::make($validated['password']),
+                        'role' => 'Pemateri',
+                        'email_verified_at' => now(),
+                    ]);
+                }
+
+                $speaker->user_id = $user->id;
+            }
+
+            $speaker->contact_email = $validated['email'];
+            $speaker->save();
+
+            ActivityLog::record('speaker.account_provisioned', $speaker, [
+                'speaker_name' => $speaker->name,
+                'email' => $speaker->contact_email,
+            ]);
+        });
+
+        return back()->with('success', "Akun login untuk pemateri {$speaker->name} ({$speaker->contact_email}) berhasil dibuat/diperbarui.");
     }
 
     /**

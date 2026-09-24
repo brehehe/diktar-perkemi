@@ -402,8 +402,9 @@ class MaterialSeeder extends Seeder
                 ]);
             }
 
-            // 2. Sync Audiences
-            $audIds = collect($audCodes)
+            // 2. Sync Audiences (Always include 'participant' for all materials)
+            $allAudCodes = array_values(array_unique(array_merge($audCodes, ['participant'])));
+            $audIds = collect($allAudCodes)
                 ->map(fn ($code) => $audiences[$code]->id ?? null)
                 ->filter()
                 ->toArray();

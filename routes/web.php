@@ -153,6 +153,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/event/{event}/sesi/{session}/cetak-qr', [AttendanceController::class, 'printQr'])->name('event.session.attendance.print');
         Route::get('/event/{event}/absensi/cetak-semua-qr', [AttendanceController::class, 'printAllQr'])->name('event.attendance.print-all-qr');
         Route::post('/event/{event}/absensi/override', [AttendanceController::class, 'override'])->name('event.attendance.override');
+        Route::put('/event/{event}/absensi/{attendance}', [AttendanceController::class, 'update'])->name('event.attendance.update');
         Route::delete('/event/{event}/absensi/{attendance}', [AttendanceController::class, 'destroy'])->name('event.attendance.destroy');
         Route::delete('/event/{event}/absensi', [AttendanceController::class, 'destroyAll'])->name('event.attendance.destroy-all');
         Route::post('/event/{event}/absensi/generate', [AttendanceController::class, 'generateAll'])->name('event.attendance.generate-all');

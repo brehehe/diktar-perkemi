@@ -425,6 +425,8 @@ export default function Show({
 
     // Attendance Override & Generate Modal
     const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
+    const [isEditAttendanceModalOpen, setIsEditAttendanceModalOpen] = useState(false);
+    const [editingAttendance, setEditingAttendance] = useState(null);
     const [attendanceResetTarget, setAttendanceResetTarget] = useState(null);
     const [isResettingAttendance, setIsResettingAttendance] = useState(false);
     const [isGenerateAttendanceModalOpen, setIsGenerateAttendanceModalOpen] = useState(false);
@@ -541,6 +543,13 @@ export default function Show({
         participant_id: '',
         attendance_type: 'check_in',
         status: 'present',
+        notes: '',
+    });
+    const editAttendanceForm = useForm({
+        status: 'present',
+        attendance_type: 'check_in',
+        checked_in_at: '',
+        method: 'manual_admin',
         notes: '',
     });
 
@@ -682,6 +691,30 @@ export default function Show({
             onSuccess: () => {
                 setIsOverrideModalOpen(false);
                 overrideForm.reset();
+            },
+        });
+    };
+
+    const handleOpenEditAttendance = (att) => {
+        setEditingAttendance(att);
+        editAttendanceForm.setData({
+            status: att.status || 'present',
+            attendance_type: att.attendance_type || 'check_in',
+            checked_in_at: att.checked_in_at_raw || '',
+            method: att.method || 'manual_admin',
+            notes: att.notes || '',
+        });
+        setIsEditAttendanceModalOpen(true);
+    };
+
+    const handleSaveEditAttendance = (e) => {
+        e.preventDefault();
+        if (!editingAttendance) return;
+        editAttendanceForm.put(`/admin/event/${event.id}/absensi/${editingAttendance.id}`, {
+            onSuccess: () => {
+                setIsEditAttendanceModalOpen(false);
+                setEditingAttendance(null);
+                editAttendanceForm.reset();
             },
         });
     };
@@ -3625,15 +3658,26 @@ export default function Show({
                                                         {att.notes && <div className="italic mt-0.5 text-[10px] text-[#6B7C93]">{att.notes}</div>}
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
-                                                        <button
-                                                            type="button"
-                                                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-[#B42355] transition-colors hover:bg-[#FFF1F5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] sm:min-h-9 sm:min-w-9"
-                                                            aria-label={`Reset seluruh hasil ${att.participant_name}`}
-                                                            title="Reset seluruh hasil peserta ini"
-                                                            onClick={() => setAttendanceResetTarget(att)}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                                                        </button>
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <button
+                                                                type="button"
+                                                                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-[#0B63CE] transition-colors hover:bg-[#EFF6FF] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] sm:min-h-9 sm:min-w-9"
+                                                                aria-label={`Edit absensi ${att.participant_name}`}
+                                                                title="Edit absensi peserta ini"
+                                                                onClick={() => handleOpenEditAttendance(att)}
+                                                            >
+                                                                <Edit3 className="h-4 w-4" aria-hidden="true" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-[#B42355] transition-colors hover:bg-[#FFF1F5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] sm:min-h-9 sm:min-w-9"
+                                                                aria-label={`Reset seluruh hasil ${att.participant_name}`}
+                                                                title="Reset seluruh hasil peserta ini"
+                                                                onClick={() => setAttendanceResetTarget(att)}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))
@@ -4994,6 +5038,122 @@ export default function Show({
                         />
                     </FormField>
                 </form>
+            </Modal>
+
+            {/* MODAL: Edit Absensi Peserta */}
+            <Modal
+                isOpen={isEditAttendanceModalOpen}
+                onClose={() => {
+                    setIsEditAttendanceModalOpen(false);
+                    setEditingAttendance(null);
+                }}
+                title="Edit Catatan Absensi"
+                size="md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => {
+                                setIsEditAttendanceModalOpen(false);
+                                setEditingAttendance(null);
+                            }}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="submit"
+                            form="edit-attendance-form"
+                            variant="primary"
+                            loading={editAttendanceForm.processing}
+                        >
+                            Simpan Perubahan
+                        </Button>
+                    </>
+                }
+            >
+                {editingAttendance && (
+                    <form id="edit-attendance-form" onSubmit={handleSaveEditAttendance} className="space-y-4">
+                        <div className="p-3 bg-slate-50 border border-[#DCE7F3] rounded-xl space-y-1.5 text-xs">
+                            <div className="flex justify-between items-start">
+                                <span className="text-[#6B7C93] font-medium">Nama Peserta:</span>
+                                <span className="font-bold text-[#0E2747] text-right">
+                                    {editingAttendance.participant_name}
+                                    {editingAttendance.participant_kenshi_id && (
+                                        <span className="block text-[11px] font-normal text-[#6B7C93]">
+                                            No. Kenshi: {editingAttendance.participant_kenshi_id}
+                                        </span>
+                                    )}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-start pt-1.5 border-t border-[#DCE7F3]/70">
+                                <span className="text-[#6B7C93] font-medium">Sesi Kegiatan:</span>
+                                <span className="font-semibold text-[#112743] text-right">
+                                    {editingAttendance.session_topic}
+                                    <span className="block text-[11px] font-normal text-[#6B7C93]">
+                                        Hari {editingAttendance.day_number} • Sesi {editingAttendance.session_number}
+                                    </span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FormField label="Tipe Absensi" required error={editAttendanceForm.errors.attendance_type}>
+                                <Select
+                                    value={editAttendanceForm.data.attendance_type}
+                                    onChange={(e) => editAttendanceForm.setData('attendance_type', e.target.value)}
+                                    required
+                                >
+                                    <option value="check_in">Absensi Masuk</option>
+                                    <option value="check_out">Absensi Keluar</option>
+                                </Select>
+                            </FormField>
+
+                            <FormField label="Status Kehadiran" required error={editAttendanceForm.errors.status}>
+                                <Select
+                                    value={editAttendanceForm.data.status}
+                                    onChange={(e) => editAttendanceForm.setData('status', e.target.value)}
+                                    required
+                                >
+                                    <option value="present">Hadir Tepat Waktu</option>
+                                    <option value="late">Hadir Terlambat</option>
+                                    <option value="excused">Izin / Dispensasi Panitia</option>
+                                    <option value="manual_override">Override Panitia Khusus</option>
+                                    <option value="absent">Tidak Hadir</option>
+                                </Select>
+                            </FormField>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FormField label="Waktu Pencatatan" error={editAttendanceForm.errors.checked_in_at}>
+                                <Input
+                                    type="datetime-local"
+                                    value={editAttendanceForm.data.checked_in_at}
+                                    onChange={(e) => editAttendanceForm.setData('checked_in_at', e.target.value)}
+                                />
+                            </FormField>
+
+                            <FormField label="Metode Pencatatan" error={editAttendanceForm.errors.method}>
+                                <Select
+                                    value={editAttendanceForm.data.method}
+                                    onChange={(e) => editAttendanceForm.setData('method', e.target.value)}
+                                >
+                                    <option value="manual_admin">Manual Admin</option>
+                                    <option value="qr_scan">Scan QR</option>
+                                    <option value="short_code">Kode Sesi</option>
+                                </Select>
+                            </FormField>
+                        </div>
+
+                        <FormField label="Catatan / Alasan Perubahan" error={editAttendanceForm.errors.notes}>
+                            <Textarea
+                                value={editAttendanceForm.data.notes}
+                                onChange={(e) => editAttendanceForm.setData('notes', e.target.value)}
+                                rows={3}
+                                placeholder="Tuliskan catatan perbaikan atau alasan perubahan status kehadiran..."
+                            />
+                        </FormField>
+                    </form>
+                )}
             </Modal>
 
             {/* MODAL: Generate Absensi Seluruh Peserta */}

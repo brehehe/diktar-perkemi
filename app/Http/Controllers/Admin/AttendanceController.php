@@ -12,6 +12,7 @@ use App\Models\EventSession;
 use App\Services\QrCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -269,6 +270,89 @@ class AttendanceController extends Controller
         });
 
         return back()->with('success', 'Status absensi peserta berhasil diperbarui melalui override manual.');
+    }
+
+    /**
+     * Update an existing attendance record.
+     */
+    public function update(Request $request, Event $event, EventAttendance $attendance): RedirectResponse
+    {
+        abort_unless($attendance->event_id === $event->id, 404);
+
+        $validated = $request->validate([
+            'status' => ['required', 'in:present,late,excused,absent,manual_override'],
+            'attendance_type' => [
+                'required',
+                'in:check_in,check_out',
+                Rule::unique('event_attendances')
+                    ->where('event_session_id', $attendance->event_session_id)
+                    ->where('participant_id', $attendance->participant_id)
+                    ->ignore($attendance->id),
+            ],
+            'checked_in_at' => ['nullable', 'date'],
+            'method' => ['nullable', 'in:manual_admin,qr_scan,short_code'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        DB::transaction(function () use ($event, $attendance, $validated): void {
+            $checkedInAt = ! empty($validated['checked_in_at'])
+                ? Carbon::parse($validated['checked_in_at'])
+                : ($attendance->checked_in_at ?? now());
+
+            $attendanceUpdates = [
+                'status' => $validated['status'],
+                'attendance_type' => $validated['attendance_type'],
+                'checked_in_at' => $checkedInAt,
+                'method' => $validated['method'] ?? $attendance->method ?? 'manual_admin',
+                'recorded_by' => Auth::id(),
+                'notes' => $validated['notes'] ?? $attendance->notes,
+            ];
+
+            if ($validated['attendance_type'] === 'check_out') {
+                $attendanceUpdates['checked_out_at'] = $checkedInAt;
+            }
+
+            $attendance->update($attendanceUpdates);
+
+            $eventParticipant = EventParticipant::query()
+                ->where('event_id', $event->id)
+                ->where('participant_id', $attendance->participant_id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($eventParticipant) {
+                $attendance->loadMissing('session');
+                $session = $attendance->session;
+                $records = $eventParticipant->attendance_records ?? [];
+                $records["session_{$attendance->event_session_id}"] = [
+                    'status' => $validated['status'],
+                    'type' => $validated['attendance_type'],
+                    'time' => $checkedInAt->toIso8601String(),
+                    'by' => Auth::user()?->name ?? 'Admin',
+                    'reason' => $validated['notes'] ?? 'Diedit oleh admin',
+                ];
+
+                $updates = [
+                    'attendance_records' => $records,
+                ];
+
+                if (in_array($validated['status'], ['present', 'late', 'manual_override'], true)) {
+                    $updates['attendance_status'] = 'present';
+                }
+
+                if ($session && $session->session_type_code === 'KEHADIRAN_AWAL' && $validated['attendance_type'] === 'check_in') {
+                    if (in_array($validated['status'], ['present', 'late', 'manual_override'], true)) {
+                        $updates['checked_in_at'] = $checkedInAt;
+                        $updates['checkin_method'] = $validated['method'] ?? 'manual_admin';
+                        $updates['checkin_status'] = 'checked_in';
+                    }
+                }
+
+                $eventParticipant->update($updates);
+            }
+        });
+
+        return back()->with('success', 'Catatan absensi berhasil diperbarui.');
     }
 
     public function destroy(

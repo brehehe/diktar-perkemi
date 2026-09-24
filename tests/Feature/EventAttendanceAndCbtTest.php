@@ -220,6 +220,47 @@ test('admin can perform manual attendance override with audit log', function () 
     ]);
 });
 
+test('admin can edit an existing attendance record', function () {
+    $event = Event::first();
+    $session = $event->sessions()->first();
+    $participant = Participant::first();
+
+    $attendance = EventAttendance::firstOrCreate(
+        [
+            'event_session_id' => $session->id,
+            'participant_id' => $participant->id,
+            'attendance_type' => 'check_in',
+        ],
+        [
+            'event_id' => $event->id,
+            'status' => 'late',
+            'checked_in_at' => now()->subHours(2),
+            'method' => 'qr_scan',
+            'recorded_by' => $this->admin->id,
+            'notes' => 'Catatan awal',
+        ]
+    );
+
+    $customTime = '2026-09-24T08:30:00';
+    $response = $this->actingAs($this->admin)
+        ->put("/admin/event/{$event->id}/absensi/{$attendance->id}", [
+            'status' => 'present',
+            'attendance_type' => 'check_in',
+            'checked_in_at' => $customTime,
+            'method' => 'manual_admin',
+            'notes' => 'Diubah menjadi tepat waktu oleh panitia setelah verifikasi.',
+        ]);
+
+    $response->assertSessionHasNoErrors();
+    $response->assertRedirect();
+
+    $attendance->refresh();
+    expect($attendance->status)->toBe('present')
+        ->and($attendance->method)->toBe('manual_admin')
+        ->and($attendance->notes)->toBe('Diubah menjadi tepat waktu oleh panitia setelah verifikasi.')
+        ->and($attendance->checked_in_at->format('Y-m-d H:i'))->toBe('2026-09-24 08:30');
+});
+
 test('admin can reset all results for one participant without affecting another participant', function () {
     $event = Event::firstOrFail();
     app(EventAttendanceScheduleService::class)->ensureDefaultSessions($event);

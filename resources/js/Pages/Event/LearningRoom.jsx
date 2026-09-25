@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, useForm, usePoll } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePoll } from '@inertiajs/react';
 import {
     BookOpen,
     Calendar,
@@ -15,6 +15,8 @@ import {
     Camera,
     Shield,
     Check,
+    CheckCheck,
+    Loader2,
     AlertCircle,
     PlayCircle,
     HelpCircle,
@@ -79,6 +81,24 @@ export default function LearningRoom({
     const [categoryFilter, setCategoryFilter] = useState('all'); // all, sesi, ujian
     const [ujianTypeFilter, setUjianTypeFilter] = useState('all');
     const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+    const [processingSessionId, setProcessingSessionId] = useState(null);
+
+    const handleDirectAttendance = (session, type = 'check_in') => {
+        if (!session || processingSessionId) return;
+        setProcessingSessionId(session.id);
+        router.post(
+            `/event/${event.slug}/absensi/catat`,
+            {
+                session_id: session.id,
+                attendance_type: type,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setProcessingSessionId(null),
+            }
+        );
+    };
 
     // Filter sessions for currently selected day
     const daySessions = sessions.filter((s) => s.day_number === selectedDay);
@@ -378,7 +398,17 @@ export default function LearningRoom({
                             {/* Dynamic CTAs according to Session Rules */}
                             <div className="pt-3 border-t border-[#DCE7F3] flex flex-wrap items-center justify-between gap-3">
                                 <div className="flex items-center gap-2 text-xs">
-                                    {activeSession.has_attended ? (
+                                    {activeSession.attendance_setting === 'check_in_out' && activeSession.has_checked_in && activeSession.has_checked_out ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-[11px]">
+                                            <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                            Masuk & Keluar Tercatat
+                                        </span>
+                                    ) : activeSession.attendance_setting === 'check_in_out' && activeSession.has_checked_in ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-semibold text-[11px]">
+                                            <Check className="w-3.5 h-3.5 text-blue-600" />
+                                            Masuk: {activeSession.check_in_time ? activeSession.check_in_time.split(',')[0] : 'Tercatat'} (Perlu Absen Keluar)
+                                        </span>
+                                    ) : activeSession.has_attended ? (
                                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-[11px]">
                                             <Check className="w-3.5 h-3.5 text-emerald-600" />
                                             Kehadiran Tercatat
@@ -396,14 +426,40 @@ export default function LearningRoom({
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2">
-                                    {/* Attendance CTA */}
-                                    {activeSession.is_attendance_open && !activeSession.has_attended && (
+                                    {/* Direct 1-Click Attendance Shortcut */}
+                                    {activeSession.can_shortcut_attend && activeSession.next_attendance_type && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDirectAttendance(activeSession, activeSession.next_attendance_type)}
+                                            disabled={processingSessionId === activeSession.id}
+                                            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 ${
+                                                activeSession.next_attendance_type === 'check_out'
+                                                    ? 'bg-amber-600 hover:bg-amber-700'
+                                                    : 'bg-emerald-600 hover:bg-emerald-700'
+                                            }`}
+                                        >
+                                            {processingSessionId === activeSession.id ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <CheckCircle2 className="w-4 h-4" />
+                                            )}
+                                            <span>
+                                                {processingSessionId === activeSession.id
+                                                    ? 'Mencatat...'
+                                                    : activeSession.attendance_button_label}
+                                            </span>
+                                        </button>
+                                    )}
+
+                                    {/* Attendance QR Scan CTA */}
+                                    {activeSession.is_attendance_open && (!activeSession.has_attended || (activeSession.attendance_setting === 'check_in_out' && !activeSession.has_checked_out)) && (
                                         <Link
                                             href={`/event/${event.slug}/scan`}
-                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0B63CE] text-white text-xs font-bold hover:bg-[#0A3F82] transition-colors shadow-xs"
+                                            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE7F3] text-[#0B63CE] text-xs font-bold hover:bg-[#EAF5FF] transition-colors shadow-2xs"
+                                            title="Scan QR dengan Kamera"
                                         >
                                             <QrCode className="w-4 h-4" />
-                                            <span>Scan QR untuk Absensi</span>
+                                            <span>Scan QR</span>
                                         </Link>
                                     )}
 
@@ -421,10 +477,17 @@ export default function LearningRoom({
                                         <a href={activeSession.event_material_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 bg-[#0B63CE] px-4 text-xs font-semibold text-white hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Buka materi sesi</a>
                                     )}
 
-                                    {!activeSession.has_attended && !activeSession.can_access_content && (
+                                    {!activeSession.has_attended && !activeSession.can_access_content && (activeSession.has_material || activeSession.has_exam || activeSession.material_slug || activeSession.event_material_url || activeSession.cbt_package_code) && (
                                         <div className="inline-flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
                                             <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                            <span>Absen pada sesi ini untuk membuka materi dan ujian</span>
+                                            <span>
+                                                Absen pada sesi ini untuk membuka{' '}
+                                                {activeSession.has_exam && activeSession.has_material
+                                                    ? 'materi dan ujian'
+                                                    : activeSession.has_exam
+                                                    ? 'ujian CBT'
+                                                    : 'materi'}
+                                            </span>
                                         </div>
                                     )}
 
@@ -740,15 +803,67 @@ export default function LearningRoom({
                                                 </div>
 
                                                 <div className="flex items-center gap-2 shrink-0">
-                                                    {s.has_attended ? (
-                                                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                                                            <Check className="w-3.5 h-3.5" />
+                                                    {/* Direct 1-Click Attendance Shortcut in Session Header */}
+                                                    {s.can_shortcut_attend && s.next_attendance_type ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDirectAttendance(s, s.next_attendance_type);
+                                                            }}
+                                                            disabled={processingSessionId === s.id}
+                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-xs transition-all active:scale-95 disabled:opacity-50 ${
+                                                                s.next_attendance_type === 'check_out'
+                                                                    ? 'bg-amber-600 hover:bg-amber-700'
+                                                                    : 'bg-[#0B63CE] hover:bg-[#0A3F82]'
+                                                            }`}
+                                                            title={`Klik untuk langsung mencatat absensi ${s.next_attendance_type === 'check_out' ? 'keluar' : 'masuk'}`}
+                                                        >
+                                                            {processingSessionId === s.id ? (
+                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            ) : (
+                                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                            )}
+                                                            <span>
+                                                                {processingSessionId === s.id
+                                                                    ? 'Mencatat...'
+                                                                    : s.next_attendance_type === 'check_out'
+                                                                    ? 'Absen Keluar'
+                                                                    : 'Absen Sekarang'}
+                                                            </span>
+                                                        </button>
+                                                    ) : s.attendance_setting === 'check_in_out' && s.has_checked_in && s.has_checked_out ? (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-semibold">
+                                                            <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                                            <span className="hidden sm:inline">Lengkap</span>
+                                                        </span>
+                                                    ) : s.has_attended ? (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-semibold">
+                                                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                                            <span className="hidden sm:inline">Hadir</span>
+                                                        </span>
+                                                    ) : s.is_future ? (
+                                                        <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-medium border border-slate-200">
+                                                            <Calendar className="w-3 h-3 text-slate-400" />
+                                                            <span>Hari ke-{s.day_number}</span>
                                                         </span>
                                                     ) : s.is_attendance_open ? (
                                                         <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 motion-safe:animate-pulse">
                                                             Absen Buka
                                                         </span>
                                                     ) : null}
+
+                                                    {/* Direct CBT Exam Link in header if attended and exam accessible */}
+                                                    {s.has_attended && s.cbt_package_code && s.cbt_is_accessible && !s.cbt_has_attempt && (
+                                                        <Link
+                                                            href={`/event/${event.slug}/cbt/${s.cbt_package_code}`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-600 text-white text-[11px] font-bold hover:bg-purple-700 shadow-xs transition-all active:scale-95"
+                                                        >
+                                                            <Award className="w-3 h-3" />
+                                                            <span className="hidden sm:inline">Ujian CBT</span>
+                                                        </Link>
+                                                    )}
 
                                                     {isExpanded ? (
                                                         <ChevronUp className="w-4 h-4 text-[#6B7C93]" />
@@ -765,24 +880,86 @@ export default function LearningRoom({
                                                         <p className="text-[#112743]">{s.subtopic}</p>
                                                     )}
                                                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-                                                        <span className="text-[11px] text-[#6B7C93]">
-                                                            Ruangan: <strong>{s.room || 'Belum ditetapkan'}</strong>
-                                                        </span>
-
-                                                        <div className="flex items-center gap-2">
-                                                            {!s.has_attended && !s.can_access_content && (
-                                                                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
-                                                                    <Lock className="w-3 h-3 text-amber-600 shrink-0" />
-                                                                    <span>Absen sesi untuk membuka {s.session_type_code === 'UJIAN' ? 'ujian' : 'materi'}</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-[11px] text-[#6B7C93]">
+                                                                Ruangan: <strong>{s.room || 'Belum ditetapkan'}</strong>
+                                                            </span>
+                                                            {s.attendance_setting === 'check_in_out' && (
+                                                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                                                    Absensi Masuk & Keluar
                                                                 </span>
                                                             )}
-                                                            {s.is_attendance_open && !s.has_attended && (
+                                                            {s.attendance_setting === 'check_in' && (
+                                                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                                                    Absensi Masuk Saja
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            {!s.has_attended && !s.can_access_content && (s.has_exam || s.has_material || s.cbt_package_code || s.material_slug || s.event_material_url) && (
+                                                                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                                                                    <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                                                                    <span>Absen sesi untuk membuka {(s.has_exam || s.cbt_package_code || s.session_type_code === 'UJIAN') ? 'ujian CBT' : 'materi'}</span>
+                                                                </span>
+                                                            )}
+
+                                                            {/* Direct Shortcut Button inside expanded detail */}
+                                                            {s.can_shortcut_attend && s.next_attendance_type && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDirectAttendance(s, s.next_attendance_type)}
+                                                                    disabled={processingSessionId === s.id}
+                                                                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white shadow-xs transition-all active:scale-95 disabled:opacity-50 ${
+                                                                        s.next_attendance_type === 'check_out'
+                                                                            ? 'bg-amber-600 hover:bg-amber-700'
+                                                                            : 'bg-[#0B63CE] hover:bg-[#0A3F82]'
+                                                                    }`}
+                                                                >
+                                                                    {processingSessionId === s.id ? (
+                                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                    ) : (
+                                                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                    )}
+                                                                    <span>
+                                                                        {processingSessionId === s.id
+                                                                            ? 'Mencatat...'
+                                                                            : s.attendance_button_label}
+                                                                    </span>
+                                                                </button>
+                                                            )}
+
+                                                            {/* Alternative Scan QR link */}
+                                                            {s.is_attendance_open && (!s.has_attended || (s.attendance_setting === 'check_in_out' && !s.has_checked_out)) && (
                                                                 <Link
                                                                     href={`/event/${event.slug}/scan`}
-                                                                    className="px-3 py-1.5 rounded-lg bg-[#0B63CE] text-white text-xs font-bold hover:bg-[#0A3F82]"
+                                                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-[#DCE7F3] text-[#0B63CE] hover:bg-[#EAF5FF] text-xs font-semibold"
+                                                                    title="Scan QR kode menggunakan kamera"
                                                                 >
-                                                                    Scan Absensi
+                                                                    <QrCode className="w-3.5 h-3.5" />
+                                                                    <span>Scan QR</span>
                                                                 </Link>
+                                                            )}
+
+                                                            {s.has_checked_in && (
+                                                                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 font-medium">
+                                                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    <span>Masuk: {s.check_in_time ? s.check_in_time.split(',')[0] : 'Tercatat'}</span>
+                                                                </span>
+                                                            )}
+
+                                                            {s.has_checked_out && (
+                                                                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 font-medium">
+                                                                    <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    <span>Keluar: {s.check_out_time ? s.check_out_time.split(',')[0] : 'Tercatat'}</span>
+                                                                </span>
+                                                            )}
+
+                                                            {s.is_future && (
+                                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 text-[11px] font-medium border border-slate-200">
+                                                                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                                                    <span>Dibuka pada Hari ke-{s.day_number} ({s.session_date_label})</span>
+                                                                </span>
                                                             )}
                                                             {s.material_slug && (
                                                                 <Link
@@ -805,24 +982,38 @@ export default function LearningRoom({
                                                                         <span>Ujian Selesai{s.cbt_last_score !== null ? ` (${s.cbt_last_score})` : ''}</span>
                                                                     </button>
                                                                 ) : !s.cbt_is_accessible ? (
-                                                                    <span
-                                                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200 cursor-not-allowed"
-                                                                        title={s.cbt_access_denied_reason || 'Ujian Terkunci'}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setActiveTab('ujian')}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 text-xs font-semibold border border-purple-200 hover:bg-purple-100 transition-colors"
+                                                                        title={s.cbt_access_denied_reason || 'Ujian Terkunci (Perlu Absensi Sesi)'}
                                                                     >
-                                                                        <Lock className="w-3.5 h-3.5 text-slate-400" />
-                                                                        <span>Terkunci</span>
-                                                                    </span>
+                                                                        <Lock className="w-3.5 h-3.5 text-purple-600" />
+                                                                        <span>Ujian CBT (Perlu Absen)</span>
+                                                                    </button>
                                                                 ) : (
                                                                     <Link
                                                                         href={`/event/${event.slug}/cbt/${s.cbt_package_code}`}
-                                                                        className="px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-bold hover:bg-purple-700"
+                                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 shadow-xs transition-all active:scale-95"
                                                                     >
-                                                                        {s.cbt_has_attempt ? 'Ujian Ulang CBT' : 'Ikuti Ujian CBT'}
+                                                                        <Award className="w-3.5 h-3.5" />
+                                                                        <span>{s.cbt_has_attempt ? 'Ujian Ulang CBT' : 'Ikuti Ujian CBT'}</span>
                                                                     </Link>
                                                                 )
                                                             )}
                                                         </div>
                                                     </div>
+
+                                                    {/* Module Information if linked to a course module */}
+                                                    {s.module_title && (
+                                                        <div className="flex items-center gap-2 text-xs text-[#6B7C93] pt-1 border-t border-[#DCE7F3]/40">
+                                                            <BookOpen className="w-3.5 h-3.5 text-[#0B63CE] shrink-0" />
+                                                            <span>Modul: <strong className="text-[#0E2747]">{s.module_code ? `${s.module_code} — ` : ''}{s.module_title}</strong></span>
+                                                            {!s.material_slug && !s.event_material_url && (
+                                                                <span className="text-[11px] text-slate-500 italic">• Bahan tatap muka / disiapkan instruktur</span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -1738,7 +1929,7 @@ export default function LearningRoom({
                                                     {att.session_name}
                                                 </div>
                                                 <div className="text-[11px] text-[#6B7C93]">
-                                                    {att.time} • Metode: {att.method === 'qr_scan' ? 'Scan QR' : 'Kode Manual'}
+                                                    {att.time} • Metode: {att.method === 'qr_scan' ? 'Scan QR' : att.method === 'portal_direct' ? 'Absen Langsung (Portal)' : 'Kode Manual'}
                                                 </div>
                                             </div>
 

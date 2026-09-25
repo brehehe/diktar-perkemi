@@ -483,9 +483,10 @@ class EventPortalController extends Controller
 
         $token = $request->input('token');
         $shortCode = strtoupper(trim((string) $request->input('short_code')));
+        $sessionId = $request->input('session_id');
 
-        if (empty($token) && empty($shortCode)) {
-            return back()->with('error', 'Token QR atau kode sesi harus disertakan.');
+        if (empty($token) && empty($shortCode) && empty($sessionId)) {
+            return back()->with('error', 'Token QR, kode sesi, atau sesi harus disertakan.');
         }
 
         $session = null;
@@ -496,6 +497,10 @@ class EventPortalController extends Controller
         } elseif (! empty($shortCode)) {
             $session = EventSession::where('event_id', $event->id)
                 ->where('qr_short_code', $shortCode)
+                ->first();
+        } elseif (! empty($sessionId)) {
+            $session = EventSession::where('event_id', $event->id)
+                ->where('id', $sessionId)
                 ->first();
         }
 
@@ -515,8 +520,18 @@ class EventPortalController extends Controller
             return back()->with('error', "Waktu absensi untuk sesi \"{$session->topic}\" telah berakhir.");
         }
 
+        $isAdminOrOrganizer = $request->user()->isAdmin() || in_array($request->user()->role, ['Admin', 'Diktar', 'Penyelenggara'], true);
+
+        // Verify day of the session for participants
+        if (! $isAdminOrOrganizer) {
+            $sessionDate = $session->date ?? ($event->start_date ? $event->start_date->copy()->addDays($session->day_number - 1) : null);
+            if ($sessionDate && $sessionDate->isFuture() && ! $sessionDate->isToday()) {
+                return back()->with('error', "Absensi untuk sesi \"{$session->topic}\" baru dapat diakses pada hari pelaksanaannya.");
+            }
+        }
+
         // Check if track matches (if session restricts tracks)
-        if (! empty($session->track_codes) && ! in_array($eventParticipant->track_code, $session->track_codes)) {
+        if (! $isAdminOrOrganizer && ! empty($session->track_codes) && ! in_array($eventParticipant->track_code, $session->track_codes)) {
             return back()->with('error', "Anda berada di jalur {$eventParticipant->track_code}, sesi ini dikhususkan untuk jalur: ".implode(', ', $session->track_codes));
         }
 
@@ -535,6 +550,11 @@ class EventPortalController extends Controller
             return back()->with('error', 'Absensi masuk sesi harus tercatat sebelum absensi keluar.');
         }
 
+        // Admin preview without formal enrollment
+        if (empty($participant->id) || empty($eventParticipant->id)) {
+            return back()->with('info', 'Mode Pratinjau Admin: Tombol absensi aktif dan berfungsi. Untuk menyimpan catatan absensi peserta ke database, silakan gunakan akun peserta resmi.');
+        }
+
         // Determine status (present vs late)
         $status = 'present';
         // If current time is more than 30 minutes after start_time
@@ -545,6 +565,8 @@ class EventPortalController extends Controller
             }
         }
 
+        $method = ! empty($token) ? 'qr_scan' : (! empty($shortCode) ? 'short_code' : 'portal_direct');
+
         $attendance = $this->attendanceService->record(
             $event,
             $session,
@@ -552,18 +574,20 @@ class EventPortalController extends Controller
             $eventParticipant,
             $type,
             $status,
-            ! empty($token) ? 'qr_scan' : 'short_code',
+            $method,
             $request->user()->id,
         );
 
+        $actionLabel = $type === 'check_out' ? 'keluar' : 'masuk';
+
         if (! $attendance->wasRecentlyCreated) {
-            return back()->with('info', "Anda sudah melakukan absensi {$type} untuk sesi \"{$session->topic}\" pada {$attendance->checked_in_at?->format('H:i')} WIB.");
+            return back()->with('info', "Anda sudah melakukan absensi {$actionLabel} untuk sesi \"{$session->topic}\" pada {$attendance->checked_in_at?->format('H:i')} WIB.");
         }
 
         $statusText = $status === 'late' ? ' (Terlambat)' : '';
 
         return redirect()->route('event.learning-room', $event->slug)
-            ->with('success', "Absensi {$type} berhasil dicatat{$statusText} untuk sesi \"{$session->topic}\".");
+            ->with('success', "Absensi {$actionLabel} berhasil dicatat{$statusText} untuk sesi \"{$session->topic}\".");
     }
 
     /**

@@ -100,6 +100,66 @@ class EventLearningRoomService
             ->filter(fn ($record) => $record['type'] === 'check_in' && in_array($record['status'], ['present', 'late', 'manual_override'], true))
             ->pluck('session_id')->unique()->all();
 
+        $checkedOutSessionIds = collect($attendanceRecords)
+            ->filter(fn ($record) => $record['type'] === 'check_out' && in_array($record['status'], ['present', 'late', 'manual_override'], true))
+            ->pluck('session_id')->unique()->all();
+
+        $attendanceBySession = collect($attendanceRecords)->groupBy('session_id');
+
+        $resolveSessionAttendanceMeta = function (EventSession $s) use ($attendedSessionIds, $checkedOutSessionIds, $attendanceBySession, $isAdminOrOrganizer, $event): array {
+            $sessionRecords = $attendanceBySession->get($s->id, collect());
+            $checkInRec = $sessionRecords->firstWhere('type', 'check_in');
+            $checkOutRec = $sessionRecords->firstWhere('type', 'check_out');
+
+            $hasCheckedIn = in_array($s->id, $attendedSessionIds, true);
+            $hasCheckedOut = in_array($s->id, $checkedOutSessionIds, true);
+
+            $sessionDate = $s->date ?? ($event->start_date ? $event->start_date->copy()->addDays($s->day_number - 1) : null);
+            $isToday = $sessionDate ? $sessionDate->isToday() : true;
+            $isFuture = $sessionDate ? ($sessionDate->isFuture() && ! $sessionDate->isToday()) : false;
+            $isPast = $sessionDate ? ($sessionDate->isPast() && ! $sessionDate->isToday()) : false;
+
+            $setting = $s->attendance_setting ?? 'check_in';
+            $requiresAttendance = in_array($setting, ['check_in', 'check_in_out'], true);
+
+            $nextAttendanceType = null;
+            if ($requiresAttendance) {
+                if (! $hasCheckedIn) {
+                    $nextAttendanceType = 'check_in';
+                } elseif ($setting === 'check_in_out' && ! $hasCheckedOut) {
+                    $nextAttendanceType = 'check_out';
+                }
+            }
+
+            $canShortcutAttend = $requiresAttendance
+                && $nextAttendanceType !== null
+                && $s->isAttendanceActive()
+                && ($isToday || $isAdminOrOrganizer || ! $sessionDate);
+
+            $buttonLabel = null;
+            if ($nextAttendanceType === 'check_in') {
+                $buttonLabel = $setting === 'check_in_out' ? 'Absen Masuk Sekarang' : 'Absen Sekarang';
+            } elseif ($nextAttendanceType === 'check_out') {
+                $buttonLabel = 'Absen Keluar Sekarang';
+            }
+
+            return [
+                'attendance_setting' => $setting,
+                'has_checked_in' => $hasCheckedIn,
+                'has_checked_out' => $hasCheckedOut,
+                'check_in_time' => $checkInRec['time'] ?? null,
+                'check_out_time' => $checkOutRec['time'] ?? null,
+                'session_date' => $sessionDate?->format('Y-m-d'),
+                'session_date_label' => $sessionDate?->locale('id')->translatedFormat('D, d M'),
+                'is_today' => $isToday,
+                'is_future' => $isFuture,
+                'is_past' => $isPast,
+                'can_shortcut_attend' => $canShortcutAttend,
+                'next_attendance_type' => $nextAttendanceType,
+                'attendance_button_label' => $buttonLabel,
+            ];
+        };
+
         // Determine active or next upcoming session
         $unattendedActiveSession = $sessions->first(fn (EventSession $session) => $session->isAttendanceActive() && ! in_array($session->id, $attendedSessionIds, true));
         $activeSession = $unattendedActiveSession
@@ -474,7 +534,7 @@ class EventLearningRoomService
                 'integrity_pact_url' => route('event.integrity-pact', $event->slug),
                 'integrity_pact_print_url' => route('event.integrity-pact.print', $event->slug),
             ],
-            'activeSession' => $activeSession ? [
+            'activeSession' => $activeSession ? array_merge([
                 'id' => $activeSession->id,
                 'session_number' => $activeSession->session_number,
                 'day_number' => $activeSession->day_number,
@@ -487,6 +547,11 @@ class EventLearningRoomService
                 'session_type_name' => $activeSession->sessionType?->name ?? 'Sesi',
                 'speaker_name' => $activeSession->speaker?->name,
                 'is_attendance_open' => $activeSession->isAttendanceActive(),
+                'has_material' => (bool) ($activeSession->material_id || $activeSession->learning_module_id || ($activeSession->module && ($activeSession->module->material_id || $activeSession->module->source_file_path || $activeSession->module->source_url))),
+                'has_exam' => (bool) ($activeSession->cbt_exam_package_id || $activeSession->session_type_code === 'UJIAN' || $activeSessionExam),
+                'module_id' => $activeSession->event_module_id,
+                'module_code' => $activeSession->module?->code,
+                'module_title' => $activeSession->module?->title,
                 'material_slug' => $canAccessSessionContent($activeSession) ? ($activeSession->material?->slug ?? $activeSession->learningModule?->materials->first()?->slug ?? $activeSession->module?->material?->slug) : null,
                 'material_reader_url' => $canAccessSessionContent($activeSession) ? $eventReaderUrl($activeSession->material?->slug ?? $activeSession->learningModule?->materials->first()?->slug ?? $activeSession->module?->material?->slug) : null,
                 'event_material_url' => $canAccessSessionContent($activeSession) && $activeSession->module?->publication_status === 'published'
@@ -499,24 +564,29 @@ class EventLearningRoomService
                 'material_type' => $activeSession->material?->type ?? 'book',
                 'learning_module_id' => $activeSession->learning_module_id,
                 'learning_module_title' => $activeSession->learningModule?->title,
-                'cbt_package_code' => ($canAccessSessionContent($activeSession) && $activeSessionExam) ? $activeSessionExam['code'] : null,
-                'cbt_package_title' => ($canAccessSessionContent($activeSession) && $activeSessionExam) ? $activeSessionExam['title'] : null,
-                'cbt_is_accessible' => $activeSessionExam ? (bool) $activeSessionExam['is_accessible'] : true,
+                'cbt_package_code' => $activeSessionExam ? $activeSessionExam['code'] : null,
+                'cbt_package_title' => $activeSessionExam ? $activeSessionExam['title'] : null,
+                'cbt_is_accessible' => $activeSessionExam ? ($canAccessSessionContent($activeSession) && (bool) $activeSessionExam['is_accessible']) : true,
                 'cbt_has_attempt' => $activeSessionExam ? (bool) $activeSessionExam['has_attempt'] : false,
                 'cbt_exam_state' => $activeSessionExam['exam_state'] ?? null,
                 'cbt_last_score' => $activeSessionExam['last_score'] ?? null,
                 'cbt_is_passed' => $activeSessionExam['is_passed'] ?? null,
                 'cbt_attempts_count' => $activeSessionExam['attempts_count'] ?? 0,
                 'cbt_attempts_allowed' => $activeSessionExam['attempts_allowed'] ?? 1,
-                'cbt_access_denied_reason' => $activeSessionExam['access_denied_reason'] ?? null,
+                'cbt_access_denied_reason' => (! $canAccessSessionContent($activeSession) && $activeSessionExam)
+                    ? 'Absen sesi terlebih dahulu untuk membuka ujian ini'
+                    : ($activeSessionExam['access_denied_reason'] ?? null),
                 'has_attended' => in_array($activeSession->id, $attendedSessionIds),
                 'can_access_content' => $canAccessSessionContent($activeSession),
-            ] : null,
+            ], $resolveSessionAttendanceMeta($activeSession)) : null,
             'scheduleDays' => $scheduleDays,
-            'sessions' => $sessions->map(function (EventSession $s) use ($canAccessSessionContent, $event, $eventReaderUrl, $attendedSessionIds, $myCbtExamsById) {
+            'sessions' => $sessions->map(function (EventSession $s) use ($canAccessSessionContent, $event, $eventReaderUrl, $attendedSessionIds, $myCbtExamsById, $resolveSessionAttendanceMeta) {
                 $sExam = $s->cbt_exam_package_id ? $myCbtExamsById->get($s->cbt_exam_package_id) : null;
+                $attendanceMeta = $resolveSessionAttendanceMeta($s);
+                $sHasMaterial = (bool) ($s->material_id || $s->learning_module_id || ($s->module && ($s->module->material_id || $s->module->source_file_path || $s->module->source_url)));
+                $sHasExam = (bool) ($s->cbt_exam_package_id || $s->session_type_code === 'UJIAN' || $sExam);
 
-                return [
+                return array_merge([
                     'id' => $s->id,
                     'day_number' => $s->day_number,
                     'session_number' => $s->session_number,
@@ -528,6 +598,11 @@ class EventLearningRoomService
                     'session_type_name' => $s->sessionType?->name ?? 'Sesi',
                     'speaker_name' => $s->speaker?->name,
                     'is_attendance_open' => $s->isAttendanceActive(),
+                    'has_material' => $sHasMaterial,
+                    'has_exam' => $sHasExam,
+                    'module_id' => $s->event_module_id,
+                    'module_code' => $s->module?->code,
+                    'module_title' => $s->module?->title,
                     'learning_module_id' => $s->learning_module_id,
                     'learning_module_title' => $s->learningModule?->title,
                     'material_slug' => $canAccessSessionContent($s) ? ($s->material?->slug ?? $s->learningModule?->materials->first()?->slug ?? $s->module?->material?->slug) : null,
@@ -540,19 +615,21 @@ class EventLearningRoomService
                         } : null,
                     'material_title' => $canAccessSessionContent($s) ? ($s->material?->title ?? $s->learningModule?->title ?? $s->module?->material?->title ?? $s->module?->title) : null,
                     'material_type' => $s->material?->type ?? 'book',
-                    'cbt_package_code' => ($canAccessSessionContent($s) && $sExam) ? $sExam['code'] : null,
-                    'cbt_package_title' => ($canAccessSessionContent($s) && $sExam) ? $sExam['title'] : null,
-                    'cbt_is_accessible' => $sExam ? (bool) $sExam['is_accessible'] : true,
+                    'cbt_package_code' => $sExam ? $sExam['code'] : null,
+                    'cbt_package_title' => $sExam ? $sExam['title'] : null,
+                    'cbt_is_accessible' => $sExam ? ($canAccessSessionContent($s) && (bool) $sExam['is_accessible']) : true,
                     'cbt_has_attempt' => $sExam ? (bool) $sExam['has_attempt'] : false,
                     'cbt_exam_state' => $sExam['exam_state'] ?? null,
                     'cbt_last_score' => $sExam['last_score'] ?? null,
                     'cbt_is_passed' => $sExam['is_passed'] ?? null,
                     'cbt_attempts_count' => $sExam['attempts_count'] ?? 0,
                     'cbt_attempts_allowed' => $sExam['attempts_allowed'] ?? 1,
-                    'cbt_access_denied_reason' => $sExam['access_denied_reason'] ?? null,
+                    'cbt_access_denied_reason' => (! $canAccessSessionContent($s) && $sExam)
+                        ? 'Absen sesi terlebih dahulu untuk membuka ujian ini'
+                        : ($sExam['access_denied_reason'] ?? null),
                     'has_attended' => in_array($s->id, $attendedSessionIds),
                     'can_access_content' => $canAccessSessionContent($s),
-                ];
+                ], $attendanceMeta);
             }),
             'modules' => ($canAccessLearning ? $visibleEventModules : collect())->map(fn (EventModule $m) => [
                 'id' => $m->id,

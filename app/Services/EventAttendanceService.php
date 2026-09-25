@@ -34,7 +34,6 @@ class EventAttendanceService
             }
 
             $previewParticipant = $participant ?? new Participant([
-                'id' => 0,
                 'user_id' => $user->id,
                 'name' => $user->name,
                 'dan_rank' => 'IV-DAN',
@@ -43,9 +42,11 @@ class EventAttendanceService
                 'origin_city' => 'Pusat',
                 'origin_dojo' => 'Pengurus Pusat',
             ]);
+            if (! $participant) {
+                $previewParticipant->id = 0;
+            }
 
             $previewEnrollment = new EventParticipant([
-                'id' => 0,
                 'event_id' => $event->id,
                 'participant_id' => $previewParticipant->id,
                 'track_code' => 'ALL',
@@ -54,6 +55,7 @@ class EventAttendanceService
                 'checked_in_at' => now(),
                 'checkin_status' => 'checked_in',
             ]);
+            $previewEnrollment->id = 0;
 
             return [$previewParticipant, $previewEnrollment];
         }
@@ -220,6 +222,7 @@ class EventAttendanceService
                     'event_id' => $event->id,
                     'status' => $status,
                     'checked_in_at' => now(),
+                    'checked_out_at' => $type === 'check_out' ? now() : null,
                     'method' => $method,
                     'recorded_by' => $recordedBy,
                     'notes' => 'Pencatatan mandiri peserta via portal Pustaka Penataran',
@@ -231,23 +234,32 @@ class EventAttendanceService
             }
 
             $records = $lockedEnrollment->attendance_records ?? [];
-            $records["session_{$session->id}"] = [
-                'status' => $status,
-                'type' => $type,
-                'time' => now()->toIso8601String(),
-                'method' => $method,
-            ];
+            if ($type === 'check_out') {
+                $sessionRecord = $records["session_{$session->id}"] ?? [];
+                $sessionRecord['check_out_time'] = now()->toIso8601String();
+                $sessionRecord['check_out_method'] = $method;
+                $records["session_{$session->id}"] = $sessionRecord;
+                $records["session_{$session->id}_out"] = [
+                    'status' => $status,
+                    'type' => $type,
+                    'time' => now()->toIso8601String(),
+                    'method' => $method,
+                ];
+            } else {
+                $records["session_{$session->id}"] = [
+                    'status' => $status,
+                    'type' => $type,
+                    'time' => now()->toIso8601String(),
+                    'method' => $method,
+                ];
+            }
+
             $updates = [
                 'attendance_records' => $records,
                 'attendance_status' => 'present',
             ];
 
-            $hasArrivalSession = EventSession::query()
-                ->where('event_id', $event->id)
-                ->where('session_type_code', 'KEHADIRAN_AWAL')
-                ->exists();
-            if ($type === 'check_in' && ! $lockedEnrollment->checked_in_at
-                && ($session->session_type_code === 'KEHADIRAN_AWAL' || ! $hasArrivalSession)) {
+            if ($type === 'check_in' && ! $lockedEnrollment->checked_in_at) {
                 $updates += [
                     'checked_in_at' => now(),
                     'checkin_method' => $method,

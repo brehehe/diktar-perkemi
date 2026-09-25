@@ -3837,7 +3837,7 @@ export default function Show({
                                                         {att.checked_in_at || '-'}
                                                     </td>
                                                     <td className="px-4 py-3 font-medium text-[11px]">
-                                                        {att.method === 'qr_scan' ? 'Scan QR' : att.method === 'short_code' ? 'Kode Sesi' : 'Manual Admin'}
+                                                        {att.method === 'qr_scan' ? 'Scan QR' : att.method === 'short_code' ? 'Kode Sesi' : att.method === 'portal_direct' ? 'Portal Ruang Belajar' : 'Manual Admin'}
                                                     </td>
                                                     <td className="px-4 py-3 text-[11px] text-[#6B7C93]">
                                                         <div>Oleh: <strong className="text-[#112743]">{att.recorded_by}</strong></div>

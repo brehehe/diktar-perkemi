@@ -424,7 +424,7 @@ export default function Show({
         ctx.lineWidth = 2.5;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#0B63CE';
+        ctx.strokeStyle = '#000000';
         setIsDrawingSig(true);
         setHasDrawnSig(true);
     };
@@ -469,13 +469,13 @@ export default function Show({
 
         const name = signatureForm.data.signer_name || certificateSignatureDefaults.signer_name || 'Ketua Umum';
         ctx.font = 'italic 30px "Brush Script MT", "Caveat", "Segoe Script", cursive';
-        ctx.fillStyle = '#0B63CE';
+        ctx.fillStyle = '#000000';
         ctx.fillText(name, 20, canvas.height / 2 + 8);
 
         ctx.beginPath();
         ctx.moveTo(15, canvas.height / 2 + 22);
         ctx.lineTo(canvas.width - 25, canvas.height / 2 + 18);
-        ctx.strokeStyle = '#0B63CE';
+        ctx.strokeStyle = '#000000';
         ctx.lineWidth = 2;
         ctx.stroke();
 

@@ -299,6 +299,17 @@ class EventDocumentGenerator
         return $date->format('j').' '.($months[$date->month] ?? $date->format('F')).' '.$date->format('Y');
     }
 
+    public function indonesianDayMonth(CarbonInterface $date): string
+    {
+        $months = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+
+        return $date->format('j').' '.($months[$date->month] ?? $date->format('F'));
+    }
+
     /** @return array<string, string> */
     private function savedAdminNumberSettings(): array
     {
@@ -389,7 +400,6 @@ class EventDocumentGenerator
             'WAN' => 274,
             default => 304,
         };
-        $overlays[] = $this->whiteRectangle(698, 260, 520, 52);
         $overlays[] = $this->text($certificateNumber, 708, $certNumTop, 26, true);
 
         // 2. Colons & Data Peserta alignment
@@ -434,11 +444,40 @@ class EventDocumentGenerator
         // 3. Masa Berlaku 3 Tahun
         $issueDate = $sigSettings['parsed_date'] ?? $event?->end_date ?? today();
         $validUntil = $issueDate->copy()->addYears(3);
-        $validUntilStr = $this->indonesianDate($validUntil).',';
 
-        // Cover gap and template printed "2029," without covering "kecuali" (starts at x=786)
-        $overlays[] = $this->whiteRectangle(432, 698, 350, 34);
-        $overlays[] = $this->text($validUntilStr, 436, 723, 23, true);
+        $dateTop = match ($trackCode) {
+            'PEN' => 715,
+            'PN', 'PD' => 713,
+            'WAD' => 720,
+            'WAN' => 701,
+            default => 723, // PED
+        };
+
+        if ($validUntil->year === 2029) {
+            // Template already prints "2029, kecuali ada ketentuan lain dari PB. PERKEMI"
+            // Place day and month perfectly centered in the designated blank space without any white block
+            $dayMonthStr = $this->indonesianDayMonth($validUntil);
+            $dateX = match ($trackCode) {
+                'PEN' => 480,
+                'PN', 'PD' => 575,
+                'WAD' => 370,
+                'WAN' => 640,
+                default => 500, // PED (gap is x=429..714, centered at ~500)
+            };
+            $overlays[] = $this->text($dayMonthStr, $dateX, $dateTop, 23, true);
+        } else {
+            // When expiration year is different from pre-printed 2029, only cover the 2029 digits
+            $rectX = match ($trackCode) {
+                'PEN' => 670,
+                'PN', 'PD' => 745,
+                'WAD' => 468,
+                'WAN' => 790,
+                default => 712,
+            };
+            $overlays[] = $this->whiteRectangle($rectX, $dateTop - 25, 65, 30);
+            $overlays[] = $this->text($this->indonesianDayMonth($validUntil), 500, $dateTop, 23, true);
+            $overlays[] = $this->text($validUntil->format('Y').',', $rectX, $dateTop, 23, true);
+        }
 
         // 4. TTD Block
         $overlays[] = $this->whiteRectangle(650, 775, 750, 185);
@@ -488,14 +527,6 @@ class EventDocumentGenerator
         $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
         $overlays = $trackCode === 'PD' ? $this->pdTranscriptOverlays($eventParticipant) : [];
 
-        $rectX = match ($trackCode) {
-            'WAD' => 690,
-            'PEN' => 718,
-            'PN', 'PD' => 725,
-            'WAN' => 722,
-            default => 732, // PED colon ends at 724
-        };
-
         $textX = match ($trackCode) {
             'WAD' => 698,
             'PEN' => 726,
@@ -510,7 +541,6 @@ class EventDocumentGenerator
             default => 304, // PEN, PN, PD
         };
 
-        $overlays[] = $this->whiteRectangle($rectX, 260, 480, 52);
         $overlays[] = $this->text($transcriptNumber, $textX, $top, 24, true);
 
         return $this->createPdf(
@@ -651,7 +681,17 @@ class EventDocumentGenerator
                     $sh = imagesy($gd);
                     $rgb = '';
                     $alpha = '';
-                    $hasAlpha = false;
+                    // Detect if image has native alpha channel
+                    for ($y = 0; $y < $sh; $y++) {
+                        for ($x = 0; $x < $sw; $x++) {
+                            $rgba = imagecolorat($gd, $x, $y);
+                            $a = ($rgba >> 24) & 0x7F;
+                            if ($a > 0) {
+                                $hasAlpha = true;
+                                break 2;
+                            }
+                        }
+                    }
 
                     for ($y = 0; $y < $sh; $y++) {
                         for ($x = 0; $x < $sw; $x++) {
@@ -660,11 +700,25 @@ class EventDocumentGenerator
                             $g = ($rgba >> 8) & 0xFF;
                             $b = $rgba & 0xFF;
                             $a = ($rgba >> 24) & 0x7F;
-                            if ($a > 0) {
-                                $hasAlpha = true;
+
+                            if ($hasAlpha) {
+                                // Transparent image (e.g. digital signature): force ink to black, preserve antialiased alpha
+                                $pixelAlpha = (int) round((127 - $a) * 255 / 127);
+                                $rgb .= chr(0).chr(0).chr(0);
+                                $alpha .= chr($pixelAlpha);
+                            } else {
+                                // White paper scan image: remove white background and render ink in pure black
+                                $brightness = ($r * 299 + $g * 587 + $b * 114) / 1000;
+                                if ($brightness < 235) {
+                                    $hasAlpha = true;
+                                    $pixelAlpha = (int) round(min(255, (235 - $brightness) * (255 / 180)));
+                                    $rgb .= chr(0).chr(0).chr(0);
+                                    $alpha .= chr($pixelAlpha);
+                                } else {
+                                    $rgb .= chr(0).chr(0).chr(0);
+                                    $alpha .= chr(0);
+                                }
                             }
-                            $rgb .= chr($r).chr($g).chr($b);
-                            $alpha .= chr((int) round((127 - $a) * 255 / 127));
                         }
                     }
                     imagedestroy($gd);

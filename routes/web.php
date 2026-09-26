@@ -328,6 +328,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/event/{slug}/ruang-belajar', [EventPortalController::class, 'learningRoom'])->name('event.learning-room');
     Route::get('/event/{slug}/scan', [EventPortalController::class, 'scan'])->name('event.scan');
     Route::get('/event/{slug}/id-card', [EventPortalController::class, 'myIdCard'])->name('event.id-card.mine');
+    Route::post('/event/{slug}/profil', [EventPortalController::class, 'updateProfile'])->name('event.profile.update');
     Route::get('/event/{slug}/sertifikat', [EventPortalController::class, 'downloadCertificate'])->name('event.certificate.mine');
     Route::get('/event/{slug}/transkrip', [EventPortalController::class, 'downloadTranscript'])->name('event.transcript.mine');
     Route::get('/event/{slug}/materi/{module}/pdf', [EventPortalController::class, 'moduleFile'])->name('event.module.file');

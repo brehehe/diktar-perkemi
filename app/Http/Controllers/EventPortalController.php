@@ -1102,4 +1102,85 @@ class EventPortalController extends Controller
             'single' => true,
         ]);
     }
+
+    /**
+     * Update or add participant's own profile data and avatar.
+     */
+    public function updateProfile(Request $request, string $slug): RedirectResponse
+    {
+        $event = Event::where('slug', $slug)->firstOrFail();
+        $user = $request->user();
+
+        $participant = Participant::where('user_id', $user->id)->first();
+        if (! $participant) {
+            $participant = Participant::where('email', $user->email)->first();
+            if ($participant) {
+                $participant->update(['user_id' => $user->id]);
+            } else {
+                $participant = Participant::create([
+                    'user_id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ]);
+            }
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'kenshi_id' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'origin' => ['nullable', 'string', 'max:255'],
+            'dojo' => ['nullable', 'string', 'max:255'],
+            'dan_level' => ['nullable', 'integer', 'min:1', 'max:10'],
+            'birth_place' => ['nullable', 'string', 'max:100'],
+            'birth_date' => ['nullable', 'date'],
+            'gender' => ['nullable', 'string', 'max:20'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'occupation' => ['nullable', 'string', 'max:100'],
+            'photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
+            'remove_photo' => ['nullable', 'boolean'],
+        ]);
+
+        if ($request->boolean('remove_photo')) {
+            if ($participant->photo_path) {
+                Storage::disk('public')->delete($participant->photo_path);
+            }
+            $participant->photo_path = null;
+            $user->update(['avatar_path' => null]);
+        } elseif ($request->hasFile('photo')) {
+            if ($participant->photo_path) {
+                Storage::disk('public')->delete($participant->photo_path);
+            }
+            $path = $request->file('photo')->store("participants/{$participant->id}", 'public');
+            $participant->photo_path = $path;
+            $user->update(['avatar_path' => $path]);
+        }
+
+        $participant->name = $validated['name'];
+        if (! empty($validated['kenshi_id'])) {
+            $participant->kenshi_id_number = strtoupper(trim($validated['kenshi_id']));
+            $participant->kenshi_id = strtoupper(trim($validated['kenshi_id']));
+        }
+        $participant->phone = $validated['phone'] ?? null;
+        $participant->origin = $validated['origin'] ?? null;
+        $participant->origin_province = $validated['origin'] ?? null;
+        $participant->dojo = $validated['dojo'] ?? null;
+        $participant->origin_dojo = $validated['dojo'] ?? null;
+        if (! empty($validated['dan_level'])) {
+            $participant->dan_rank = "{$validated['dan_level']}-DAN";
+            $participant->dan_level = (int) $validated['dan_level'];
+        }
+        $participant->birth_place = $validated['birth_place'] ?? null;
+        $participant->birth_date = $validated['birth_date'] ?? null;
+        $participant->gender = $validated['gender'] ?? null;
+        $participant->address = $validated['address'] ?? null;
+        $participant->occupation = $validated['occupation'] ?? null;
+        $participant->save();
+
+        if ($user->name !== $validated['name']) {
+            $user->update(['name' => $validated['name']]);
+        }
+
+        return back()->with('success', 'Profil kenshi Anda berhasil diperbarui.');
+    }
 }

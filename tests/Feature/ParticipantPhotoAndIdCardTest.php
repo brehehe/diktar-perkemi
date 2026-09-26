@@ -139,3 +139,41 @@ test('authenticated participant can access their own event ID card', function ()
         ->has('cards.0.qr_svg')
     );
 });
+
+test('authenticated participant can update their own profile and photo in ruang belajar', function () {
+    Storage::fake('public');
+
+    $participant = Participant::where('name', 'like', '%Victor Leonard%')->firstOrFail();
+    $user = $participant->user;
+
+    $photoFile = UploadedFile::fake()->image('my_profile.jpg', 350, 450);
+
+    $response = $this->actingAs($user)
+        ->post("/event/{$this->event->slug}/profil", [
+            'name' => 'Victor Leonard Harlim Updated',
+            'kenshi_id' => '90.2.13.01.11.001',
+            'phone' => '081299887766',
+            'origin' => 'Jawa Timur',
+            'dojo' => 'Dojo UNAIR',
+            'dan_level' => 4,
+            'birth_place' => 'Surabaya',
+            'birth_date' => '1990-05-12',
+            'gender' => 'Laki-laki',
+            'address' => 'Jl. Dharmawangsa No. 10',
+            'occupation' => 'Dosen / Pelatih Kempo',
+            'photo' => $photoFile,
+        ]);
+
+    $response->assertSessionHasNoErrors();
+    $response->assertRedirect();
+
+    $participant->refresh();
+    $user->refresh();
+
+    expect($participant->name)->toBe('Victor Leonard Harlim Updated');
+    expect($user->name)->toBe('Victor Leonard Harlim Updated');
+    expect($participant->phone)->toBe('081299887766');
+    expect($participant->photo_path)->not->toBeNull();
+    Storage::disk('public')->assertExists($participant->photo_path);
+    expect($user->avatar_path)->toBe($participant->photo_path);
+});

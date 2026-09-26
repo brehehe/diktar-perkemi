@@ -629,10 +629,15 @@ class Jatim2026PenataranSeeder extends Seeder
      */
     private function seedCbtPackages(Event $event, ?User $organizer = null): array
     {
-        // 1. Import Soal dari 3 File Excel ke Master Modul & Bank Soal
+        // 1. Import Soal dari 4 File Excel ke Master Modul & Bank Soal
+        $pelatihExcel = file_exists(public_path('xlsx/Bank_Soal_PD_PN_PERKEMI_2026.xlsx'))
+            ? public_path('xlsx/Bank_Soal_PD_PN_PERKEMI_2026.xlsx')
+            : public_path('xlsx/Bank_Soal_PreTest_PD30_Kuis20_PostTest50_PN50_Kuis30_PostTest80_PERKEMI_2026_REVISI_JAWABAN_HURUF (1).xlsx');
+
         $excelFiles = [
             public_path('xlsx/Bank_Soal_WAD_WAN_PERKEMI_2026.xlsx'),
             public_path('xlsx/Bank_Soal_PED_PEN_PERKEMI_2026_TERINTEGRASI.xlsx'),
+            $pelatihExcel,
             public_path('xlsx/Bank_Soal_Gabungan_Penguji_Wasit_PERKEMI_2026.xlsx'),
         ];
 
@@ -647,10 +652,7 @@ class Jatim2026PenataranSeeder extends Seeder
             }
         }
 
-        // 2. Seed Modul & Bank Soal Khusus Pelatih (PD & PN)
-        $this->seedPelatihModulesAndQuestions($organizer);
-
-        // 3. Pastikan penamaan dan kode modul soal terpisah sesuai jalur peserta (WAD, WAN, PED, PEN, PD, PN)
+        // 2. Pastikan penamaan, status aktif, dan metadata modul soal terpisah sesuai jalur peserta (WAD, WAN, PED, PEN, PD, PN)
         $explicitModuleTitles = [
             'QM-WAD-PRE' => ['title' => 'Pre-Test Wasit Daerah (WAD)', 'tracks' => ['WAD'], 'cat' => 'Wasit Daerah'],
             'QM-WAN-PRE' => ['title' => 'Pre-Test Wasit Nasional (WAN)', 'tracks' => ['WAN'], 'cat' => 'Wasit Nasional'],
@@ -677,6 +679,7 @@ class Jatim2026PenataranSeeder extends Seeder
                 'title' => $mMeta['title'],
                 'track_codes' => $mMeta['tracks'],
                 'category' => $mMeta['cat'],
+                'status' => 'active',
             ]);
         }
 
@@ -1018,70 +1021,48 @@ class Jatim2026PenataranSeeder extends Seeder
                 'category' => 'Pelatih Daerah',
                 'stage' => 'pre_test',
                 'track_codes' => ['PD'],
-                'source_module' => 'QM-PED-PRE', // 30 butir soal Daerah dari Excel
             ],
             'QM-PN-PRE' => [
                 'title' => 'Pre-Test Pelatih Nasional (PN)',
                 'category' => 'Pelatih Nasional',
                 'stage' => 'pre_test',
                 'track_codes' => ['PN'],
-                'source_module' => 'QM-PEN-PRE', // 50 butir soal Nasional dari Excel
             ],
             'QM-PD-KUIS' => [
                 'title' => 'Kuis Formatif Pelatih Daerah (PD)',
                 'category' => 'Pelatih Daerah',
                 'stage' => 'quiz',
                 'track_codes' => ['PD'],
-                'source_module' => 'QM-PED-KUIS', // 20 butir soal Kuis Daerah dari Excel
             ],
             'QM-PN-KUIS' => [
                 'title' => 'Kuis Formatif Pelatih Nasional (PN)',
                 'category' => 'Pelatih Nasional',
                 'stage' => 'quiz',
                 'track_codes' => ['PN'],
-                'source_module' => 'QM-PEN-KUIS', // 30 butir soal Kuis Nasional dari Excel
             ],
             'QM-PD-POST' => [
                 'title' => 'Post-Test Pelatih Daerah (PD)',
                 'category' => 'Pelatih Daerah',
                 'stage' => 'post_test',
                 'track_codes' => ['PD'],
-                'source_module' => 'QM-PED-POST', // 50 butir soal Post-Test Daerah dari Excel
             ],
             'QM-PN-POST' => [
                 'title' => 'Post-Test Pelatih Nasional (PN)',
                 'category' => 'Pelatih Nasional',
                 'stage' => 'post_test',
                 'track_codes' => ['PN'],
-                'source_module' => 'QM-PEN-POST', // 80 butir soal Post-Test Nasional dari Excel
             ],
         ];
 
         foreach ($pelatihMappings as $code => $modData) {
             $slugBase = Str::slug($modData['title']);
-            $module = QuestionModule::query()->updateOrCreate(
-                ['code' => $code],
-                [
-                    'title' => $modData['title'],
-                    'slug' => $slugBase,
-                    'category' => $modData['category'],
-                    'track_codes' => $modData['track_codes'],
-                    'description' => "Modul bank soal {$modData['title']} untuk standarisasi kepelatihan PERKEMI 2026 yang bersumber dari Bank Soal Terintegrasi.",
-                    'evaluation_purpose' => 'Standarisasi kompetensi kepelatihan Shorinji Kempo.',
-                    'passing_grade' => 75.00,
-                    'status' => 'active',
-                    'created_by' => $organizer?->id,
-                ]
-            );
-
-            // Ambil butir soal dari modul sumber yang telah diimpor dari file Excel
-            $source = QuestionModule::where('code', $modData['source_module'])->first();
-            if ($source) {
-                $questionIds = $source->questions()->pluck('question_bank.id')->toArray();
-                if (! empty($questionIds)) {
-                    $module->questions()->sync($questionIds);
-                }
-            }
+            QuestionModule::query()->where('code', $code)->update([
+                'title' => $modData['title'],
+                'slug' => $slugBase,
+                'category' => $modData['category'],
+                'track_codes' => $modData['track_codes'],
+                'status' => 'active',
+            ]);
         }
     }
 

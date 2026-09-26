@@ -154,6 +154,46 @@ test('admin can import Bank_Soal_Gabungan_Penguji_Wasit_PERKEMI_2026.xlsx succes
     expect($totalQuestions)->toBe(520);
 });
 
+test('admin can import Pelatih PD and PN Excel successfully', function () {
+    $sourcePath = file_exists(base_path('public/xlsx/Bank_Soal_PD_PN_PERKEMI_2026.xlsx'))
+        ? base_path('public/xlsx/Bank_Soal_PD_PN_PERKEMI_2026.xlsx')
+        : base_path('public/xlsx/Bank_Soal_PreTest_PD30_Kuis20_PostTest50_PN50_Kuis30_PostTest80_PERKEMI_2026_REVISI_JAWABAN_HURUF (1).xlsx');
+    expect(file_exists($sourcePath))->toBeTrue();
+
+    $uploadedFile = new UploadedFile(
+        $sourcePath,
+        'Bank_Soal_PD_PN_PERKEMI_2026.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        null,
+        true
+    );
+
+    $response = $this->actingAs($this->admin)->post('/admin/master/modul-soal/impor', [
+        'file' => $uploadedFile,
+    ]);
+
+    $response->assertRedirect('/admin/master/modul-soal');
+    $response->assertSessionHas('success');
+
+    $pnPre = QuestionModule::where('code', 'QM-PN-PRE')->first();
+    expect($pnPre)->not->toBeNull();
+    expect($pnPre->title)->toBe('Pre-Test Pelatih Nasional (PN)');
+    expect($pnPre->category)->toBe('Pelatih Nasional');
+    expect($pnPre->track_codes)->toContain('PN');
+    expect($pnPre->questions()->count())->toBe(50);
+
+    $pdPre = QuestionModule::where('code', 'QM-PD-PRE')->first();
+    expect($pdPre)->not->toBeNull();
+    expect($pdPre->title)->toBe('Pre-Test Pelatih Daerah (PD)');
+    expect($pdPre->category)->toBe('Pelatih Daerah');
+    expect($pdPre->track_codes)->toContain('PD');
+    expect($pdPre->questions()->count())->toBe(30);
+
+    // Total questions across PD & PN is 260
+    $totalQuestions = QuestionBank::whereIn('exam_stage', ['pre_test', 'quiz', 'post_test'])->count();
+    expect($totalQuestions)->toBe(260);
+});
+
 test('imported module displays petunjuk and question details in show page', function () {
     $sourcePath = base_path('public/xlsx/Bank_Soal_PED_PEN_PERKEMI_2026_TERINTEGRASI.xlsx');
     $uploadedFile = new UploadedFile(

@@ -3460,13 +3460,21 @@ export default function Show({
                                                                 #{att.attempt_number}
                                                             </span>
                                                             {att.duration_minutes !== null && (
-                                                                <div className="text-[10px] text-[#6B7C93]">{att.duration_minutes} mnt</div>
+                                                                <div className="text-[10px] text-[#6B7C93]">
+                                                                    {typeof att.duration_minutes === 'number' ? Math.round(att.duration_minutes) : att.duration_minutes} mnt
+                                                                </div>
                                                             )}
                                                         </td>
                                                         <td className="py-3 px-4 text-center">
-                                                            <div className={`font-display text-base font-bold ${att.is_passed ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                                                {att.score.toFixed(1)}
-                                                            </div>
+                                                            {att.status === 'in_progress' ? (
+                                                                <div className="font-display text-base font-bold text-amber-600" title="Ujian sedang berlangsung, nilai dihitung otomatis setelah selesai">
+                                                                    -
+                                                                </div>
+                                                            ) : (
+                                                                <div className={`font-display text-base font-bold ${att.is_passed ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                                    {Number(att.score ?? 0).toFixed(1)}
+                                                                </div>
+                                                            )}
                                                             <div className="text-[10px] text-[#6B7C93]">
                                                                 Min. {att.passing_score}
                                                             </div>
@@ -7246,7 +7254,7 @@ export default function Show({
                                             <div className={`flex flex-col items-center justify-center rounded-xl p-3 px-5 border ${attemptDetailData.attempt.is_passed ? 'bg-emerald-50 border-emerald-300 text-emerald-950' : 'bg-rose-50 border-rose-300 text-rose-950'}`}>
                                                 <span className="text-[11px] font-semibold uppercase tracking-wider">Nilai Akhir</span>
                                                 <span className="font-display text-3xl font-black">
-                                                    {attemptDetailData.attempt.score?.toFixed(1)}
+                                                    {(attemptDetailData.attempt.score ?? attemptDetailData.attempt.total_score ?? attemptDetailData.summary?.score ?? 0).toFixed(1)}
                                                 </span>
                                                 <span className="text-[10px] text-[#6B7C93]">
                                                     Passing: {attemptDetailData.attempt.passing_score}
@@ -7260,10 +7268,10 @@ export default function Show({
                                                     </span>
                                                 </div>
                                                 <div className="text-xs text-[#0E2747] font-semibold mt-1">
-                                                    {attemptDetailData.attempt.participant_name} ({attemptDetailData.attempt.kenshi_id_number || '-'})
+                                                    {attemptDetailData.attempt.participant_name || attemptDetailData.participant?.name || 'Peserta'} ({attemptDetailData.attempt.kenshi_id_number || attemptDetailData.participant?.kenshi_id_number || '-'})
                                                 </div>
                                                 <div className="text-[11px] text-[#6B7C93]">
-                                                    Diselesaikan pada: {attemptDetailData.attempt.submitted_at || '-'} • Durasi: {attemptDetailData.attempt.duration_minutes || '-'} menit
+                                                    Diselesaikan pada: {attemptDetailData.attempt.submitted_at || '-'} • Durasi: {typeof attemptDetailData.attempt.duration_minutes === 'number' ? Math.round(attemptDetailData.attempt.duration_minutes) : (attemptDetailData.attempt.duration_minutes || '-')} menit
                                                 </div>
                                             </div>
                                         </div>
@@ -7275,11 +7283,11 @@ export default function Show({
                                             </div>
                                             <div className="bg-white border border-[#DCE7F3] rounded-lg p-2 shadow-2xs">
                                                 <div className="text-[#6B7C93] text-[10px]">Salah</div>
-                                                <div className="font-bold text-rose-700 text-base">{attemptDetailData.summary.incorrect_count}</div>
+                                                <div className="font-bold text-rose-700 text-base">{attemptDetailData.summary.incorrect_count ?? attemptDetailData.summary.wrong_count ?? 0}</div>
                                             </div>
                                             <div className="bg-white border border-[#DCE7F3] rounded-lg p-2 shadow-2xs">
                                                 <div className="text-[#6B7C93] text-[10px]">Akurasi</div>
-                                                <div className="font-bold text-[#0B63CE] text-base">{attemptDetailData.summary.percentage}%</div>
+                                                <div className="font-bold text-[#0B63CE] text-base">{attemptDetailData.summary.percentage ?? attemptDetailData.summary.score ?? 0}%</div>
                                             </div>
                                         </div>
                                     </div>

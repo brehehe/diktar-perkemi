@@ -43,6 +43,25 @@ class AdminCbtExamAttemptController extends Controller
         $userAnswers = is_array($attempt->answers) ? $attempt->answers : [];
         $optionOrder = is_array($attempt->option_order) ? $attempt->option_order : [];
 
+        // Check if question IDs match directly or if IDs shifted due to re-syncing
+        $hasKeyMatch = false;
+        foreach ($questions as $q) {
+            if (array_key_exists((string) $q->id, $userAnswers)) {
+                $hasKeyMatch = true;
+                break;
+            }
+        }
+        if (! $hasKeyMatch && ! empty($userAnswers)) {
+            $answerVals = array_values($userAnswers);
+            $normalizedAnswers = [];
+            foreach ($questions as $idx => $q) {
+                if (array_key_exists($idx, $answerVals)) {
+                    $normalizedAnswers[(string) $q->id] = $answerVals[$idx];
+                }
+            }
+            $userAnswers = $normalizedAnswers;
+        }
+
         $detailedQuestions = [];
         $correctCount = 0;
         $totalEarnedPoints = 0.0;
@@ -58,12 +77,21 @@ class AdminCbtExamAttemptController extends Controller
             // Determine correctness
             $isCorrect = false;
             if (is_array($correctAnswer)) {
-                if ($submittedAnswer == $correctAnswer
-                    || (is_array($submittedAnswer) && empty(array_diff($correctAnswer, $submittedAnswer)) && empty(array_diff($submittedAnswer, $correctAnswer)))) {
+                $normCorrect = array_map(fn ($v) => strtoupper(trim((string) $v)), $correctAnswer);
+                sort($normCorrect);
+                $normSubmitted = is_array($submittedAnswer)
+                    ? array_map(fn ($v) => strtoupper(trim((string) $v)), $submittedAnswer)
+                    : ($submittedAnswer !== null && $submittedAnswer !== '' ? [strtoupper(trim((string) $submittedAnswer))] : []);
+                sort($normSubmitted);
+                if (! empty($normCorrect) && $normCorrect === $normSubmitted) {
                     $isCorrect = true;
                 }
-            } elseif ($submittedAnswer !== null && (string) $submittedAnswer === (string) $correctAnswer) {
-                $isCorrect = true;
+            } elseif ($submittedAnswer !== null && $submittedAnswer !== '') {
+                $normCorrect = strtoupper(trim((string) $correctAnswer));
+                $normSubmitted = strtoupper(trim((string) $submittedAnswer));
+                if ($normSubmitted === $normCorrect) {
+                    $isCorrect = true;
+                }
             }
 
             if ($isCorrect) {
@@ -105,6 +133,7 @@ class AdminCbtExamAttemptController extends Controller
             'attempt' => [
                 'id' => $attempt->id,
                 'attempt_number' => $attempt->attempt_number,
+                'score' => (float) $attempt->total_score,
                 'total_score' => (float) $attempt->total_score,
                 'passing_score' => (float) ($package->passing_score ?? 70),
                 'is_passed' => (bool) $attempt->is_passed,
@@ -113,6 +142,8 @@ class AdminCbtExamAttemptController extends Controller
                 'submitted_at' => $attempt->submitted_at?->format('d M Y, H:i'),
                 'duration_minutes' => $durationMinutes,
                 'feedback' => $attempt->feedback,
+                'participant_name' => $attempt->participant?->name ?? 'Peserta dihapus',
+                'kenshi_id_number' => $attempt->participant?->kenshi_id_number ?? '-',
             ],
             'package' => [
                 'id' => $package->id,
@@ -133,7 +164,9 @@ class AdminCbtExamAttemptController extends Controller
                 'total_questions' => count($detailedQuestions),
                 'correct_count' => $correctCount,
                 'wrong_count' => count($detailedQuestions) - $correctCount,
+                'incorrect_count' => count($detailedQuestions) - $correctCount,
                 'score' => (float) $attempt->total_score,
+                'percentage' => (float) $attempt->total_score,
                 'earned_points' => round($totalEarnedPoints, 2),
                 'total_possible_points' => round($totalPossiblePoints, 2),
             ],

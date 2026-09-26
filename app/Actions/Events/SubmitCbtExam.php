@@ -44,17 +44,18 @@ class SubmitCbtExam
             }
 
             $timedOut = $attempt->hasExpired($package);
-            $answers = $timedOut
-                ? ($attempt->answers ?? [])
-                : ($submittedAnswers ?? $attempt->answers ?? []);
-            [$score, $isPassed] = $this->score($questions, $answers, (float) $package->passing_score);
+            $storedAnswers = is_array($attempt->answers) ? $attempt->answers : [];
+            $incomingAnswers = is_array($submittedAnswers) ? $submittedAnswers : [];
+            $answers = array_merge($storedAnswers, $incomingAnswers);
+
+            [$score, $isPassed, $finalAnswers] = $this->score($questions, $answers, (float) $package->passing_score);
 
             $attempt->update([
                 'status' => $timedOut ? 'timed_out' : 'submitted',
                 'submitted_at' => now(),
                 'total_score' => $score,
                 'is_passed' => $isPassed,
-                'answers' => $answers,
+                'answers' => $finalAnswers,
                 'feedback' => $timedOut
                     ? 'Waktu ujian berakhir. Jawaban yang telah tersimpan dikumpulkan otomatis.'
                     : $attempt->feedback,
@@ -68,31 +69,65 @@ class SubmitCbtExam
     /**
      * @param  Collection<int, CbtQuestion|QuestionBank>  $questions
      * @param  array<string, mixed>  $answers
-     * @return array{0: float, 1: bool}
+     * @return array{0: float, 1: bool, 2: array<string, mixed>}
      */
     private function score(Collection $questions, array $answers, float $passingScore): array
     {
         $totalPoints = 0.0;
         $earnedPoints = 0.0;
 
+        // Check if question IDs match directly or if IDs shifted due to re-syncing
+        $hasDirectKeyMatch = false;
+        foreach ($questions as $question) {
+            if (array_key_exists((string) $question->id, $answers)) {
+                $hasDirectKeyMatch = true;
+                break;
+            }
+        }
+
+        $normalizedAnswers = $answers;
+        if (! $hasDirectKeyMatch && ! empty($answers)) {
+            $answerValues = array_values($answers);
+            $normalizedAnswers = [];
+            foreach ($questions as $idx => $question) {
+                if (array_key_exists($idx, $answerValues)) {
+                    $normalizedAnswers[(string) $question->id] = $answerValues[$idx];
+                }
+            }
+        }
+
         foreach ($questions as $question) {
             $points = (float) $question->points;
             $totalPoints += $points;
-            $submittedAnswer = $answers[(string) $question->id] ?? null;
+            $submittedAnswer = $normalizedAnswers[(string) $question->id] ?? null;
             $correctAnswer = $question->correct_answer;
 
+            $isCorrect = false;
             if (is_array($correctAnswer)) {
-                if ($submittedAnswer == $correctAnswer
-                    || (is_array($submittedAnswer) && empty(array_diff($correctAnswer, $submittedAnswer)))) {
-                    $earnedPoints += $points;
+                $normCorrect = array_map(fn ($v) => strtoupper(trim((string) $v)), $correctAnswer);
+                sort($normCorrect);
+                $normSubmitted = is_array($submittedAnswer)
+                    ? array_map(fn ($v) => strtoupper(trim((string) $v)), $submittedAnswer)
+                    : ($submittedAnswer !== null && $submittedAnswer !== '' ? [strtoupper(trim((string) $submittedAnswer))] : []);
+                sort($normSubmitted);
+                if (! empty($normCorrect) && $normCorrect === $normSubmitted) {
+                    $isCorrect = true;
                 }
-            } elseif ((string) $submittedAnswer === (string) $correctAnswer) {
+            } elseif ($submittedAnswer !== null && $submittedAnswer !== '') {
+                $normCorrect = strtoupper(trim((string) $correctAnswer));
+                $normSubmitted = strtoupper(trim((string) $submittedAnswer));
+                if ($normSubmitted === $normCorrect) {
+                    $isCorrect = true;
+                }
+            }
+
+            if ($isCorrect) {
                 $earnedPoints += $points;
             }
         }
 
         $score = $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 100, 2) : 0.0;
 
-        return [$score, $score >= $passingScore];
+        return [$score, $score >= $passingScore, $normalizedAnswers];
     }
 }

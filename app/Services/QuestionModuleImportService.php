@@ -363,32 +363,42 @@ class QuestionModuleImportService
         $trackCodes = ['PD', 'PN'];
         $category = 'Evaluasi Teori';
 
-        if (str_contains($normalizedProdi, 'PED + WAD') || str_contains($topikSoal, 'PED') && str_contains($topikSoal, 'WAD')) {
+        if (str_contains($normalizedProdi, 'PED + WAD') || (str_contains($topikSoal, 'PED') && str_contains($topikSoal, 'WAD'))) {
             $prodiCode = 'PWAD';
             $prodiName = 'Penguji & Wasit Daerah (PED + WAD)';
             $trackCodes = ['PWAD', 'PED', 'WAD'];
             $category = 'Penguji & Wasit Terintegrasi';
-        } elseif (str_contains($normalizedProdi, 'PEN + WAN') || str_contains($topikSoal, 'PEN') && str_contains($topikSoal, 'WAN')) {
+        } elseif (str_contains($normalizedProdi, 'PEN + WAN') || (str_contains($topikSoal, 'PEN') && str_contains($topikSoal, 'WAN'))) {
             $prodiCode = 'PWAN';
             $prodiName = 'Penguji & Wasit Nasional (PEN + WAN)';
             $trackCodes = ['PWAN', 'PEN', 'WAN'];
             $category = 'Penguji & Wasit Terintegrasi';
-        } elseif (str_contains($normalizedProdi, 'PED') || str_starts_with($topikSoal, 'PED')) {
+        } elseif ($normalizedProdi === 'PED' || str_contains($normalizedProdi, 'PENGUJI DAERAH') || str_starts_with($topikSoal, 'PED')) {
             $prodiCode = 'PED';
             $prodiName = 'Penguji Daerah (PED)';
             $trackCodes = ['PED'];
             $category = 'Penguji Daerah';
-        } elseif (str_contains($normalizedProdi, 'PEN') || str_starts_with($topikSoal, 'PEN')) {
+        } elseif ($normalizedProdi === 'PEN' || str_contains($normalizedProdi, 'PENGUJI NASIONAL') || str_starts_with($topikSoal, 'PEN')) {
             $prodiCode = 'PEN';
             $prodiName = 'Penguji Nasional (PEN)';
             $trackCodes = ['PEN'];
             $category = 'Penguji Nasional';
-        } elseif (str_contains($normalizedProdi, 'WAD') || str_starts_with($topikSoal, 'WAD')) {
+        } elseif ($normalizedProdi === 'PD' || str_contains($normalizedProdi, 'PELATIH DAERAH') || str_starts_with($topikSoal, 'PD')) {
+            $prodiCode = 'PD';
+            $prodiName = 'Pelatih Daerah (PD)';
+            $trackCodes = ['PD'];
+            $category = 'Pelatih Daerah';
+        } elseif ($normalizedProdi === 'PN' || str_contains($normalizedProdi, 'PELATIH NASIONAL') || str_starts_with($topikSoal, 'PN')) {
+            $prodiCode = 'PN';
+            $prodiName = 'Pelatih Nasional (PN)';
+            $trackCodes = ['PN'];
+            $category = 'Pelatih Nasional';
+        } elseif ($normalizedProdi === 'WAD' || str_contains($normalizedProdi, 'WASIT DAERAH') || str_starts_with($topikSoal, 'WAD')) {
             $prodiCode = 'WAD';
             $prodiName = 'Wasit Daerah (WAD)';
             $trackCodes = ['WAD'];
             $category = 'Wasit Daerah';
-        } elseif (str_contains($normalizedProdi, 'WAN') || str_starts_with($topikSoal, 'WAN')) {
+        } elseif ($normalizedProdi === 'WAN' || str_contains($normalizedProdi, 'WASIT NASIONAL') || str_starts_with($topikSoal, 'WAN')) {
             $prodiCode = 'WAN';
             $prodiName = 'Wasit Nasional (WAN)';
             $trackCodes = ['WAN'];
@@ -461,10 +471,14 @@ class QuestionModuleImportService
                 ],
             ]);
         } else {
-            $moduleUpdates = [];
-            if ($module->status === 'draft') {
-                $moduleUpdates['status'] = 'active';
-            }
+            $moduleUpdates = [
+                'title' => $title,
+                'category' => $category,
+                'track_codes' => $trackCodes,
+                'description' => $description,
+                'evaluation_purpose' => $purpose,
+                'status' => 'active',
+            ];
             $currentMeta = $module->metadata ?? [];
             $currentMeta['stage'] = $stage;
             $currentMeta['prodi'] = $prodiCode;
@@ -487,7 +501,7 @@ class QuestionModuleImportService
      */
     private function determineTrackCodes(string $prodi, string $code): array
     {
-        $normalizedProdi = strtoupper($prodi);
+        $normalizedProdi = strtoupper(trim($prodi));
 
         if (str_contains($normalizedProdi, 'PED + WAD')) {
             return ['PWAD', 'PED', 'WAD'];
@@ -497,35 +511,27 @@ class QuestionModuleImportService
             return ['PWAN', 'PEN', 'WAN'];
         }
 
-        if (str_contains($normalizedProdi, 'PED')) {
+        if ($normalizedProdi === 'PED' || str_contains($normalizedProdi, 'PENGUJI DAERAH') || str_starts_with($code, 'PED')) {
             return ['PED'];
         }
 
-        if (str_contains($normalizedProdi, 'PEN')) {
+        if ($normalizedProdi === 'PEN' || str_contains($normalizedProdi, 'PENGUJI NASIONAL') || str_starts_with($code, 'PEN')) {
             return ['PEN'];
         }
 
-        if (str_contains($normalizedProdi, 'WAD')) {
+        if ($normalizedProdi === 'PD' || str_contains($normalizedProdi, 'PELATIH DAERAH') || str_starts_with($code, 'PD')) {
+            return ['PD'];
+        }
+
+        if ($normalizedProdi === 'PN' || str_contains($normalizedProdi, 'PELATIH NASIONAL') || str_starts_with($code, 'PN')) {
+            return ['PN'];
+        }
+
+        if ($normalizedProdi === 'WAD' || str_contains($normalizedProdi, 'WASIT DAERAH') || str_starts_with($code, 'WAD')) {
             return ['WAD'];
         }
 
-        if (str_contains($normalizedProdi, 'WAN')) {
-            return ['WAN'];
-        }
-
-        if (str_starts_with($code, 'PED')) {
-            return ['PED'];
-        }
-
-        if (str_starts_with($code, 'PEN')) {
-            return ['PEN'];
-        }
-
-        if (str_starts_with($code, 'WAD')) {
-            return ['WAD'];
-        }
-
-        if (str_starts_with($code, 'WAN')) {
+        if ($normalizedProdi === 'WAN' || str_contains($normalizedProdi, 'WASIT NASIONAL') || str_starts_with($code, 'WAN')) {
             return ['WAN'];
         }
 
@@ -549,6 +555,14 @@ class QuestionModuleImportService
 
         if (in_array('PEN', $trackCodes, true)) {
             return 'Penguji Nasional';
+        }
+
+        if (in_array('PD', $trackCodes, true)) {
+            return 'Pelatih Daerah';
+        }
+
+        if (in_array('PN', $trackCodes, true)) {
+            return 'Pelatih Nasional';
         }
 
         if (in_array('WAD', $trackCodes, true)) {

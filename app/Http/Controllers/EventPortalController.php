@@ -906,12 +906,16 @@ class EventPortalController extends Controller
     /**
      * Autosave participant answer for a question.
      */
-    public function saveCbtAnswer(Request $request, string $slug, string $packageCode): RedirectResponse
+    public function saveCbtAnswer(Request $request, string $slug, string $packageCode): RedirectResponse|JsonResponse
     {
         $event = Event::where('slug', $slug)->firstOrFail();
         [$participant, $eventParticipant] = $this->attendanceService->resolveParticipant($request->user(), $event);
 
         if (! $participant) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['error' => 'Otorisasi gagal.'], 403);
+            }
+
             return back()->with('error', 'Otorisasi gagal.');
         }
 
@@ -919,17 +923,23 @@ class EventPortalController extends Controller
         $this->attendanceService->ensureExamAttendance($event, $eventParticipant, $package);
 
         $validated = $request->validate([
-            'question_id' => ['required', 'integer'],
+            'question_id' => ['nullable', 'integer'],
             'answer' => ['nullable'],
+            'answers' => ['nullable', 'array'],
         ]);
+
         $questions = $this->examQuestions($package);
-        $questionId = (int) $validated['question_id'];
-        if (! $questions->contains(fn ($question) => $question->id === $questionId)) {
-            return back()->withErrors(['question_id' => 'Soal tidak termasuk dalam paket ujian ini.']);
+
+        $incomingBatch = [];
+        if (! empty($validated['answers']) && is_array($validated['answers'])) {
+            foreach ($validated['answers'] as $qId => $ans) {
+                $incomingBatch[(string) $qId] = $ans;
+            }
+        } elseif (isset($validated['question_id'])) {
+            $incomingBatch[(string) $validated['question_id']] = $validated['answer'] ?? null;
         }
 
-        $answer = $validated['answer'] ?? null;
-        $answerSaved = DB::transaction(function () use ($event, $package, $participant, $questionId, $answer): bool {
+        $answerSaved = DB::transaction(function () use ($event, $package, $participant, $incomingBatch): bool {
             $attempt = CbtExamAttempt::query()
                 ->where('event_id', $event->id)
                 ->where('cbt_exam_package_id', $package->id)
@@ -942,11 +952,13 @@ class EventPortalController extends Controller
                 return false;
             }
 
-            $answers = $attempt->answers ?? [];
-            if ($answer === null || $answer === '') {
-                unset($answers[(string) $questionId]);
-            } else {
-                $answers[(string) $questionId] = (string) $answer;
+            $answers = is_array($attempt->answers) ? $attempt->answers : [];
+            foreach ($incomingBatch as $qId => $val) {
+                if ($val === null || $val === '') {
+                    unset($answers[(string) $qId]);
+                } else {
+                    $answers[(string) $qId] = (string) $val;
+                }
             }
             $attempt->update(['answers' => $answers]);
 
@@ -963,8 +975,24 @@ class EventPortalController extends Controller
                 $questions,
             );
 
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'status' => 'expired',
+                    'message' => 'Waktu ujian telah berakhir.',
+                    'total_score' => $timedOutAttempt->total_score,
+                ], 410);
+            }
+
             return redirect()->route('event.learning-room', $slug)
                 ->with('info', "Waktu ujian telah berakhir. Jawaban tersimpan dikumpulkan otomatis dengan nilai {$timedOutAttempt->total_score}.");
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'status' => 'saved',
+                'saved_count' => count($incomingBatch),
+                'saved_at' => now()->toIso8601String(),
+            ]);
         }
 
         return back();

@@ -1403,13 +1403,14 @@ class EventDocumentGenerator
 
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
-            5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>',
-            6 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>',
-            8 => '<< /Title ('.$this->pdfText($title).') /Creator (Pustaka Penataran) >>',
-            9 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic /Encoding /WinAnsiEncoding >>',
+            2 => '', // Updated after all pages are built
+            3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>',
+            4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>',
+            5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic /Encoding /WinAnsiEncoding >>',
+            6 => '<< /Title ('.$this->pdfText($title).') /Creator (Pustaka Penataran) >>',
         ];
 
-        $nextObjNum = 10;
+        $nextObjNum = 7;
         $cachedTemplates = [];
         $cachedSignatures = [];
         $kids = [];
@@ -1625,7 +1626,7 @@ class EventDocumentGenerator
             $objects[$contentsObjNum] = '<< /Length '.strlen($content).">> \nstream\n{$content}endstream";
 
             $pageObjNum = $nextObjNum++;
-            $objects[$pageObjNum] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Resources << /XObject << {$xObjectsDict} >> /Font << /F1 5 0 R /F2 6 0 R /F3 9 0 R >> >> /Contents {$contentsObjNum} 0 R >>";
+            $objects[$pageObjNum] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Resources << /XObject << {$xObjectsDict} >> /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents {$contentsObjNum} 0 R >>";
 
             $kids[] = "{$pageObjNum} 0 R";
         }
@@ -1635,23 +1636,24 @@ class EventDocumentGenerator
         ksort($objects);
 
         $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
-        $offsets = [0];
+        $offsets = [];
 
         foreach ($objects as $number => $object) {
             $offsets[$number] = strlen($pdf);
             $pdf .= "{$number} 0 obj\n{$object}\nendobj\n";
         }
 
+        $totalObjs = count($objects);
         $xrefOffset = strlen($pdf);
-        $pdf .= "xref\n0 ".(count($objects) + 1)."\n";
+        $pdf .= "xref\n0 ".($totalObjs + 1)."\n";
         $pdf .= "0000000000 65535 f \n";
 
-        foreach (array_keys($objects) as $number) {
-            $pdf .= sprintf("%010d 00000 n \n", $offsets[$number]);
+        for ($num = 1; $num <= $totalObjs; $num++) {
+            $pdf .= sprintf("%010d 00000 n \n", $offsets[$num]);
         }
 
         $pdf .= "trailer\n";
-        $pdf .= '<< /Size '.(count($objects) + 1).' /Root 1 0 R /Info 8 0 R >>'."\n";
+        $pdf .= '<< /Size '.($totalObjs + 1).' /Root 1 0 R /Info 6 0 R >>'."\n";
         $pdf .= "startxref\n{$xrefOffset}\n%%EOF";
 
         return $pdf;

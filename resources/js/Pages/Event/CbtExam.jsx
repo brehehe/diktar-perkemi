@@ -44,9 +44,105 @@ export default function CbtExam({ event, participant, package: pkg, attempt, que
     const questionCardRef = useRef(null);
     const activeNavButtonRef = useRef(null);
 
+    const storageKey = `cbt_answers_pkg_${pkg.id}_att_${attempt.id}`;
+    const [syncStatus, setSyncStatus] = useState('saved'); // 'saved' | 'saving' | 'offline'
+    const pendingSyncRef = useRef(null);
+    const syncInFlightRef = useRef(false);
+
     useEffect(() => {
         answersRef.current = answers;
     }, [answers]);
+
+    // Send answers to database in background
+    const syncAnswersToDatabase = useCallback(async (answersToSync) => {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        setSyncStatus('saving');
+        syncInFlightRef.current = true;
+
+        try {
+            const res = await fetch(`/event/${event.slug}/cbt/${pkg.code}/jawaban`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken || '',
+                },
+                body: JSON.stringify({ answers: answersToSync }),
+            });
+
+            if (res.ok) {
+                setSyncStatus('saved');
+            } else if (res.status === 410) {
+                // Exam timed out on server
+                setSyncStatus('offline');
+                handleAutoSubmit();
+            } else {
+                setSyncStatus('offline');
+            }
+        } catch (err) {
+            console.warn('CBT Autosave network drop, answers kept safely in local storage:', err);
+            setSyncStatus('offline');
+        } finally {
+            syncInFlightRef.current = false;
+            // If another change came in while previous request was in flight, sync it now
+            if (pendingSyncRef.current) {
+                const nextToSync = pendingSyncRef.current;
+                pendingSyncRef.current = null;
+                syncAnswersToDatabase(nextToSync);
+            }
+        }
+    }, [event.slug, pkg.code]);
+
+    // On mount: merge cached localStorage with attempt.answers, and sync if local has newer data
+    useEffect(() => {
+        try {
+            const cachedRaw = localStorage.getItem(storageKey);
+            if (cachedRaw) {
+                const cachedAnswers = JSON.parse(cachedRaw);
+                if (cachedAnswers && typeof cachedAnswers === 'object') {
+                    const merged = { ...(attempt.answers || {}), ...cachedAnswers };
+                    setAnswers(merged);
+                    answersRef.current = merged;
+
+                    const serverAnswers = attempt.answers || {};
+                    let hasUnsynced = false;
+                    for (const [k, v] of Object.entries(cachedAnswers)) {
+                        if (serverAnswers[k] !== v) {
+                            hasUnsynced = true;
+                            break;
+                        }
+                    }
+                    if (hasUnsynced) {
+                        syncAnswersToDatabase(merged);
+                    }
+                }
+            } else if (attempt.answers && Object.keys(attempt.answers).length > 0) {
+                localStorage.setItem(storageKey, JSON.stringify(attempt.answers));
+            }
+        } catch (e) {
+            console.warn('LocalStorage error:', e);
+        }
+    }, [storageKey, syncAnswersToDatabase]);
+
+    // Listen for reconnection to sync any pending offline answers
+    useEffect(() => {
+        const handleOnline = () => {
+            if (answersRef.current && Object.keys(answersRef.current).length > 0) {
+                syncAnswersToDatabase(answersRef.current);
+            }
+        };
+        const handleOffline = () => {
+            setSyncStatus('offline');
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [syncAnswersToDatabase]);
 
     const recordProctoringEvent = useCallback(async (type, metadata = {}) => {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -347,7 +443,7 @@ export default function CbtExam({ event, participant, package: pkg, attempt, que
     const totalQuestions = questions.length;
     const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
 
-    // Handle answer selection with autosave
+    // Handle answer selection with autosave and local persistence
     const handleSelectOption = (questionId, optionId) => {
         try {
             window.history.pushState({ cbtExamLock: true }, '', window.location.href);
@@ -357,21 +453,19 @@ export default function CbtExam({ event, participant, package: pkg, attempt, que
         setAnswers(updated);
         answersRef.current = updated;
 
-        // Autosave to backend
-        setIsSaving(true);
-        router.post(
-            `/event/${event.slug}/cbt/${pkg.code}/jawaban`,
-            {
-                question_id: questionId,
-                answer: optionId,
-            },
-            {
-                preserveScroll: true,
-                preserveState: true,
-                only: ['attempt'],
-                onFinish: () => setIsSaving(false),
-            }
-        );
+        // 1. Immediately persist locally (immune to tab close, crash, or refresh)
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(updated));
+        } catch (err) {
+            console.warn('LocalStorage save failed:', err);
+        }
+
+        // 2. Background sync to database
+        if (syncInFlightRef.current) {
+            pendingSyncRef.current = updated;
+        } else {
+            syncAnswersToDatabase(updated);
+        }
     };
 
     const handleAutoSubmit = () => {
@@ -384,8 +478,14 @@ export default function CbtExam({ event, participant, package: pkg, attempt, que
         router.post(`/event/${event.slug}/cbt/${pkg.code}/submit`, {
             answers: answersRef.current,
         }, {
+            onSuccess: () => {
+                try {
+                    localStorage.removeItem(storageKey);
+                } catch {}
+            },
             onError: () => {
                 isSubmittingRef.current = false;
+                alert('Terjadi kendala saat mengirimkan jawaban. Jawaban Anda tetap tersimpan aman di perangkat. Silakan coba klik tombol Kumpulkan kembali.');
             },
         });
     };
@@ -447,7 +547,26 @@ export default function CbtExam({ event, participant, package: pkg, attempt, que
                     </div>
                     <div className="flex justify-between items-center text-[10px] text-white/70 mt-1 font-mono">
                         <span>Terjawab: {answeredCount} dari {totalQuestions} soal ({progressPercent}%)</span>
-                        {isSaving && <span className="text-emerald-300 flex items-center gap-1"><Check className="w-3 h-3" /> Tersimpan</span>}
+                        <div className="flex items-center gap-2">
+                            {syncStatus === 'saved' && (
+                                <span className="text-emerald-300 flex items-center gap-1 font-sans font-medium">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    Tersimpan di database
+                                </span>
+                            )}
+                            {syncStatus === 'saving' && (
+                                <span className="text-sky-300 flex items-center gap-1 font-sans font-medium">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-ping inline-block" />
+                                    Menyimpan...
+                                </span>
+                            )}
+                            {syncStatus === 'offline' && (
+                                <span className="text-amber-300 flex items-center gap-1 font-sans font-medium" title="Jawaban aman tersimpan di browser kenshi">
+                                    <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                    Tersimpan di perangkat (offline)
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>

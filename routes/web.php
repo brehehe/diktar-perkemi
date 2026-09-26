@@ -199,6 +199,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::delete('/event/{event}/cbt-attempts', [AdminCbtExamAttemptController::class, 'destroyAllAttempts'])->name('event.cbt-attempt.destroy-all');
         Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat/generate', [EventCertificateController::class, 'generateCertificate'])->name('event.certificate.generate');
         Route::post('/event/{event}/dokumen/generate', [EventCertificateController::class, 'generateMissingDocuments'])->name('event.documents.generate');
+        Route::get('/event/{event}/dokumen/cetak-semua', [EventCertificateController::class, 'printAllDocuments'])->name('event.documents.print-all');
+        Route::get('/event/{event}/dokumen/unduh-zip', [EventCertificateController::class, 'downloadAllZip'])->name('event.documents.download-zip');
         Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'store'])->name('event.certificate.store');
         Route::get('/event/{event}/peserta/{eventParticipant}/sertifikat', [EventCertificateController::class, 'download'])->name('event.certificate.download');
         Route::get('/event/{event}/peserta/{eventParticipant}/sertifikat/preview', [EventCertificateController::class, 'previewCertificate'])->name('event.certificate.preview');

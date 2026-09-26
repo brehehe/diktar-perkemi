@@ -759,9 +759,9 @@ test('bulk generation uses event numbering and preserves issued documents', func
     $second->refresh();
     expect($first->certificate_number)->toBe('SK-LAMA-012')
         ->and($first->certificate_file_path)->toBe('event-certificates/existing.pdf')
-        ->and($first->transcript_number)->toBe('SK-LAMA-012')
+        ->and($first->transcript_number)->toBe('001/TR-PLT-KHUSUS/IX/2026')
         ->and($second->certificate_number)->toBe('013/PLT-KHUSUS/IX/2026')
-        ->and($second->transcript_number)->toBe('013/PLT-KHUSUS/IX/2026');
+        ->and($second->transcript_number)->toBe('002/TR-PLT-KHUSUS/IX/2026');
     Storage::disk('local')->assertExists([$first->transcript_file_path, $second->certificate_file_path, $second->transcript_file_path]);
 
     $this->get("/admin/event/{$event->id}/peserta/{$second->id}/sertifikat/preview?document_track=PN")
@@ -864,7 +864,7 @@ test('pelatih daerah documents use the regional title and event modules', functi
 
     $enrollment->refresh();
     expect($enrollment->certificate_number)->toBe('001/PLT-DRH/IX/2026')
-        ->and($enrollment->transcript_number)->toBe('001/PLT-DRH/IX/2026');
+        ->and($enrollment->transcript_number)->toBe('001/TR-PLT-DRH/IX/2026');
     expect(Storage::disk('local')->get($enrollment->certificate_file_path))
         ->toContain('SERTIFIKAT PELATIH SHORINJI KEMPO DAERAH');
     expect(Storage::disk('local')->get($enrollment->transcript_file_path))
@@ -905,8 +905,10 @@ test('dual tracks generate and expose separate penguji and wasit document pairs'
         $wasitSuffix = $documentTracks[1] === 'WAD' ? 'WST-DRH' : 'WST-NAS';
         expect($enrollment->certificate_number)->toContain("/{$pengujiSuffix}/")
             ->and($enrollment->secondary_certificate_number)->toContain("/{$wasitSuffix}/")
-            ->and($enrollment->transcript_number)->toBe($enrollment->certificate_number)
-            ->and($enrollment->secondary_transcript_number)->toBe($enrollment->secondary_certificate_number)
+            ->and($enrollment->transcript_number)->toContain("/TR-{$pengujiSuffix}/")
+            ->and($enrollment->secondary_transcript_number)->toContain("/TR-{$wasitSuffix}/")
+            ->and($enrollment->transcript_number)->not->toBe($enrollment->certificate_number)
+            ->and($enrollment->secondary_transcript_number)->not->toBe($enrollment->secondary_certificate_number)
             ->and($enrollment->certificate_file_path)->not->toBe($enrollment->secondary_certificate_file_path)
             ->and($enrollment->transcript_file_path)->not->toBe($enrollment->secondary_transcript_file_path);
 
@@ -1032,7 +1034,7 @@ test('automatic document generation suggests a number from the event and uses it
             ->where('participants', fn ($participants) => collect($participants)->contains(
                 fn ($participant) => $participant['id'] === $enrollment->id
                     && $participant['suggested_certificate_number'] === '001/WST-DRH/IX/2026'
-                    && $participant['suggested_transcript_number'] === '001/WST-DRH/IX/2026'
+                    && $participant['suggested_transcript_number'] === '001/TR-WST-DRH/IX/2026'
                     && $participant['can_generate_certificate']
                     && $participant['can_generate_transcript']
             )));
@@ -1044,7 +1046,7 @@ test('automatic document generation suggests a number from the event and uses it
 
     $enrollment->refresh();
     expect($enrollment->certificate_number)->toBe('001/WST-DRH/IX/2026')
-        ->and($enrollment->transcript_number)->toBe('001/WST-DRH/IX/2026');
+        ->and($enrollment->transcript_number)->toBe('001/TR-WST-DRH/IX/2026');
     Storage::disk('local')->assertExists($enrollment->certificate_file_path);
     Storage::disk('local')->assertExists($enrollment->transcript_file_path);
     expect(Storage::disk('local')->get($enrollment->certificate_file_path))
@@ -1132,7 +1134,7 @@ test('event number settings override admin defaults and preserve existing issued
             ->where('participants', fn ($participants) => collect($participants)->contains(
                 fn ($participant) => $participant['id'] === $enrollment->id
                     && $participant['suggested_certificate_number'] === '007/WST-JABAR/IX/2026'
-                    && $participant['suggested_transcript_number'] === '007/WST-JABAR/IX/2026'
+                    && $participant['suggested_transcript_number'] === '001/TR-WST-JABAR/IX/2026'
             ) && collect($participants)->contains(
                 fn ($participant) => $participant['id'] === $nextEnrollment->id
                     && $participant['suggested_certificate_number'] === '010/WST-JABAR/IX/2026'

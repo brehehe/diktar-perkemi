@@ -63,8 +63,8 @@ import {
     Upload,
     FileEdit,
     Key,
-    CreditCard,
     Camera,
+    FileBadge,
 } from 'lucide-react';
 
 export default function Show({
@@ -93,6 +93,9 @@ export default function Show({
     documentNumberLabels = {},
     documentNumberDefaults = {},
     documentNumberOverrides = {},
+    transcriptNumberLabels = {},
+    transcriptNumberDefaults = {},
+    transcriptNumberOverrides = {},
     certificateSignatureSettings = {},
     certificateSignatureDefaults = {},
     registrationForms = [],
@@ -377,10 +380,17 @@ export default function Show({
         }
     }, [activeTab, participantPage]);
     const [isGeneratingDocuments, setIsGeneratingDocuments] = useState(false);
+    const [documentNumberSubTab, setDocumentNumberSubTab] = useState('certificate');
     const documentNumberForm = useForm({
+        apply_to_participants: true,
+        regenerate_documents: true,
         numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
-            prefix: documentNumberOverrides[trackCode]?.prefix ?? '',
-            start: documentNumberOverrides[trackCode]?.start ?? '',
+            prefix: (documentNumberOverrides.certificate?.[trackCode]?.prefix ?? documentNumberOverrides[trackCode]?.prefix) ?? '',
+            start: (documentNumberOverrides.certificate?.[trackCode]?.start ?? documentNumberOverrides[trackCode]?.start) ?? '',
+        }])),
+        transcript_numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
+            prefix: documentNumberOverrides.transcript?.[trackCode]?.prefix ?? '',
+            start: documentNumberOverrides.transcript?.[trackCode]?.start ?? '',
         }])),
     });
     const signatureForm = useForm({
@@ -4883,43 +4893,148 @@ export default function Show({
 
                         <details className="group border border-[#DCE7F3] bg-white">
                             <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 p-4 font-semibold text-[#0E2747] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] sm:px-5">
-                                <span>Pengaturan nomor surat event</span>
+                                <div className="flex items-center gap-2">
+                                    <FileBadge className="size-4 text-[#0B63CE]" />
+                                    <span>Pengaturan nomor surat event (Sertifikat & E-Transkrip)</span>
+                                </div>
                                 <span className="text-xs font-normal text-[#6B7C93]">Kosong = default Admin</span>
                             </summary>
-                            <form onSubmit={(submitEvent) => { submitEvent.preventDefault(); documentNumberForm.put(`/admin/event/${event.id}/nomor-dokumen`, { preserveScroll: true }); }} className="border-t border-[#DCE7F3] p-4 sm:p-5">
-                                <p className="max-w-3xl text-sm leading-6 text-[#6B7C93]">Isi hanya kategori yang perlu berbeda dari default Admin. Nomor urut dihitung per jalur peserta dalam event. Jika ada event lain dengan kode, bulan, dan tahun yang sama, atur nomor awal agar tidak bertabrakan. Nomor dokumen yang sudah terbit tidak diubah.</p>
-                                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                                    {Object.entries(documentNumberLabels).map(([trackCode, label]) => (
-                                        <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4">
-                                            <legend className="px-1 text-sm font-semibold text-[#0E2747]">{label} ({trackCode})</legend>
-                                            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
-                                                <Input
-                                                    id={`event-number-${trackCode}-prefix`}
-                                                    label="Kode surat khusus"
-                                                    value={documentNumberForm.data.numbers[trackCode]?.prefix ?? ''}
-                                                    onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], prefix: change.target.value.toUpperCase() } })}
-                                                    placeholder={documentNumberDefaults[trackCode]?.prefix || ''}
-                                                    error={documentNumberForm.errors[`numbers.${trackCode}.prefix`]}
-                                                    maxLength={32}
-                                                />
-                                                <Input
-                                                    id={`event-number-${trackCode}-start`}
-                                                    label="Nomor awal khusus"
-                                                    type="number"
-                                                    min="1"
-                                                    max="999999"
-                                                    value={documentNumberForm.data.numbers[trackCode]?.start ?? ''}
-                                                    onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], start: change.target.value } })}
-                                                    placeholder={String(documentNumberDefaults[trackCode]?.start || 1)}
-                                                    error={documentNumberForm.errors[`numbers.${trackCode}.start`]}
-                                                />
-                                            </div>
-                                        </fieldset>
-                                    ))}
+                            <form onSubmit={(submitEvent) => { submitEvent.preventDefault(); documentNumberForm.put(`/admin/event/${event.id}/nomor-dokumen`, { preserveScroll: true }); }} className="border-t border-[#DCE7F3]">
+                                <div className="p-4 sm:p-5 border-b border-[#DCE7F3] bg-[#F8FBFF]">
+                                    <p className="max-w-3xl text-sm leading-6 text-[#425973]">
+                                        Atur kode surat dan nomor awal untuk <strong>Sertifikat</strong> dan <strong>E-Transkrip</strong> per jalur peserta. Nomor urut otomatis diformat 3 digit (contoh: <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[#0B63CE] border border-[#DCE7F3]">001/SK-PED-JTM-2026/IX/2026</code> dan <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[#0B63CE] border border-[#DCE7F3]">001/TR-PED-JTM-2026/IX/2026</code>). Saat disimpan, nomor seluruh peserta dan berkas PDF sertifikat / transkrip akan otomatis disinkronkan.
+                                    </p>
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setDocumentNumberSubTab('certificate')}
+                                            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                                                documentNumberSubTab === 'certificate'
+                                                    ? 'bg-[#0B63CE] text-white shadow-2xs'
+                                                    : 'bg-white border border-[#DCE7F3] text-[#425973] hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <Award className="size-3.5" />
+                                            <span>Nomor Sertifikat</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setDocumentNumberSubTab('transcript')}
+                                            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                                                documentNumberSubTab === 'transcript'
+                                                    ? 'bg-[#0B63CE] text-white shadow-2xs'
+                                                    : 'bg-white border border-[#DCE7F3] text-[#425973] hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <FileText className="size-3.5" />
+                                            <span>Nomor E-Transkrip</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#DCE7F3] pt-4">
-                                    {isPortalAdmin ? <Link href="/admin/pengaturan?tab=certificate_numbers" className="inline-flex min-h-11 items-center text-sm font-semibold text-[#0B63CE] hover:underline">Ubah default Admin</Link> : <span className="text-xs text-[#6B7C93]">Default hanya dapat diubah oleh Admin.</span>}
-                                    <Button type="submit" icon={Save} loading={documentNumberForm.processing}>Simpan Nomor Event</Button>
+
+                                <div className="p-4 sm:p-5">
+                                    {documentNumberSubTab === 'certificate' && (
+                                        <div>
+                                            <div className="mb-3 flex items-center justify-between">
+                                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Pengaturan Nomor Sertifikat Per Jalur</h4>
+                                                <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong></span>
+                                            </div>
+                                            <div className="grid gap-4 lg:grid-cols-2">
+                                                {Object.entries(documentNumberLabels).map(([trackCode, label]) => (
+                                                    <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4 rounded-lg">
+                                                        <legend className="px-1 text-sm font-semibold text-[#0E2747]">{label} ({trackCode})</legend>
+                                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                                                            <Input
+                                                                id={`event-cert-${trackCode}-prefix`}
+                                                                label="Kode surat sertifikat"
+                                                                value={documentNumberForm.data.numbers[trackCode]?.prefix ?? ''}
+                                                                onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], prefix: change.target.value.toUpperCase() } })}
+                                                                placeholder={documentNumberDefaults[trackCode]?.prefix || ''}
+                                                                error={documentNumberForm.errors[`numbers.${trackCode}.prefix`]}
+                                                                maxLength={32}
+                                                            />
+                                                            <Input
+                                                                id={`event-cert-${trackCode}-start`}
+                                                                label="Nomor awal"
+                                                                type="number"
+                                                                min="1"
+                                                                max="999999"
+                                                                value={documentNumberForm.data.numbers[trackCode]?.start ?? ''}
+                                                                onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], start: change.target.value } })}
+                                                                placeholder={String(documentNumberDefaults[trackCode]?.start || 1)}
+                                                                error={documentNumberForm.errors[`numbers.${trackCode}.start`]}
+                                                            />
+                                                        </div>
+                                                    </fieldset>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {documentNumberSubTab === 'transcript' && (
+                                        <div>
+                                            <div className="mb-3 flex items-center justify-between">
+                                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Pengaturan Nomor E-Transkrip Per Jalur</h4>
+                                                <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong></span>
+                                            </div>
+                                            <div className="grid gap-4 lg:grid-cols-2">
+                                                {Object.entries(transcriptNumberLabels && Object.keys(transcriptNumberLabels).length > 0 ? transcriptNumberLabels : documentNumberLabels).map(([trackCode, label]) => (
+                                                    <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4 rounded-lg">
+                                                        <legend className="px-1 text-sm font-semibold text-[#0E2747]">{transcriptNumberLabels[trackCode] || `E-Transkrip (${trackCode})`}</legend>
+                                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                                                            <Input
+                                                                id={`event-trans-${trackCode}-prefix`}
+                                                                label="Kode surat transkrip"
+                                                                value={documentNumberForm.data.transcript_numbers[trackCode]?.prefix ?? ''}
+                                                                onChange={(change) => documentNumberForm.setData('transcript_numbers', { ...documentNumberForm.data.transcript_numbers, [trackCode]: { ...documentNumberForm.data.transcript_numbers[trackCode], prefix: change.target.value.toUpperCase() } })}
+                                                                placeholder={transcriptNumberDefaults[trackCode]?.prefix || ''}
+                                                                error={documentNumberForm.errors[`transcript_numbers.${trackCode}.prefix`]}
+                                                                maxLength={32}
+                                                            />
+                                                            <Input
+                                                                id={`event-trans-${trackCode}-start`}
+                                                                label="Nomor awal"
+                                                                type="number"
+                                                                min="1"
+                                                                max="999999"
+                                                                value={documentNumberForm.data.transcript_numbers[trackCode]?.start ?? ''}
+                                                                onChange={(change) => documentNumberForm.setData('transcript_numbers', { ...documentNumberForm.data.transcript_numbers, [trackCode]: { ...documentNumberForm.data.transcript_numbers[trackCode], start: change.target.value } })}
+                                                                placeholder={String(transcriptNumberDefaults[trackCode]?.start || 1)}
+                                                                error={documentNumberForm.errors[`transcript_numbers.${trackCode}.start`]}
+                                                            />
+                                                        </div>
+                                                    </fieldset>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#DCE7F3] bg-white p-4 sm:p-5">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+                                        <label className="flex items-center gap-2 text-xs font-medium text-[#0E2747] cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={documentNumberForm.data.apply_to_participants ?? true}
+                                                onChange={(e) => documentNumberForm.setData('apply_to_participants', e.target.checked)}
+                                                className="size-4 rounded border-gray-300 text-[#0B63CE] focus:ring-[#0B63CE]"
+                                            />
+                                            <span>Otomatis isi & urutkan nomor di data peserta (001, 002, dst.)</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 text-xs font-medium text-[#0E2747] cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={documentNumberForm.data.regenerate_documents ?? true}
+                                                onChange={(e) => documentNumberForm.setData('regenerate_documents', e.target.checked)}
+                                                className="size-4 rounded border-gray-300 text-[#0B63CE] focus:ring-[#0B63CE]"
+                                            />
+                                            <span>Otomatis perbarui berkas PDF sertifikat & e-transkrip</span>
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        {isPortalAdmin && <Link href="/admin/pengaturan?tab=certificate_numbers" className="text-xs font-semibold text-[#0B63CE] hover:underline">Ubah default Admin</Link>}
+                                        <Button type="submit" icon={Save} loading={documentNumberForm.processing}>Simpan Nomor Event</Button>
+                                    </div>
                                 </div>
                             </form>
                         </details>
@@ -4938,8 +5053,8 @@ export default function Show({
                                             icon={RotateCcw}
                                             loading={isGeneratingDocuments}
                                             onClick={() => {
-                                                if (!confirm('Generate ulang semua sertifikat & transkrip agar menggunakan TTD digital, tanggal terbit, dan nomor terbaru?')) return;
-                                                router.post(`/admin/event/${event.id}/dokumen/generate`, { regenerate: true }, {
+                                                if (!confirm('Generate ulang semua sertifikat & transkrip agar menggunakan TTD digital, tanggal terbit, dan nomor terbaru (001, 002, dst.)?')) return;
+                                                router.post(`/admin/event/${event.id}/dokumen/generate`, { regenerate: true, sync_numbers: true }, {
                                                     preserveScroll: true,
                                                     onStart: () => setIsGeneratingDocuments(true),
                                                     onFinish: () => setIsGeneratingDocuments(false),
@@ -4961,6 +5076,43 @@ export default function Show({
                                     >
                                         Generate yang belum ada
                                     </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {participants.length > 0 && (
+                            <div className="flex flex-wrap items-center justify-between gap-4 border border-[#DCE7F3] bg-white p-4 sm:p-5">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-[#0E2747] flex items-center gap-2">
+                                        <Printer className="size-4 text-[#0B63CE]" />
+                                        <span>Cetak & Unduh Dokumen Sekaligus</span>
+                                    </h3>
+                                    <p className="mt-1 max-w-2xl text-xs leading-5 text-[#6B7C93]">Preview dan cetak semua sertifikat atau transkrip peserta dalam satu dokumen PDF multi-halaman sekaligus, atau unduh seluruh berkas PDF dalam satu file ZIP.</p>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        icon={Printer}
+                                        onClick={() => window.open(`/admin/event/${event.id}/dokumen/cetak-semua?type=certificate`, '_blank')}
+                                    >
+                                        Cetak Semua Sertifikat
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        icon={FileText}
+                                        onClick={() => window.open(`/admin/event/${event.id}/dokumen/cetak-semua?type=transcript`, '_blank')}
+                                    >
+                                        Cetak Semua Transkrip
+                                    </Button>
+                                    <a
+                                        href={`/admin/event/${event.id}/dokumen/unduh-zip`}
+                                        className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#0B63CE] px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-[#0A3F82] transition-colors"
+                                    >
+                                        <Download className="size-4" />
+                                        <span>Unduh Semua (.ZIP)</span>
+                                    </a>
                                 </div>
                             </div>
                         )}

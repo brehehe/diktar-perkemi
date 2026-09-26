@@ -8,6 +8,7 @@ use App\Models\Setting;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -49,6 +50,15 @@ class EventDocumentGenerator
         'PN' => 'PLT-NAS',
     ];
 
+    public const TRANSCRIPT_NUMBER_SUFFIXES = [
+        'PD' => 'TR-PLT-DRH',
+        'WAD' => 'TR-WST-DRH',
+        'WAN' => 'TR-WST-NAS',
+        'PED' => 'TR-PGJ-DRH',
+        'PEN' => 'TR-PGJ-NAS',
+        'PN' => 'TR-PLT-NAS',
+    ];
+
     private const ROMAN_MONTHS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
     public const NUMBER_LABELS = [
@@ -58,6 +68,324 @@ class EventDocumentGenerator
         'PEN' => 'Sertifikat Penguji Nasional',
         'WAD' => 'Sertifikat Wasit Daerah',
         'WAN' => 'Sertifikat Wasit Nasional',
+    ];
+
+    public const TRANSCRIPT_NUMBER_LABELS = [
+        'PD' => 'E-Transkrip Pelatih Daerah',
+        'PN' => 'E-Transkrip Pelatih Nasional',
+        'PED' => 'E-Transkrip Penguji Daerah',
+        'PEN' => 'E-Transkrip Penguji Nasional',
+        'WAD' => 'E-Transkrip Wasit Daerah',
+        'WAN' => 'E-Transkrip Wasit Nasional',
+    ];
+
+    /**
+     * Kurikulum modul & fokus kompetensi resmi PERKEMI untuk transkrip penataran.
+     * Sesuai template referensi (PED, PEN, PN, WAD, WAN, PD).
+     *
+     * @var array<string, array{subtitle: string, total_jp: int, footer_lines: array<int, string>, modules: array<int, array{code: string, title: string, jp: int, fokus: string}>}>
+     */
+    public const STANDARD_TRACK_MODULES = [
+        'PED' => [
+            'subtitle' => 'PENATARAN PENGUJI DAERAH',
+            'total_jp' => 32,
+            'footer_lines' => [
+                'Total rancangan Program Penataran Penguji Daerah: 32 JP. Pembagian Teori/Praktik tidak ditampilkan karena sumber modul menetapkan alokasi per modul dalam JP total.',
+                'Basis: Modul Penguji Daerah PERKEMI 2026 dan kerangka kompetensi tenaga keolahragaan yang berlaku.',
+            ],
+            'modules' => [
+                [
+                    'code' => 'PED-01',
+                    'title' => 'Regulasi Ujian, Mandat dan Administrasi',
+                    'jp' => 4,
+                    'fokus' => 'Alur ujian, mandat PB, eligibility, administrasi peserta, dokumentasi, audit trail dan pelaporan.',
+                ],
+                [
+                    'code' => 'PED-02',
+                    'title' => 'Prinsip Assessment Shorinji Kempo',
+                    'jp' => 6,
+                    'fokus' => 'Penilaian komprehensif ajaran, teknik, perilaku dan sikap; evidence, criteria, decision rules dan feedback.',
+                ],
+                [
+                    'code' => 'PED-03',
+                    'title' => 'Kurikulum Kyu–Dan dan Kriteria Teknik',
+                    'jp' => 6,
+                    'fokus' => 'Kurikulum Kyu/Yudansha, examination contents, Kihon, Hokei, Embu/ Randori dan pemetaan kriteria observabel.',
+                ],
+                [
+                    'code' => 'PED-04',
+                    'title' => 'Teknik Observasi, Score Sheet dan Kalibrasi',
+                    'jp' => 6,
+                    'fokus' => 'Observasi, anchoring, bias, inter-rater reliability, independent scoring, konsensus dan kalibrasi panel.',
+                ],
+                [
+                    'code' => 'PED-05',
+                    'title' => 'Simulasi Ujian dan Oral/Administrative Examination',
+                    'jp' => 5,
+                    'fokus' => 'Candidate briefing, ujian tertulis/lisan, technical assessment, decision conference dan feedback.',
+                ],
+                [
+                    'code' => 'PED-06',
+                    'title' => 'Etika Penguji, Konflik Kepentingan dan Laporan',
+                    'jp' => 5,
+                    'fokus' => 'Impartiality, conflict of interest, confidentiality, appeal awareness, integritas dan laporan hasil.',
+                ],
+            ],
+        ],
+        'PEN' => [
+            'subtitle' => 'PENATARAN PENGUJI NASIONAL',
+            'total_jp' => 40,
+            'footer_lines' => [
+                'Total rancangan Program Penataran Penguji Nasional: 40 JP. Pembagian Teori/Praktik tidak ditampilkan karena sumber modul menetapkan alokasi per modul dalam JP total.',
+                'Basis: Modul Penguji Nasional PERKEMI 2026 dan kerangka kompetensi tenaga keolahragaan yang berlaku.',
+            ],
+            'modules' => [
+                [
+                    'code' => 'PEN-01',
+                    'title' => 'Governance Ujian dan Tanggung Jawab Penguji Nasional',
+                    'jp' => 4,
+                    'fokus' => 'Mengelola ujian sesuai kewenangan nasional dan mandat PB.',
+                ],
+                [
+                    'code' => 'PEN-02',
+                    'title' => 'Assessment Filosofi, Teknik dan Perilaku Tingkat Lanjut',
+                    'jp' => 7,
+                    'fokus' => 'Mengintegrasikan kurikulum Yudansha, filosofi dan bukti performa.',
+                ],
+                [
+                    'code' => 'PEN-03',
+                    'title' => 'Advanced Technical Standardization & Kyohan',
+                    'jp' => 7,
+                    'fokus' => 'Kalibrasi teknik lanjutan, prinsip aplikasi dan standar demonstrasi.',
+                ],
+                [
+                    'code' => 'PEN-04',
+                    'title' => 'Reliabilitas, Validitas dan Moderasi Nilai',
+                    'jp' => 6,
+                    'fokus' => 'Mengurangi bias, menyamakan standar, moderasi hasil dan audit score sheet.',
+                ],
+                [
+                    'code' => 'PEN-05',
+                    'title' => 'Simulasi Ujian Dan dan Case Conference',
+                    'jp' => 8,
+                    'fokus' => 'Simulasi panel, wawancara, technical assessment, diskusi keputusan.',
+                ],
+                [
+                    'code' => 'PEN-06',
+                    'title' => 'Etika, Dokumentasi, Laporan dan Mentoring',
+                    'jp' => 4,
+                    'fokus' => 'Menjaga integritas, jejak audit, laporan dan membina Penguji Daerah.',
+                ],
+                [
+                    'code' => 'PEN-07',
+                    'title' => 'Praktik Ujian Terintegrasi',
+                    'jp' => 4,
+                    'fokus' => 'Ujian praktik penguji dari persiapan hingga rekomendasi hasil.',
+                ],
+            ],
+        ],
+        'PN' => [
+            'subtitle' => 'PENATARAN PELATIH NASIONAL',
+            'total_jp' => 52,
+            'footer_lines' => [
+                'Total JP Program Pengelaran Pelatih Nasional: 52 JP. Pembagian Teori/Praktik tidak ditampilkan karena sumber modul menetapkan alokasi per modul dalam JP total.',
+                'Basis: Modul Pelatih Nasional PERKEMI 2026 dan Kerangka Kompetensi Tenaga Keolahragaan yang Berlaku.',
+            ],
+            'modules' => [
+                [
+                    'code' => 'PN-01',
+                    'title' => 'Kepemimpinan Pelatih Nasional dan Tata Kelola',
+                    'jp' => 4,
+                    'fokus' => 'Pembinaan lintas wilayah, etika, mandat, koordinasi dan akuntabilitas.',
+                ],
+                [
+                    'code' => 'PN-02',
+                    'title' => 'Filosofi Lanjutan, Kepemimpinan dan Gyo',
+                    'jp' => 5,
+                    'fokus' => 'Pendalaman Yudansha 4-6 Dan, kepemimpinan, pengembangan manusia dan penerapan ajaran.',
+                ],
+                [
+                    'code' => 'PN-03',
+                    'title' => 'Kurikulum Yudansha, Kyohan dan Standardisasi Teknik',
+                    'jp' => 7,
+                    'fokus' => 'Standardisasi teknik dan keterkaitan kurikulum 2nd-6th Dan dengan pengajaran.',
+                ],
+                [
+                    'code' => 'PN-04',
+                    'title' => 'Periodisasi, Analisis Performa dan Persiapan Kompetisi',
+                    'jp' => 8,
+                    'fokus' => 'Program berbasis data, target performa, kompetisi dan evaluasi.',
+                ],
+                [
+                    'code' => 'PN-05',
+                    'title' => 'Coach Education, Mentoring dan Pengembangan Pelatih',
+                    'jp' => 6,
+                    'fokus' => 'Pembinaan Pelatih Daerah, mentoring, feedback, lesson study dan pengembangan berkelanjutan.',
+                ],
+                [
+                    'code' => 'PN-06',
+                    'title' => 'K3, Cedera, Pemulihan dan Manajemen Risiko',
+                    'jp' => 5,
+                    'fokus' => 'Manajemen risiko, koordinasi medis, return-to-training dan keselamatan.',
+                ],
+                [
+                    'code' => 'PN-07',
+                    'title' => 'Praktik Kepelatihan Nasional dan Case Conference',
+                    'jp' => 9,
+                    'fokus' => 'Simulasi lintas dojo/provinsi, microteaching tingkat lanjut dan pemecahan kasus.',
+                ],
+                [
+                    'code' => 'PN-08',
+                    'title' => 'Aktualisasi dan Laporan Program',
+                    'jp' => 8,
+                    'fokus' => 'Rancangan aktualisasi 2-3 bulan, indikator, evidence dan presentasi.',
+                ],
+            ],
+        ],
+        'WAD' => [
+            'subtitle' => 'PENATARAN WASIT DAERAH',
+            'total_jp' => 32,
+            'footer_lines' => [
+                'Total rancangan Program Penataran Wasit Daerah: 32 JP. Pembagian Teori/Praktik tidak ditampilkan karena sumber modul menetapkan alokasi per modul dalam JP total.',
+                'Basis: Modul Wasit Daerah PERKEMI 2026 dan kerangka kompetensi tenaga keolahragaan yang berlaku.',
+            ],
+            'modules' => [
+                [
+                    'code' => 'WAD-01',
+                    'title' => 'Tata Kelola Kejuaraan, Mandat dan Kewenangan',
+                    'jp' => 4,
+                    'fokus' => 'Menguasai level kejuaraan, penugasan, mandat dan struktur kerja perwasitan.',
+                ],
+                [
+                    'code' => 'WAD-02',
+                    'title' => 'Peraturan Permainan, Pertandingan dan Kejuaraan',
+                    'jp' => 8,
+                    'fokus' => 'Memahami dan menerapkan peraturan pertandingan PERKEMI yang berlaku; detail angka/sanksi mengikuti regulasi PB terbaru.',
+                ],
+                [
+                    'code' => 'WAD-03',
+                    'title' => 'Teknik Perwasitan dan Positioning',
+                    'jp' => 8,
+                    'fokus' => 'Komunikasi, positioning, observasi, sinyal, teamwork dan decision making.',
+                ],
+                [
+                    'code' => 'WAD-04',
+                    'title' => 'Fair Play, Konflik Kepentingan dan Disiplin',
+                    'jp' => 4,
+                    'fokus' => 'Objektivitas, ketidakberpihakan, konflik kepentingan dan komunikasi keputusan.',
+                ],
+                [
+                    'code' => 'WAD-05',
+                    'title' => 'Simulasi Pertandingan dan Video Review',
+                    'jp' => 8,
+                    'fokus' => 'Praktik memimpin/menilai pertandingan, review video dan kalibrasi.',
+                ],
+            ],
+        ],
+        'WAN' => [
+            'subtitle' => 'PENATARAN WASIT NASIONAL',
+            'total_jp' => 40,
+            'footer_lines' => [
+                'Total rancangan Program Penataran Wasit Nasional: 40 JP. Pembagian Teori/Praktik tidak ditampilkan karena sumber modul menetapkan alokasi per modul dalam JP total.',
+                'Basis: Modul Wasit Nasional PERKEMI 2026 dan kerangka kompetensi tenaga keolahragaan yang berlaku.',
+            ],
+            'modules' => [
+                [
+                    'code' => 'WAN-01',
+                    'title' => 'Tata Kelola Kejuaraan, Mandat dan Kewenangan Nasional',
+                    'jp' => 4,
+                    'fokus' => 'Mengelola kewenangan, penugasan dan tata kerja perwasitan pada level nasional.',
+                ],
+                [
+                    'code' => 'WAN-02',
+                    'title' => 'Peraturan Permainan, Pertandingan dan Kejuaraan Tingkat Nasional',
+                    'jp' => 10,
+                    'fokus' => 'Menerapkan peraturan pertandingan/kejuaraan yang berlaku secara konsisten dan akurat.',
+                ],
+                [
+                    'code' => 'WAN-03',
+                    'title' => 'Teknik Perwasitan, Positioning dan Decision Making',
+                    'jp' => 8,
+                    'fokus' => 'Mengembangkan positioning, observasi sinyal, komunikasi panel dan pengambilan keputusan.',
+                ],
+                [
+                    'code' => 'WAN-04',
+                    'title' => 'Fair Play, Konflik Kepentingan dan Disiplin Perwasitan',
+                    'jp' => 4,
+                    'fokus' => 'Menjaga objektivitas, integritas, ketidakberpihakan dan disiplin dalam penugasan.',
+                ],
+                [
+                    'code' => 'WAN-05',
+                    'title' => 'Simulasi Pertandingan, Video Review dan Kalibrasi',
+                    'jp' => 8,
+                    'fokus' => 'Memimpin/menilai simulasi, melakukan video review dan menyamakan standar keputusan.',
+                ],
+                [
+                    'code' => 'WAN-06',
+                    'title' => 'Praktik Perwasitan Nasional Terintegrasi',
+                    'jp' => 6,
+                    'fokus' => 'Praktik terintegrasi dari persiapan, officiating, evaluasi, hingga laporan pertandingan.',
+                ],
+            ],
+        ],
+        'PD' => [
+            'subtitle' => 'PENATARAN PELATIH DAERAH',
+            'total_jp' => 32,
+            'footer_lines' => [
+                'Total rancangan Program Penataran Pelatih Daerah: 32 JP. Pembagian Teori/Praktik tidak ditampilkan karena sumber modul menetapkan alokasi per modul dalam JP total.',
+                'Basis: Modul Pelatih Daerah PERKEMI 2026 dan kerangka kompetensi tenaga keolahragaan yang berlaku.',
+            ],
+            'modules' => [
+                [
+                    'code' => 'PD-01',
+                    'title' => 'Regulasi, AD/ART, Tata Kelola & Administrasi PB PERKEMI',
+                    'jp' => 3,
+                    'fokus' => 'Hirarki norma, AD/ART, mandat, kewenangan, organisasi, administrasi, dan etika.',
+                ],
+                [
+                    'code' => 'PD-02',
+                    'title' => 'Filosofi, Sejarah, Ajaran & Pendidikan Karakter Shorinji Kempo',
+                    'jp' => 3,
+                    'fokus' => 'Falsafah, sejarah, nilai persaudaraan, Gyo, Shu-Ha-Ri, karakter, dan integritas.',
+                ],
+                [
+                    'code' => 'PD-03',
+                    'title' => 'Kurikulum Kyu-Dan, Kriteria Teknik & Standardisasi WSKO',
+                    'jp' => 5,
+                    'fokus' => 'Standardisasi teknik Kihon, Hokei, Goho/Juho, dan kriteria penilaian.',
+                ],
+                [
+                    'code' => 'PD-04',
+                    'title' => 'Metodologi Kepelatihan & Program Latihan Dojo',
+                    'jp' => 5,
+                    'fokus' => 'Penyusunan program latihan dojo, periodisasi dasar, dan manajemen latihan.',
+                ],
+                [
+                    'code' => 'PD-05',
+                    'title' => 'Praktik Mengajar (Microteaching) & Evaluasi Teknik',
+                    'jp' => 5,
+                    'fokus' => 'Simulasi mengajar, komunikasi instruksi, koreksi teknik, dan umpan balik.',
+                ],
+                [
+                    'code' => 'PD-06',
+                    'title' => 'Sport Science, Fisik, Kebugaran & Psikologi Olahraga',
+                    'jp' => 4,
+                    'fokus' => 'Kebugaran fisik, stamina, conditioning dasar, dan motivasi atlet dojo.',
+                ],
+                [
+                    'code' => 'PD-07',
+                    'title' => 'K3, Cedera, Pertolongan Pertama & Manajemen Risiko',
+                    'jp' => 3,
+                    'fokus' => 'Pencegahan cedera, pertolongan pertama pada kecelakaan latihan, dan keselamatan.',
+                ],
+                [
+                    'code' => 'PD-08',
+                    'title' => 'Praktik Terstruktur, Simulasi Kepelatihan & Portofolio',
+                    'jp' => 4,
+                    'fokus' => 'Praktik lapangan terstruktur, asesmen kompetensi, dan penyusunan portofolio.',
+                ],
+            ],
+        ],
     ];
 
     /** @var array<string, string>|null */
@@ -117,13 +445,13 @@ class EventDocumentGenerator
             return 'File template belum terpasang atau tidak dapat dibaca di server. Hubungi admin server atau unggah PDF manual.';
         }
 
-        if ($type === 'transcript' && $trackCode === 'PD') {
+        if ($type === 'transcript' && ! isset(self::STANDARD_TRACK_MODULES[$trackCode])) {
             $moduleCount = $event->modules
-                ->filter(fn ($module) => in_array('PD', $module->track_codes ?? [], true))
+                ->filter(fn ($module) => in_array($trackCode, $module->track_codes ?? [], true))
                 ->count();
 
             if ($moduleCount < 1 || $moduleCount > 8) {
-                return 'Transkrip otomatis Pelatih Daerah memerlukan 1–8 modul PD pada event ini. Gunakan unggah PDF manual.';
+                return "Transkrip otomatis jalur {$trackCode} memerlukan 1–8 modul pada event ini. Gunakan unggah PDF manual.";
             }
         }
 
@@ -139,15 +467,9 @@ class EventDocumentGenerator
         }
 
         $numberField = self::documentField($type, 'number', $eventParticipant->track_code, $trackCode);
-        $certificateNumberField = self::documentField('certificate', 'number', $eventParticipant->track_code, $trackCode);
 
         if ($eventParticipant->{$numberField} && ! $this->isLegacyDualPlaceholder($eventParticipant, $eventParticipant->{$numberField})) {
             return $eventParticipant->{$numberField};
-        }
-
-        if ($type === 'transcript' && $eventParticipant->{$certificateNumberField}
-            && ! $this->isLegacyDualPlaceholder($eventParticipant, $eventParticipant->{$certificateNumberField})) {
-            return $eventParticipant->{$certificateNumberField};
         }
 
         return $this->configuredNumber($event, $eventParticipant, $type, $trackCode);
@@ -165,7 +487,7 @@ class EventDocumentGenerator
         }
 
         $issuedAt = $event->end_date;
-        $settings = $this->effectiveNumberSettings($event, $trackCode);
+        $settings = $this->effectiveNumberSettings($event, $trackCode, $type);
         $sequence = $settings['start'] + $this->sequenceOffset($event, $eventParticipant, $trackCode);
 
         return sprintf(
@@ -195,11 +517,51 @@ class EventDocumentGenerator
         return $settings;
     }
 
-    /** @return array{prefix: string, start: int} */
-    public function effectiveNumberSettings(Event $event, string $trackCode): array
+    /** @return array<string, array{prefix: string, start: int}> */
+    public function adminTranscriptNumberSettings(?Event $event = null): array
     {
+        $settings = [];
+
+        foreach (self::NUMBER_LABELS as $trackCode => $label) {
+            $certPrefix = $event?->document_number_settings['certificate'][$trackCode]['prefix']
+                ?? $event?->document_number_settings[$trackCode]['prefix']
+                ?? null;
+
+            if ($certPrefix && str_starts_with(strtoupper($certPrefix), 'SK-')) {
+                $defaultPrefix = preg_replace('/^SK-/i', 'TR-', $certPrefix);
+            } elseif ($certPrefix) {
+                $defaultPrefix = 'TR-'.$certPrefix;
+            } else {
+                $defaultPrefix = self::TRANSCRIPT_NUMBER_SUFFIXES[$trackCode] ?? 'TR-'.$trackCode;
+            }
+
+            $settings[$trackCode] = [
+                'prefix' => $defaultPrefix,
+                'start' => 1,
+            ];
+        }
+
+        return $settings;
+    }
+
+    /** @return array{prefix: string, start: int} */
+    public function effectiveNumberSettings(Event $event, string $trackCode, string $type = 'certificate'): array
+    {
+        if ($type === 'transcript') {
+            $transcriptDefaults = $this->adminTranscriptNumberSettings($event)[$trackCode] ?? [
+                'prefix' => self::TRANSCRIPT_NUMBER_SUFFIXES[$trackCode] ?? 'TR-'.$trackCode,
+                'start' => 1,
+            ];
+            $override = $event->document_number_settings['transcript'][$trackCode] ?? [];
+
+            return [
+                'prefix' => filled($override['prefix'] ?? null) ? trim($override['prefix']) : $transcriptDefaults['prefix'],
+                'start' => filled($override['start'] ?? null) ? (int) $override['start'] : $transcriptDefaults['start'],
+            ];
+        }
+
         $defaults = $this->adminNumberSettings()[$trackCode];
-        $override = $event->document_number_settings[$trackCode] ?? [];
+        $override = $event->document_number_settings['certificate'][$trackCode] ?? $event->document_number_settings[$trackCode] ?? [];
 
         return [
             'prefix' => filled($override['prefix'] ?? null) ? trim($override['prefix']) : $defaults['prefix'],
@@ -380,6 +742,21 @@ class EventDocumentGenerator
     public function generateCertificate(EventParticipant $eventParticipant, string $certificateNumber, ?string $documentTrackCode = null): string
     {
         $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
+        $overlays = $this->certificateOverlays($eventParticipant, $certificateNumber, $trackCode);
+
+        return $this->createPdf(
+            $this->templatePath('certificate', $trackCode),
+            $overlays,
+            "Sertifikat {$eventParticipant->participant?->name}"
+        );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function certificateOverlays(EventParticipant $eventParticipant, string $certificateNumber, ?string $documentTrackCode = null): array
+    {
+        $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
         $eventParticipant->loadMissing(['participant', 'event']);
         $participant = $eventParticipant->participant;
         $event = $eventParticipant->event ?? Event::query()->find($eventParticipant->event_id);
@@ -488,7 +865,9 @@ class EventDocumentGenerator
 
         $danRoman = $this->danRoman($participant?->dan_rank);
         if ($danRoman) {
-            $overlays[] = $this->text("{$danRoman} DAN", $dataX, 428, $fieldSize, true, $dark);
+            $overlays[] = $this->text($danRoman, $dataX, 428, $fieldSize, true, $dark);
+            $danWidth = $this->textWidth($danRoman, $fieldSize, true);
+            $overlays[] = $this->text('- DAN', $dataX + $danWidth + 14, 428, $fieldSize, false, $dark);
         }
 
         if ($participant?->kenshi_id_number) {
@@ -506,8 +885,9 @@ class EventDocumentGenerator
         };
         $overlays[] = $this->text($ttl, $dataX, 512, $fieldSize, false, $dark);
 
-        if ($participant?->origin_province) {
-            $overlays[] = $this->text($participant->origin_province, $dataX, 555, $fieldSize, false, $dark);
+        $originProvince = trim(explode('/', (string) ($participant?->origin_province ?? ''))[0]);
+        if ($originProvince !== '') {
+            $overlays[] = $this->text($originProvince, $dataX, 555, $fieldSize, false, $dark);
         }
 
         // --- Body conclusion paragraph ---
@@ -574,6 +954,23 @@ class EventDocumentGenerator
         // Line 4: keputusan PB.PERKEMI. (left-aligned)
         $overlays[] = $this->text('keputusan PB.PERKEMI.', $contentLeft, $bodyY + ($lineSpacing * 3), $bodySize, false, $dark);
 
+        // --- Participant photo (pas foto) on the left side of Ketua Umum signature ---
+        $photoPath = $participant?->photo_path;
+        if ($photoPath && Storage::disk('public')->exists($photoPath)) {
+            $fullPhotoPath = Storage::disk('public')->path($photoPath);
+            if (is_readable($fullPhotoPath)) {
+                $photoW = 120;
+                $photoH = 160;
+                $photoX = 420;
+                $photoTop = 775;
+
+                // Gold frame & white matting around photo
+                $overlays[] = $this->coloredRectangle($photoX - 2, $photoTop - 2, $photoW + 4, $photoH + 4, [0.85, 0.70, 0.20]);
+                $overlays[] = $this->whiteRectangle($photoX - 1, $photoTop - 1, $photoW + 2, $photoH + 2);
+                $overlays[] = $this->imageOverlay($fullPhotoPath, $photoX, $photoTop, $photoW, $photoH, true);
+            }
+        }
+
         // --- Signature block ---
         $sigCenterX = 875;
         $sigY = 785;
@@ -607,14 +1004,25 @@ class EventDocumentGenerator
         $overlays[] = $this->text($nameLine, $nameX, $sigY + 150, 24, false, $dark);
         $overlays[] = $this->coloredRectangle($nameX, $sigY + 153, $nameWidth, 1.5, $dark);
 
-        return $this->createPdf(
-            $this->templatePath('certificate', $trackCode),
-            $overlays,
-            "Sertifikat {$participant?->name}"
-        );
+        return $overlays;
     }
 
     public function generateTranscript(EventParticipant $eventParticipant, string $transcriptNumber, ?string $documentTrackCode = null): string
+    {
+        $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
+        $overlays = $this->transcriptOverlays($eventParticipant, $transcriptNumber, $trackCode);
+
+        return $this->createPdf(
+            $this->templatePath('transcript', $trackCode),
+            $overlays,
+            "Transkrip {$eventParticipant->participant?->name}"
+        );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function transcriptOverlays(EventParticipant $eventParticipant, string $transcriptNumber, ?string $documentTrackCode = null): array
     {
         $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
         $eventParticipant->loadMissing(['participant', 'event']);
@@ -635,15 +1043,45 @@ class EventDocumentGenerator
 
         // === Transcript titles ===
         $titleCenterX = 845;
-        $transcriptSubtitle = match ($trackCode) {
-            'PED' => 'PENATARAN PENGUJI DAERAH',
-            'PEN' => 'PENATARAN PENGUJI NASIONAL',
-            'PN' => 'PENATARAN PELATIH NASIONAL',
-            'PD' => 'PENATARAN PELATIH DAERAH',
-            'WAD' => 'PENATARAN WASIT DAERAH',
-            'WAN' => 'PENATARAN WASIT NASIONAL',
-            default => 'PENATARAN',
-        };
+        $trackData = self::STANDARD_TRACK_MODULES[$trackCode] ?? null;
+
+        if ($trackData) {
+            $transcriptSubtitle = $trackData['subtitle'];
+            $modules = collect($trackData['modules'])->map(fn ($m) => (object) [
+                'code' => $m['code'],
+                'title' => $m['title'],
+                'jp' => $m['jp'],
+                'fokus' => $m['fokus'],
+            ]);
+            $totalJP = $trackData['total_jp'];
+            $footerLines = $trackData['footer_lines'] ?? null;
+        } else {
+            $transcriptSubtitle = match ($trackCode) {
+                'PED' => 'PENATARAN PENGUJI DAERAH',
+                'PEN' => 'PENATARAN PENGUJI NASIONAL',
+                'PN' => 'PENATARAN PELATIH NASIONAL',
+                'PD' => 'PENATARAN PELATIH DAERAH',
+                'WAD' => 'PENATARAN WASIT DAERAH',
+                'WAN' => 'PENATARAN WASIT NASIONAL',
+                default => 'PENATARAN',
+            };
+            $modules = $event?->modules
+                ->filter(fn ($m) => in_array($trackCode, $m->track_codes ?? [], true))
+                ->map(fn ($m) => (object) [
+                    'code' => $m->code,
+                    'title' => $m->title,
+                    'jp' => $m->jp,
+                    'fokus' => (string) ($m->learning_indicators ?: $m->description ?: 'Kompetensi sesuai modul kegiatan.'),
+                ])
+                ->values()
+                ?? collect();
+
+            if ($modules->isEmpty()) {
+                throw new RuntimeException("Tidak ada modul untuk jalur {$trackCode} pada event ini.");
+            }
+            $totalJP = $modules->sum('jp');
+            $footerLines = null;
+        }
 
         // Title 1: TRANSKRIP KOMPETENSI & REKAPITULASI PROGRAM
         $overlays[] = $this->centeredText('TRANSKRIP KOMPETENSI & REKAPITULASI PROGRAM', $titleCenterX, 208, 32, true, $dark);
@@ -695,19 +1133,8 @@ class EventDocumentGenerator
         $overlays[] = $this->centeredText('JP', $colCenters[2], $tableTop + 31, 19, true, [1, 1, 1]);
         $overlays[] = $this->centeredText('FOKUS KOMPETENSI', $colCenters[3], $tableTop + 31, 19, true, [1, 1, 1]);
 
-        // Get modules for this track
-        $filterCode = $trackCode;
-        $modules = $event?->modules
-            ->filter(fn ($m) => in_array($filterCode, $m->track_codes ?? [], true))
-            ->values()
-            ?? collect();
-
-        if ($modules->isEmpty()) {
-            throw new RuntimeException("Tidak ada modul untuk jalur {$trackCode} pada event ini.");
-        }
-
         $count = $modules->count();
-        $availableH = 430;
+        $availableH = 448;
         $rowH = min(74, max(46, (int) ($availableH / max($count, 1))));
 
         foreach ($modules as $idx => $module) {
@@ -735,30 +1162,29 @@ class EventDocumentGenerator
             // Col 1: Modul title (left-aligned with padding)
             $titleLines = $this->wrapText((string) $module->title, 42, 2);
             if (count($titleLines) <= 1) {
-                $overlays[] = $this->text($titleLines[0] ?? '', $colX[1] + 16, $centerTextY, 18, false, $dark);
+                $overlays[] = $this->text($titleLines[0] ?? '', $colX[1] + 16, $centerTextY, 17.5, false, $dark);
             } else {
-                $tY0 = $rowTop + (int) ($rowH * 0.40);
-                $overlays[] = $this->text($titleLines[0], $colX[1] + 16, $tY0, 17, false, $dark);
-                $overlays[] = $this->text($titleLines[1], $colX[1] + 16, $tY0 + 24, 17, false, $dark);
+                $tY0 = $rowTop + (int) ($rowH * 0.38);
+                $overlays[] = $this->text($titleLines[0], $colX[1] + 16, $tY0, 16.5, false, $dark);
+                $overlays[] = $this->text($titleLines[1], $colX[1] + 16, $tY0 + 22, 16.5, false, $dark);
             }
 
             // Col 2: JP (centered)
             $overlays[] = $this->centeredText((string) $module->jp, $colCenters[2], $centerTextY, 19, false, $dark);
 
             // Col 3: Fokus kompetensi (left-aligned with padding)
-            $fokus = (string) ($module->learning_indicators ?: $module->description ?: 'Kompetensi sesuai modul kegiatan.');
-            $fokusLines = $this->wrapText($fokus, 54, 3);
+            $fokusLines = $this->wrapText((string) $module->fokus, 65, 3);
             if (count($fokusLines) <= 1) {
-                $overlays[] = $this->text($fokusLines[0] ?? '', $colX[3] + 16, $centerTextY, 17, false, $dark);
+                $overlays[] = $this->text($fokusLines[0] ?? '', $colX[3] + 16, $centerTextY, 16, false, $dark);
             } elseif (count($fokusLines) === 2) {
-                $fY0 = $rowTop + (int) ($rowH * 0.40);
-                $overlays[] = $this->text($fokusLines[0], $colX[3] + 16, $fY0, 16, false, $dark);
-                $overlays[] = $this->text($fokusLines[1], $colX[3] + 16, $fY0 + 22, 16, false, $dark);
+                $fY0 = $rowTop + (int) ($rowH * 0.38);
+                $overlays[] = $this->text($fokusLines[0], $colX[3] + 16, $fY0, 15.5, false, $dark);
+                $overlays[] = $this->text($fokusLines[1], $colX[3] + 16, $fY0 + 21, 15.5, false, $dark);
             } else {
                 $fY0 = $rowTop + (int) ($rowH * 0.28);
-                $overlays[] = $this->text($fokusLines[0], $colX[3] + 16, $fY0, 15, false, $dark);
-                $overlays[] = $this->text($fokusLines[1], $colX[3] + 16, $fY0 + 20, 15, false, $dark);
-                $overlays[] = $this->text($fokusLines[2], $colX[3] + 16, $fY0 + 40, 15, false, $dark);
+                $overlays[] = $this->text($fokusLines[0], $colX[3] + 16, $fY0, 14.5, false, $dark);
+                $overlays[] = $this->text($fokusLines[1], $colX[3] + 16, $fY0 + 20, 14.5, false, $dark);
+                $overlays[] = $this->text($fokusLines[2], $colX[3] + 16, $fY0 + 40, 14.5, false, $dark);
             }
         }
 
@@ -770,7 +1196,6 @@ class EventDocumentGenerator
         // Total row
         $totalRowTop = $tableTop + $headerH + ($count * $rowH);
         $totalRowH = 46;
-        $totalJP = $modules->sum('jp');
 
         // Total row background fill across the entire table
         $totalBg = [1.0, 0.97, 0.82];
@@ -788,21 +1213,21 @@ class EventDocumentGenerator
         $overlays[] = $this->centeredText((string) $totalJP, $colCenters[2], $totalRowTop + 30, 20, true, $dark);
 
         // Footer note (centered across the canvas, elegant italic matching wan-transcript.jpeg)
-        $footerY = $totalRowTop + 65;
-        $shortSubtitle = ucwords(strtolower(str_replace('PENATARAN ', '', $transcriptSubtitle)));
-        $year = $event?->end_date?->format('Y') ?? date('Y');
+        $footerY = $totalRowTop + 55;
+        if ($footerLines && count($footerLines) >= 2) {
+            $line1 = $footerLines[0];
+            $line2 = $footerLines[1];
+        } else {
+            $shortSubtitle = ucwords(strtolower(str_replace('PENATARAN ', '', $transcriptSubtitle)));
+            $year = $event?->end_date?->format('Y') ?? date('Y');
+            $line1 = "Total rancangan Program Penataran {$shortSubtitle}: {$totalJP} JP. Pembagian Teori/Praktik tidak ditampilkan karena sumber modul menetapkan alokasi per modul dalam JP total.";
+            $line2 = "Basis: Modul {$shortSubtitle} PERKEMI {$year} dan kerangka kompetensi tenaga keolahragaan yang berlaku.";
+        }
 
-        $line1 = "Total rancangan Program Penataran {$shortSubtitle}: {$totalJP} JP. Pembagian Teori/Praktik tidak ditampilkan karena sumber modul menetapkan alokasi per modul dalam JP total.";
-        $line2 = "Basis: Modul {$shortSubtitle} PERKEMI {$year} dan kerangka kompetensi tenaga keolahragaan yang berlaku.";
+        $overlays[] = $this->centeredText($line1, $titleCenterX, $footerY, 14.5, false, [0.25, 0.25, 0.25], true);
+        $overlays[] = $this->centeredText($line2, $titleCenterX, $footerY + 22, 14.5, false, [0.25, 0.25, 0.25], true);
 
-        $overlays[] = $this->centeredText($line1, $titleCenterX, $footerY, 15, false, [0.25, 0.25, 0.25], true);
-        $overlays[] = $this->centeredText($line2, $titleCenterX, $footerY + 22, 15, false, [0.25, 0.25, 0.25], true);
-
-        return $this->createPdf(
-            $this->templatePath('transcript', $trackCode),
-            $overlays,
-            "Transkrip {$participant?->name}"
-        );
+        return $overlays;
     }
 
     private function templatePath(string $type, ?string $trackCode): string
@@ -823,173 +1248,389 @@ class EventDocumentGenerator
     }
 
     /**
-     * @param  array<int, array{type: string, x: float, top: float, width?: float, height?: float, text?: string, size?: float, bold?: bool, color?: array<int, float>, path?: string}>  $overlays
+     * @param  iterable<EventParticipant>  $eventParticipants
      */
-    private function createPdf(string $templatePath, array $overlays, string $title): string
+    public function generateCombinedPdf(iterable $eventParticipants, string $type, string $title): string
     {
-        $dimensions = getimagesize($templatePath);
+        $pages = [];
 
-        if ($dimensions === false) {
-            throw new RuntimeException('Template dokumen tidak dapat dibaca.');
-        }
+        foreach ($eventParticipants as $ep) {
+            $ep->loadMissing(['participant', 'event']);
+            $event = $ep->event;
 
-        // PNG cannot be embedded with DCTDecode — convert to JPEG in memory via GD
-        $mimeType = $dimensions['mime'] ?? '';
-        if ($mimeType === 'image/png') {
-            $gd = @imagecreatefrompng($templatePath);
-            if (! $gd) {
-                throw new RuntimeException('Template PNG tidak dapat dibaca oleh GD.');
+            foreach (self::documentTracks($ep->track_code) as $docTrack) {
+                if (! self::supportsForEvent($event, $type, $docTrack)) {
+                    continue;
+                }
+
+                $numberField = self::documentField($type, 'number', $ep->track_code, $docTrack);
+                $number = $ep->{$numberField} ?: $this->configuredNumber($event, $ep, $type, $docTrack);
+
+                if (! $number) {
+                    continue;
+                }
+
+                $templatePath = $this->templatePath($type, $docTrack);
+                $overlays = $type === 'certificate'
+                    ? $this->certificateOverlays($ep, $number, $docTrack)
+                    : $this->transcriptOverlays($ep, $number, $docTrack);
+
+                $pages[] = [
+                    'templatePath' => $templatePath,
+                    'overlays' => $overlays,
+                ];
             }
-            ob_start();
-            imagejpeg($gd, null, 95);
-            $image = ob_get_clean();
-            imagedestroy($gd);
-        } else {
-            $image = file_get_contents($templatePath);
         }
 
-        if ($image === false || $image === '') {
-            throw new RuntimeException('Template dokumen tidak dapat dibaca.');
+        if (empty($pages)) {
+            throw new RuntimeException('Tidak ada dokumen yang dapat dicetak untuk daftar peserta ini.');
         }
 
-        [$width, $height] = $dimensions;
-        $pageWidth = 841.89;
-        $pageHeight = 595.28;
-        $scale = min($pageWidth / $width, $pageHeight / $height);
-        $offsetX = ($pageWidth - $width * $scale) / 2;
-        $offsetY = ($pageHeight - $height * $scale) / 2;
-        $content = sprintf("q\n%.6F 0 0 %.6F %.6F %.6F cm\n", $scale, $scale, $offsetX, $offsetY);
-        $content .= "q\n{$width} 0 0 {$height} 0 0 cm\n/Im0 Do\nQ\n";
+        return $this->createMultiPagePdf($pages, $title);
+    }
 
-        $extraObjects = [];
-        $imageXObjects = [];
-        $nextObjNum = 10;
-        $imgCount = 0;
+    /**
+     * Synchronize event participants' certificate_number & transcript_number with configured sequences (e.g. 001, 002, 003).
+     */
+    public function syncEventParticipantNumbers(Event $event): int
+    {
+        $event->loadMissing(['eventParticipants' => fn ($query) => $query->orderBy('id')]);
+        $count = 0;
 
-        foreach ($overlays as $overlay) {
-            if ($overlay['type'] === 'image' && ! empty($overlay['path']) && is_readable($overlay['path'])) {
-                $gd = @imagecreatefromstring((string) file_get_contents($overlay['path']));
-                if ($gd) {
-                    $imgCount++;
-                    $imName = "/Im{$imgCount}";
-                    $sw = imagesx($gd);
-                    $sh = imagesy($gd);
-                    $rgb = '';
-                    $alpha = '';
-                    // Detect if image has native alpha channel
-                    for ($y = 0; $y < $sh; $y++) {
-                        for ($x = 0; $x < $sw; $x++) {
-                            $rgba = imagecolorat($gd, $x, $y);
-                            $a = ($rgba >> 24) & 0x7F;
-                            if ($a > 0) {
-                                $hasAlpha = true;
-                                break 2;
-                            }
+        foreach ($event->eventParticipants as $ep) {
+            $ep->setRelation('event', $event);
+            $updates = [];
+
+            foreach (self::documentTracks($ep->track_code) as $documentTrack) {
+                $certNumField = self::documentField('certificate', 'number', $ep->track_code, $documentTrack);
+                $transNumField = self::documentField('transcript', 'number', $ep->track_code, $documentTrack);
+
+                $newCertNum = $this->configuredNumber($event, $ep, 'certificate', $documentTrack);
+                if ($newCertNum && $ep->{$certNumField} !== $newCertNum) {
+                    $updates[$certNumField] = $newCertNum;
+                }
+
+                $newTransNum = $this->configuredNumber($event, $ep, 'transcript', $documentTrack);
+                if ($newTransNum && $ep->{$transNumField} !== $newTransNum) {
+                    $updates[$transNumField] = $newTransNum;
+                }
+            }
+
+            if (! empty($updates)) {
+                $ep->update($updates);
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Regenerate existing or missing document PDFs on disk with latest numbers, signatures, and data.
+     *
+     * @param  array<int, string>  $types
+     * @return array{certificate: int, transcript: int}
+     */
+    public function regenerateEventDocuments(Event $event, array $types = ['certificate', 'transcript']): array
+    {
+        $event->loadMissing(['modules', 'eventParticipants' => fn ($q) => $q->with('participant')->orderBy('id')]);
+        $sigSettings = $this->effectiveSignatureSettings($event);
+        $issuedAt = $sigSettings['parsed_date'] ?? $event->end_date ?? today();
+        $counts = ['certificate' => 0, 'transcript' => 0];
+
+        foreach ($event->eventParticipants as $ep) {
+            $ep->setRelation('event', $event);
+
+            foreach (self::documentTracks($ep->track_code) as $docTrack) {
+                foreach ($types as $type) {
+                    if (! self::supportsForEvent($event, $type, $docTrack)) {
+                        continue;
+                    }
+
+                    $pathField = self::documentField($type, 'file_path', $ep->track_code, $docTrack);
+                    $numField = self::documentField($type, 'number', $ep->track_code, $docTrack);
+                    $issuedAtField = self::documentField($type, 'issued_at', $ep->track_code, $docTrack);
+
+                    $number = $this->configuredNumber($event, $ep, $type, $docTrack) ?: $ep->{$numField};
+                    if (! $number) {
+                        continue;
+                    }
+
+                    $dir = $type === 'certificate' ? 'event-certificates' : 'event-transcripts';
+                    $newPath = "{$dir}/{$event->id}/{$ep->id}/{$docTrack}/".Str::uuid().'.pdf';
+                    $oldPath = $ep->{$pathField};
+
+                    try {
+                        $pdf = $type === 'certificate'
+                            ? $this->generateCertificate($ep, $number, $docTrack)
+                            : $this->generateTranscript($ep, $number, $docTrack);
+
+                        Storage::disk('local')->put($newPath, $pdf);
+
+                        if ($oldPath && $oldPath !== $newPath) {
+                            Storage::disk('local')->delete($oldPath);
                         }
+
+                        $ep->update([
+                            $pathField => $newPath,
+                            $numField => $number,
+                            $issuedAtField => $issuedAt,
+                        ]);
+
+                        $counts[$type]++;
+                    } catch (\Throwable $e) {
+                        Storage::disk('local')->delete($newPath);
+                        report($e);
                     }
-
-                    for ($y = 0; $y < $sh; $y++) {
-                        for ($x = 0; $x < $sw; $x++) {
-                            $rgba = imagecolorat($gd, $x, $y);
-                            $r = ($rgba >> 16) & 0xFF;
-                            $g = ($rgba >> 8) & 0xFF;
-                            $b = $rgba & 0xFF;
-                            $a = ($rgba >> 24) & 0x7F;
-
-                            if ($hasAlpha) {
-                                // Transparent image (e.g. digital signature): force ink to black, preserve antialiased alpha
-                                $pixelAlpha = (int) round((127 - $a) * 255 / 127);
-                                $rgb .= chr(0).chr(0).chr(0);
-                                $alpha .= chr($pixelAlpha);
-                            } else {
-                                // White paper scan image: remove white background and render ink in pure black
-                                $brightness = ($r * 299 + $g * 587 + $b * 114) / 1000;
-                                if ($brightness < 235) {
-                                    $hasAlpha = true;
-                                    $pixelAlpha = (int) round(min(255, (235 - $brightness) * (255 / 180)));
-                                    $rgb .= chr(0).chr(0).chr(0);
-                                    $alpha .= chr($pixelAlpha);
-                                } else {
-                                    $rgb .= chr(0).chr(0).chr(0);
-                                    $alpha .= chr(0);
-                                }
-                            }
-                        }
-                    }
-                    imagedestroy($gd);
-
-                    $rgbData = gzcompress($rgb);
-                    $imgObjNum = $nextObjNum++;
-
-                    if ($hasAlpha) {
-                        $smaskData = gzcompress($alpha);
-                        $smaskObjNum = $nextObjNum++;
-                        $extraObjects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask {$smaskObjNum} 0 R /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
-                        $extraObjects[$smaskObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($smaskData)." >>\nstream\n{$smaskData}\nendstream";
-                    } else {
-                        $extraObjects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
-                    }
-
-                    $pdfY = $height - $overlay['top'] - $overlay['height'];
-                    $imageStream = "q\n{$overlay['width']} 0 0 {$overlay['height']} {$overlay['x']} {$pdfY} cm\n{$imName} Do\nQ\n";
-                    $imageXObjects[$imName] = [
-                        'objNum' => $imgObjNum,
-                        'stream' => $imageStream,
-                    ];
                 }
             }
         }
 
-        foreach ($overlays as $overlay) {
-            if ($overlay['type'] === 'rectangle') {
-                $pdfY = $height - $overlay['top'] - $overlay['height'];
-                $color = implode(' ', $overlay['color'] ?? [1, 1, 1]);
-                $content .= "{$color} rg\n{$overlay['x']} {$pdfY} {$overlay['width']} {$overlay['height']} re f\n";
+        return $counts;
+    }
 
-                continue;
-            }
-
-            if ($overlay['type'] === 'image') {
-                continue;
-            }
-
-            $pdfY = $height - $overlay['top'];
-            $font = match (true) {
-                $overlay['italic'] ?? false => '/F3',
-                $overlay['bold'] ?? false => '/F2',
-                default => '/F1',
-            };
-            $text = $this->pdfText($overlay['text'] ?? '');
-            $color = implode(' ', $overlay['color'] ?? [0, 0, 0]);
-            $content .= "{$color} rg\nBT\n{$font} {$overlay['size']} Tf\n1 0 0 1 {$overlay['x']} {$pdfY} Tm\n({$text}) Tj\nET\n";
+    /**
+     * @param  array<int, array{templatePath: string, overlays: array<int, mixed>}>  $pages
+     */
+    public function createMultiPagePdf(array $pages, string $title): string
+    {
+        if (empty($pages)) {
+            throw new RuntimeException('Daftar halaman kosong.');
         }
 
-        foreach ($imageXObjects as $imgData) {
-            $content .= $imgData['stream'];
-        }
-
-        $content .= "Q\n";
-
-        $xObjectsDict = '/Im0 4 0 R';
-        foreach ($imageXObjects as $name => $imgData) {
-            $xObjectsDict .= " {$name} {$imgData['objNum']} 0 R";
-        }
+        $pageWidth = 841.89;
+        $pageHeight = 595.28;
 
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
-            2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-            3 => "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Resources << /XObject << {$xObjectsDict} >> /Font << /F1 5 0 R /F2 6 0 R /F3 9 0 R >> >> /Contents 7 0 R >>",
-            4 => "<< /Type /XObject /Subtype /Image /Width {$width} /Height {$height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ".strlen($image)." >>\nstream\n{$image}\nendstream",
             5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>',
             6 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>',
-            7 => '<< /Length '.strlen($content)." >>\nstream\n{$content}endstream",
             8 => '<< /Title ('.$this->pdfText($title).') /Creator (Pustaka Penataran) >>',
             9 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic /Encoding /WinAnsiEncoding >>',
         ];
 
-        foreach ($extraObjects as $num => $obj) {
-            $objects[$num] = $obj;
+        $nextObjNum = 10;
+        $cachedTemplates = [];
+        $cachedSignatures = [];
+        $kids = [];
+
+        foreach ($pages as $page) {
+            $templatePath = $page['templatePath'];
+            $overlays = $page['overlays'] ?? [];
+
+            if (! isset($cachedTemplates[$templatePath])) {
+                $dimensions = getimagesize($templatePath);
+                if ($dimensions === false) {
+                    throw new RuntimeException("Template dokumen tidak dapat dibaca: {$templatePath}");
+                }
+
+                $mimeType = $dimensions['mime'] ?? '';
+                if ($mimeType === 'image/png') {
+                    $gd = @imagecreatefrompng($templatePath);
+                    if (! $gd) {
+                        throw new RuntimeException('Template PNG tidak dapat dibaca oleh GD.');
+                    }
+                    ob_start();
+                    imagejpeg($gd, null, 95);
+                    $image = ob_get_clean();
+                    imagedestroy($gd);
+                } else {
+                    $image = file_get_contents($templatePath);
+                }
+
+                if ($image === false || $image === '') {
+                    throw new RuntimeException('Template dokumen tidak dapat dibaca.');
+                }
+
+                [$w, $h] = $dimensions;
+                $tmplObjNum = $nextObjNum++;
+                $objects[$tmplObjNum] = "<< /Type /XObject /Subtype /Image /Width {$w} /Height {$h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ".strlen($image)." >>\nstream\n{$image}\nendstream";
+
+                $cachedTemplates[$templatePath] = [
+                    'objNum' => $tmplObjNum,
+                    'width' => $w,
+                    'height' => $h,
+                ];
+            }
+
+            $tmpl = $cachedTemplates[$templatePath];
+            $width = $tmpl['width'];
+            $height = $tmpl['height'];
+            $scale = min($pageWidth / $width, $pageHeight / $height);
+            $offsetX = ($pageWidth - $width * $scale) / 2;
+            $offsetY = ($pageHeight - $height * $scale) / 2;
+
+            $content = sprintf("q\n%.6F 0 0 %.6F %.6F %.6F cm\n", $scale, $scale, $offsetX, $offsetY);
+            $content .= "q\n{$width} 0 0 {$height} 0 0 cm\n/Im0 Do\nQ\n";
+
+            $pageImageXObjects = [];
+            $pageImageStreams = '';
+            $imgCount = 0;
+
+            foreach ($overlays as $overlay) {
+                if ($overlay['type'] === 'image' && ! empty($overlay['path']) && is_readable($overlay['path'])) {
+                    $path = $overlay['path'];
+                    $preserveColors = ! empty($overlay['preserve_colors']);
+
+                    if (! $preserveColors && isset($cachedSignatures[$path])) {
+                        $cached = $cachedSignatures[$path];
+                        $imgCount++;
+                        $imName = "/Im{$imgCount}";
+                        $pageImageXObjects[$imName] = $cached['objNum'];
+                        $pdfY = $height - $overlay['top'] - $overlay['height'];
+                        $pageImageStreams .= "q\n{$overlay['width']} 0 0 {$overlay['height']} {$overlay['x']} {$pdfY} cm\n{$imName} Do\nQ\n";
+
+                        continue;
+                    }
+
+                    $gd = @imagecreatefromstring((string) file_get_contents($path));
+                    if ($gd) {
+                        $sw = imagesx($gd);
+                        $sh = imagesy($gd);
+                        $targetRatio = (float) $overlay['width'] / (float) $overlay['height'];
+                        $srcRatio = (float) $sw / (float) $sh;
+
+                        if ($preserveColors && abs($srcRatio - $targetRatio) > 0.05) {
+                            if ($srcRatio > $targetRatio) {
+                                $cropW = (int) round($sh * $targetRatio);
+                                $cropH = $sh;
+                                $srcX = (int) round(($sw - $cropW) / 2);
+                                $srcY = 0;
+                            } else {
+                                $cropW = $sw;
+                                $cropH = (int) round($sw / $targetRatio);
+                                $srcX = 0;
+                                $srcY = (int) round(($sh - $cropH) / 2);
+                            }
+
+                            $cropped = imagecreatetruecolor($cropW, $cropH);
+                            imagealphablending($cropped, false);
+                            imagesavealpha($cropped, true);
+                            imagecopy($cropped, $gd, 0, 0, $srcX, $srcY, $cropW, $cropH);
+                            imagedestroy($gd);
+                            $gd = $cropped;
+                            $sw = $cropW;
+                            $sh = $cropH;
+                        }
+
+                        $rgb = '';
+                        $alpha = '';
+                        $hasAlpha = false;
+
+                        if (! $preserveColors) {
+                            for ($y = 0; $y < $sh; $y++) {
+                                for ($x = 0; $x < $sw; $x++) {
+                                    $rgba = imagecolorat($gd, $x, $y);
+                                    $a = ($rgba >> 24) & 0x7F;
+                                    if ($a > 0) {
+                                        $hasAlpha = true;
+                                        break 2;
+                                    }
+                                }
+                            }
+                        }
+
+                        for ($y = 0; $y < $sh; $y++) {
+                            for ($x = 0; $x < $sw; $x++) {
+                                $rgba = imagecolorat($gd, $x, $y);
+                                $r = ($rgba >> 16) & 0xFF;
+                                $g = ($rgba >> 8) & 0xFF;
+                                $b = $rgba & 0xFF;
+                                $a = ($rgba >> 24) & 0x7F;
+
+                                if ($preserveColors) {
+                                    $pixelAlpha = (int) round((127 - $a) * 255 / 127);
+                                    if ($pixelAlpha < 255) {
+                                        $hasAlpha = true;
+                                    }
+                                    $rgb .= chr($r).chr($g).chr($b);
+                                    $alpha .= chr($pixelAlpha);
+                                } elseif ($hasAlpha) {
+                                    $pixelAlpha = (int) round((127 - $a) * 255 / 127);
+                                    $rgb .= chr(0).chr(0).chr(0);
+                                    $alpha .= chr($pixelAlpha);
+                                } else {
+                                    $brightness = ($r * 299 + $g * 587 + $b * 114) / 1000;
+                                    if ($brightness < 235) {
+                                        $hasAlpha = true;
+                                        $pixelAlpha = (int) round(min(255, (235 - $brightness) * (255 / 180)));
+                                        $rgb .= chr(0).chr(0).chr(0);
+                                        $alpha .= chr($pixelAlpha);
+                                    } else {
+                                        $rgb .= chr(0).chr(0).chr(0);
+                                        $alpha .= chr(0);
+                                    }
+                                }
+                            }
+                        }
+                        imagedestroy($gd);
+
+                        $rgbData = gzcompress($rgb);
+                        $imgObjNum = $nextObjNum++;
+
+                        if ($hasAlpha) {
+                            $smaskData = gzcompress($alpha);
+                            $smaskObjNum = $nextObjNum++;
+                            $objects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask {$smaskObjNum} 0 R /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
+                            $objects[$smaskObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($smaskData)." >>\nstream\n{$smaskData}\nendstream";
+                        } else {
+                            $objects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
+                        }
+
+                        if (! $preserveColors) {
+                            $cachedSignatures[$path] = ['objNum' => $imgObjNum];
+                        }
+
+                        $imgCount++;
+                        $imName = "/Im{$imgCount}";
+                        $pageImageXObjects[$imName] = $imgObjNum;
+                        $pdfY = $height - $overlay['top'] - $overlay['height'];
+                        $pageImageStreams .= "q\n{$overlay['width']} 0 0 {$overlay['height']} {$overlay['x']} {$pdfY} cm\n{$imName} Do\nQ\n";
+                    }
+                }
+            }
+
+            foreach ($overlays as $overlay) {
+                if ($overlay['type'] === 'rectangle') {
+                    $pdfY = $height - $overlay['top'] - $overlay['height'];
+                    $color = implode(' ', $overlay['color'] ?? [1, 1, 1]);
+                    $content .= "{$color} rg\n{$overlay['x']} {$pdfY} {$overlay['width']} {$overlay['height']} re f\n";
+
+                    continue;
+                }
+
+                if ($overlay['type'] === 'image') {
+                    continue;
+                }
+
+                $pdfY = $height - $overlay['top'];
+                $font = match (true) {
+                    $overlay['italic'] ?? false => '/F3',
+                    $overlay['bold'] ?? false => '/F2',
+                    default => '/F1',
+                };
+                $text = $this->pdfText($overlay['text'] ?? '');
+                $color = implode(' ', $overlay['color'] ?? [0, 0, 0]);
+                $content .= "{$color} rg\nBT\n{$font} {$overlay['size']} Tf\n1 0 0 1 {$overlay['x']} {$pdfY} Tm\n({$text}) Tj\nET\n";
+            }
+
+            $content .= $pageImageStreams."Q\n";
+
+            $xObjectsDict = "/Im0 {$tmpl['objNum']} 0 R";
+            foreach ($pageImageXObjects as $name => $objNum) {
+                $xObjectsDict .= " {$name} {$objNum} 0 R";
+            }
+
+            $contentsObjNum = $nextObjNum++;
+            $objects[$contentsObjNum] = '<< /Length '.strlen($content).">> \nstream\n{$content}endstream";
+
+            $pageObjNum = $nextObjNum++;
+            $objects[$pageObjNum] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Resources << /XObject << {$xObjectsDict} >> /Font << /F1 5 0 R /F2 6 0 R /F3 9 0 R >> >> /Contents {$contentsObjNum} 0 R >>";
+
+            $kids[] = "{$pageObjNum} 0 R";
         }
+
+        $objects[2] = '<< /Type /Pages /Kids ['.implode(' ', $kids).'] /Count '.count($kids).' >>';
 
         ksort($objects);
 
@@ -1016,10 +1657,23 @@ class EventDocumentGenerator
         return $pdf;
     }
 
-    /** @return array{type: string, path: string, x: float, top: float, width: float, height: float} */
-    private function imageOverlay(string $path, float $x, float $top, float $width, float $height): array
+    /**
+     * @param  array<int, array{type: string, x: float, top: float, width?: float, height?: float, text?: string, size?: float, bold?: bool, color?: array<int, float>, path?: string}>  $overlays
+     */
+    private function createPdf(string $templatePath, array $overlays, string $title): string
     {
-        return compact('path', 'x', 'top', 'width', 'height') + ['type' => 'image'];
+        return $this->createMultiPagePdf([
+            [
+                'templatePath' => $templatePath,
+                'overlays' => $overlays,
+            ],
+        ], $title);
+    }
+
+    /** @return array{type: string, path: string, x: float, top: float, width: float, height: float, preserve_colors?: bool} */
+    private function imageOverlay(string $path, float $x, float $top, float $width, float $height, bool $preserveColors = false): array
+    {
+        return compact('path', 'x', 'top', 'width', 'height') + ['type' => 'image', 'preserve_colors' => $preserveColors];
     }
 
     /** @param  array<int, float>  $color
@@ -1128,7 +1782,19 @@ class EventDocumentGenerator
             return null;
         }
 
-        return trim((string) preg_replace('/(?:\s*-\s*|\s+)DAN$/iu', '', trim($danRank)));
+        $cleaned = trim((string) preg_replace('/(?:\s*-\s*|\s+)DAN$/iu', '', trim($danRank)));
+        $arabicToRoman = [
+            '1' => 'I',
+            '2' => 'II',
+            '3' => 'III',
+            '4' => 'IV',
+            '5' => 'V',
+            '6' => 'VI',
+            '7' => 'VII',
+            '8' => 'VIII',
+        ];
+
+        return $arabicToRoman[$cleaned] ?? $cleaned;
     }
 
     private function pdfText(string $value): string

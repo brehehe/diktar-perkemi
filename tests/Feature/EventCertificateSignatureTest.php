@@ -146,3 +146,83 @@ test('generated certificate includes Tempat/Tanggal Lahir, 3-year validity, and 
         ->toContain('Ketua Umum,')
         ->toContain('Agus Setiadji');
 });
+
+test('certificate embeds participant photo when available', function () {
+    Storage::fake('public');
+
+    $fakePhoto = UploadedFile::fake()->image('pas-foto.jpg', 300, 400);
+    $photoPath = $fakePhoto->store('participants/test', 'public');
+
+    $enrollment = EventParticipant::firstOrFail();
+    $enrollment->update(['track_code' => 'PED']);
+    $enrollment->participant->update(['photo_path' => $photoPath]);
+
+    $generator = app(EventDocumentGenerator::class);
+    $pdf = $generator->generateCertificate($enrollment, '001/SK-PED-JTM-2026/IX/2026', 'PED');
+
+    expect($pdf)
+        ->toStartWith('%PDF-1.4')
+        ->toContain('001/SK-PED-JTM-2026/IX/2026')
+        ->toContain('/Im1'); // Photo XObject
+});
+
+test('admin can view and print all event documents combined into multi-page PDF', function () {
+    $this->actingAs($this->admin)
+        ->get("/admin/event/{$this->event->id}/dokumen/cetak-semua?type=certificate")
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+
+    $this->actingAs($this->admin)
+        ->get("/admin/event/{$this->event->id}/dokumen/cetak-semua?type=transcript")
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+});
+
+test('admin can download all event documents as a zip archive', function () {
+    $response = $this->actingAs($this->admin)
+        ->get("/admin/event/{$this->event->id}/dokumen/unduh-zip")
+        ->assertOk();
+
+    expect($response->headers->get('content-type'))->toBe('application/zip');
+});
+
+test('saving document number settings can synchronize participant numbers', function () {
+    Storage::fake('local');
+    $enrollment = EventParticipant::firstOrFail();
+    $enrollment->update([
+        'track_code' => 'PED',
+        'certificate_number' => 'OLD-CERT',
+        'transcript_number' => 'OLD-TRANS',
+    ]);
+
+    $this->actingAs($this->admin)
+        ->put("/admin/event/{$this->event->id}/nomor-dokumen", [
+            'apply_to_participants' => true,
+            'regenerate_documents' => true,
+            'numbers' => [
+                'PED' => ['prefix' => 'SK-PED-BARU', 'start' => 1],
+                'PN' => ['prefix' => '', 'start' => ''],
+                'PD' => ['prefix' => '', 'start' => ''],
+                'PEN' => ['prefix' => '', 'start' => ''],
+                'WAD' => ['prefix' => '', 'start' => ''],
+                'WAN' => ['prefix' => '', 'start' => ''],
+            ],
+            'transcript_numbers' => [
+                'PED' => ['prefix' => 'TR-PED-BARU', 'start' => 1],
+                'PN' => ['prefix' => '', 'start' => ''],
+                'PD' => ['prefix' => '', 'start' => ''],
+                'PEN' => ['prefix' => '', 'start' => ''],
+                'WAD' => ['prefix' => '', 'start' => ''],
+                'WAN' => ['prefix' => '', 'start' => ''],
+            ],
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $enrollment->refresh();
+    expect($enrollment->certificate_number)->toContain('001/SK-PED-BARU')
+        ->and($enrollment->transcript_number)->toContain('001/TR-PED-BARU')
+        ->and($enrollment->certificate_number)->not->toBe($enrollment->transcript_number)
+        ->and($enrollment->certificate_file_path)->not->toBeNull()
+        ->and($enrollment->transcript_file_path)->not->toBeNull();
+});

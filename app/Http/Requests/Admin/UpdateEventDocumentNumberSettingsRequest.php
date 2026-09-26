@@ -24,12 +24,21 @@ class UpdateEventDocumentNumberSettingsRequest extends FormRequest
      */
     public function rules(): array
     {
-        $rules = ['numbers' => ['required', 'array:'.implode(',', array_keys(EventDocumentGenerator::NUMBER_LABELS))]];
+        $rules = [
+            'numbers' => ['required', 'array:'.implode(',', array_keys(EventDocumentGenerator::NUMBER_LABELS))],
+            'transcript_numbers' => ['nullable', 'array'],
+            'apply_to_participants' => ['nullable', 'boolean'],
+            'regenerate_documents' => ['nullable', 'boolean'],
+        ];
 
         foreach (array_keys(EventDocumentGenerator::NUMBER_LABELS) as $trackCode) {
             $rules["numbers.{$trackCode}"] = ['required', 'array:prefix,start'];
             $rules["numbers.{$trackCode}.prefix"] = ['nullable', 'string', 'max:32', 'regex:/^[A-Z0-9-]+$/'];
             $rules["numbers.{$trackCode}.start"] = ['nullable', 'integer', 'min:1', 'max:999999'];
+
+            $rules["transcript_numbers.{$trackCode}"] = ['nullable', 'array:prefix,start'];
+            $rules["transcript_numbers.{$trackCode}.prefix"] = ['nullable', 'string', 'max:32', 'regex:/^[A-Z0-9-]+$/'];
+            $rules["transcript_numbers.{$trackCode}.start"] = ['nullable', 'integer', 'min:1', 'max:999999'];
         }
 
         return $rules;

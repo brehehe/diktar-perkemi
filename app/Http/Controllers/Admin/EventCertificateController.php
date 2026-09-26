@@ -13,6 +13,7 @@ use App\Models\EventParticipant;
 use App\Services\EventDocumentGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -20,6 +21,7 @@ use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
+use ZipArchive;
 
 class EventCertificateController extends Controller
 {
@@ -53,9 +55,10 @@ class EventCertificateController extends Controller
 
                     $numberField = EventDocumentGenerator::documentField($type, 'number', $eventParticipant->track_code, $documentTrack);
                     $issuedAtField = EventDocumentGenerator::documentField($type, 'issued_at', $eventParticipant->track_code, $documentTrack);
-                    $number = ($regenerate && $eventParticipant->{$numberField})
-                        ? $eventParticipant->{$numberField}
-                        : $generator->suggestedNumber($event, $eventParticipant, $type, $documentTrack);
+                    $syncNumbers = $request->boolean('sync_numbers', $regenerate);
+                    $number = ($syncNumbers || ! $eventParticipant->{$numberField})
+                        ? ($generator->configuredNumber($event, $eventParticipant, $type, $documentTrack) ?? $generator->suggestedNumber($event, $eventParticipant, $type, $documentTrack))
+                        : $eventParticipant->{$numberField};
 
                     if (! $number) {
                         $failed++;
@@ -380,6 +383,100 @@ class EventCertificateController extends Controller
 
         return Storage::disk('local')->response($path, "{$label}-{$event->slug}-{$documentTrack}-{$eventParticipant->id}.pdf", [
             'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+    public function printAllDocuments(Request $request, Event $event, EventDocumentGenerator $generator): Response
+    {
+        Gate::authorize('view', $event);
+
+        $type = $request->query('type') === 'transcript' ? 'transcript' : 'certificate';
+        $trackFilter = strtoupper(trim((string) $request->query('track', '')));
+
+        $query = $event->eventParticipants()
+            ->with(['participant', 'event'])
+            ->orderBy('id');
+
+        if ($trackFilter !== '' && isset(EventDocumentGenerator::NUMBER_LABELS[$trackFilter])) {
+            $query->where('track_code', $trackFilter);
+        }
+
+        $participants = $query->get();
+
+        abort_if($participants->isEmpty(), 404, 'Tidak ada peserta yang terdaftar pada event ini.');
+
+        $title = ($type === 'certificate' ? 'Semua Sertifikat - ' : 'Semua Transkrip - ').$event->title;
+        $pdf = $generator->generateCombinedPdf($participants, $type, $title);
+        $slug = Str::slug($event->title);
+        $filename = ($type === 'certificate' ? 'sertifikat-semua-' : 'transkrip-semua-')."{$slug}.pdf";
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+        ]);
+    }
+
+    public function downloadAllZip(Request $request, Event $event, EventDocumentGenerator $generator): StreamedResponse
+    {
+        Gate::authorize('view', $event);
+
+        $event->load(['eventParticipants' => fn ($q) => $q->with('participant')->orderBy('id')]);
+        $tempZipPath = tempnam(sys_get_temp_dir(), 'diktar_docs_');
+        $zip = new ZipArchive;
+
+        if ($zip->open($tempZipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException('Gagal membuat berkas ZIP di server.');
+        }
+
+        foreach ($event->eventParticipants as $ep) {
+            $ep->setRelation('event', $event);
+            $participantName = Str::slug($ep->participant?->name ?? 'peserta');
+
+            foreach (EventDocumentGenerator::documentTracks($ep->track_code) as $docTrack) {
+                foreach (['certificate', 'transcript'] as $type) {
+                    if (! EventDocumentGenerator::supportsForEvent($event, $type, $docTrack)) {
+                        continue;
+                    }
+
+                    $pathField = EventDocumentGenerator::documentField($type, 'file_path', $ep->track_code, $docTrack);
+                    $numField = EventDocumentGenerator::documentField($type, 'number', $ep->track_code, $docTrack);
+                    $filePath = $ep->{$pathField};
+                    $number = $ep->{$numField} ?: $generator->suggestedNumber($event, $ep, $type, $docTrack);
+                    $cleanNum = Str::slug(str_replace('/', '-', $number ?? ''));
+
+                    $pdfContent = null;
+                    if ($filePath && Storage::disk('local')->exists($filePath)) {
+                        $pdfContent = Storage::disk('local')->get($filePath);
+                    } elseif ($number) {
+                        try {
+                            $pdfContent = $type === 'certificate'
+                                ? $generator->generateCertificate($ep, $number, $docTrack)
+                                : $generator->generateTranscript($ep, $number, $docTrack);
+                        } catch (Throwable) {
+                            // Skip ungeneratable
+                        }
+                    }
+
+                    if ($pdfContent) {
+                        $folder = $type === 'certificate' ? 'sertifikat' : 'transkrip';
+                        $zipEntryName = "{$folder}/{$docTrack}_{$cleanNum}_{$participantName}.pdf";
+                        $zip->addFromString($zipEntryName, $pdfContent);
+                    }
+                }
+            }
+        }
+
+        $zip->close();
+
+        $filename = "dokumen-{$event->slug}.zip";
+
+        return response()->streamDownload(function () use ($tempZipPath) {
+            $stream = fopen($tempZipPath, 'rb');
+            fpassthru($stream);
+            fclose($stream);
+            @unlink($tempZipPath);
+        }, $filename, [
+            'Content-Type' => 'application/zip',
         ]);
     }
 }

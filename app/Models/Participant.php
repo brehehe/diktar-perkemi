@@ -212,7 +212,19 @@ class Participant extends Model
             return null;
         }
 
-        return str_replace('-DAN', '', $this->dan_rank);
+        $cleaned = trim((string) preg_replace('/(?:\s*-\s*|\s+)DAN$/iu', '', trim($this->dan_rank)));
+        $arabicToRoman = [
+            '1' => 'I',
+            '2' => 'II',
+            '3' => 'III',
+            '4' => 'IV',
+            '5' => 'V',
+            '6' => 'VI',
+            '7' => 'VII',
+            '8' => 'VIII',
+        ];
+
+        return $arabicToRoman[$cleaned] ?? $cleaned;
     }
 
     public function getPhotoUrlAttribute(): ?string

@@ -623,6 +623,9 @@ class AdminEventDetailService
             'documentNumberLabels' => EventDocumentGenerator::NUMBER_LABELS,
             'documentNumberDefaults' => $this->documentGenerator->adminNumberSettings(),
             'documentNumberOverrides' => $event->document_number_settings ?? [],
+            'transcriptNumberLabels' => EventDocumentGenerator::TRANSCRIPT_NUMBER_LABELS,
+            'transcriptNumberDefaults' => $this->documentGenerator->adminTranscriptNumberSettings($event),
+            'transcriptNumberOverrides' => $event->document_number_settings['transcript'] ?? [],
             'certificateSignatureSettings' => $this->documentGenerator->effectiveSignatureSettings($event),
             'certificateSignatureDefaults' => $this->documentGenerator->adminSignatureSettings(),
             'event' => [

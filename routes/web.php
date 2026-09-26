@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\CbtController;
 use App\Http\Controllers\Admin\CbtPackageController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EventCertificateController;
+use App\Http\Controllers\Admin\EventCertificateSignatureSettingController;
 use App\Http\Controllers\Admin\EventController;
 use App\Http\Controllers\Admin\EventDocumentNumberSettingController;
 use App\Http\Controllers\Admin\EventReferenceController;
@@ -128,6 +129,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/event/{event}/edit', [EventController::class, 'edit'])->name('event.edit');
         Route::put('/event/{event}', [EventController::class, 'update'])->name('event.update');
         Route::put('/event/{event}/nomor-dokumen', [EventDocumentNumberSettingController::class, 'update'])->name('event.document-numbers.update');
+        Route::post('/event/{event}/pengaturan-ttd', [EventCertificateSignatureSettingController::class, 'update'])->name('event.certificate-signatures.update');
+        Route::delete('/event/{event}/pengaturan-ttd/signature', [EventCertificateSignatureSettingController::class, 'destroySignature'])->name('event.certificate-signatures.destroy-signature');
         Route::delete('/event/{event}', [EventController::class, 'destroy'])->name('event.destroy');
 
         // Event Sub-actions (Rundown, Modul, Peserta)

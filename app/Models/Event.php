@@ -41,6 +41,7 @@ class Event extends Model
         'requirements_checklist',
         'responsible_user_id',
         'document_number_settings',
+        'certificate_signature_settings',
     ];
 
     protected $appends = [
@@ -70,6 +71,7 @@ class Event extends Model
             'facilities_checklist' => 'array',
             'requirements_checklist' => 'array',
             'document_number_settings' => 'array',
+            'certificate_signature_settings' => 'array',
         ];
     }
 

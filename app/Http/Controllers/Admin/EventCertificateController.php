@@ -23,10 +23,11 @@ use Throwable;
 
 class EventCertificateController extends Controller
 {
-    public function generateMissingDocuments(Event $event, EventDocumentGenerator $generator): RedirectResponse
+    public function generateMissingDocuments(Event $event, EventDocumentGenerator $generator, Request $request): RedirectResponse
     {
         Gate::authorize('update', $event);
 
+        $regenerate = $request->boolean('regenerate') || $request->boolean('force');
         $event->load(['modules', 'eventParticipants' => fn ($query) => $query->with('participant')->orderBy('id')]);
         $generated = ['certificate' => 0, 'transcript' => 0];
         $failed = 0;
@@ -38,8 +39,9 @@ class EventCertificateController extends Controller
             foreach (EventDocumentGenerator::documentTracks($eventParticipant->track_code) as $documentTrack) {
                 foreach (['certificate', 'transcript'] as $type) {
                     $pathField = EventDocumentGenerator::documentField($type, 'file_path', $eventParticipant->track_code, $documentTrack);
+                    $oldPath = $eventParticipant->{$pathField};
 
-                    if ($eventParticipant->{$pathField}) {
+                    if (! $regenerate && $oldPath) {
                         continue;
                     }
 
@@ -51,7 +53,9 @@ class EventCertificateController extends Controller
 
                     $numberField = EventDocumentGenerator::documentField($type, 'number', $eventParticipant->track_code, $documentTrack);
                     $issuedAtField = EventDocumentGenerator::documentField($type, 'issued_at', $eventParticipant->track_code, $documentTrack);
-                    $number = $generator->suggestedNumber($event, $eventParticipant, $type, $documentTrack);
+                    $number = ($regenerate && $eventParticipant->{$numberField})
+                        ? $eventParticipant->{$numberField}
+                        : $generator->suggestedNumber($event, $eventParticipant, $type, $documentTrack);
 
                     if (! $number) {
                         $failed++;
@@ -62,6 +66,9 @@ class EventCertificateController extends Controller
                     $directory = $type === 'certificate' ? 'event-certificates' : 'event-transcripts';
                     $path = "{$directory}/{$event->id}/{$eventParticipant->id}/{$documentTrack}/".Str::uuid().'.pdf';
 
+                    $sigSettings = $generator->effectiveSignatureSettings($event);
+                    $issuedAt = $sigSettings['parsed_date'] ?? $event->end_date ?? today();
+
                     try {
                         $pdf = $type === 'certificate'
                             ? $generator->generateCertificate($eventParticipant, $number, $documentTrack)
@@ -71,9 +78,13 @@ class EventCertificateController extends Controller
                             throw new RuntimeException('Dokumen hasil generate tidak dapat disimpan.');
                         }
 
+                        if ($oldPath && $oldPath !== $path) {
+                            Storage::disk('local')->delete($oldPath);
+                        }
+
                         $eventParticipant->update([
                             $pathField => $path,
-                            $issuedAtField => $event->end_date,
+                            $issuedAtField => $issuedAt,
                             $numberField => $number,
                         ]);
                         $generated[$type]++;
@@ -86,7 +97,9 @@ class EventCertificateController extends Controller
             }
         }
 
-        $message = "Generate selesai: {$generated['certificate']} sertifikat dan {$generated['transcript']} e-transkrip dibuat.";
+        $message = $regenerate
+            ? "Generate ulang selesai: {$generated['certificate']} sertifikat dan {$generated['transcript']} e-transkrip diperbarui dengan data \u{0026} TTD terbaru."
+            : "Generate selesai: {$generated['certificate']} sertifikat dan {$generated['transcript']} e-transkrip dibuat.";
 
         if ($unavailable > 0) {
             $message .= " {$unavailable} dokumen dilewati karena template tidak tersedia.";
@@ -130,11 +143,13 @@ class EventCertificateController extends Controller
         }
 
         $oldPath = $eventParticipant->{$pathField};
+        $sigSettings = $generator->effectiveSignatureSettings($event);
+        $issuedAt = $sigSettings['parsed_date'] ?? $event->end_date ?? today();
 
         try {
             $eventParticipant->update([
                 $pathField => $path,
-                $issuedAtField => $event->end_date,
+                $issuedAtField => $issuedAt,
                 $numberField => $certificateNumber,
             ]);
         } catch (Throwable $exception) {

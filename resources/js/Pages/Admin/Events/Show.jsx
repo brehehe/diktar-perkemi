@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '../../../Layouts/AdminLayout';
 import PageHeader from '../../../Components/admin/PageHeader';
@@ -91,6 +91,8 @@ export default function Show({
     documentNumberLabels = {},
     documentNumberDefaults = {},
     documentNumberOverrides = {},
+    certificateSignatureSettings = {},
+    certificateSignatureDefaults = {},
     registrationForms = [],
     integrityPacts = [],
     examAttempts = [],
@@ -379,6 +381,133 @@ export default function Show({
             start: documentNumberOverrides[trackCode]?.start ?? '',
         }])),
     });
+    const signatureForm = useForm({
+        city: certificateSignatureSettings.city ?? certificateSignatureDefaults.city ?? 'Jakarta',
+        date: certificateSignatureSettings.date ?? event.end_date ?? '',
+        organization: certificateSignatureSettings.organization ?? certificateSignatureDefaults.organization ?? 'Pengurus Besar PERKEMI',
+        position: certificateSignatureSettings.position ?? certificateSignatureDefaults.position ?? 'Ketua Umum,',
+        signer_name: certificateSignatureSettings.signer_name ?? certificateSignatureDefaults.signer_name ?? 'Laksdya TNI (Purn) Prof. Dr. Agus Setiadji, S.A.P., M.A.',
+        signature_image: null,
+        signature_data: '',
+    });
+    const [signatureMode, setSignatureMode] = useState('draw'); // 'draw' or 'upload'
+    const [signaturePreview, setSignaturePreview] = useState(certificateSignatureSettings.signature_url || null);
+    const [isDeletingSignature, setIsDeletingSignature] = useState(false);
+    const signatureCanvasRef = useRef(null);
+    const [isDrawingSig, setIsDrawingSig] = useState(false);
+    const [hasDrawnSig, setHasDrawnSig] = useState(false);
+
+    useEffect(() => {
+        setSignaturePreview(certificateSignatureSettings.signature_url || null);
+    }, [certificateSignatureSettings.signature_url]);
+
+    const getSigCoordinates = (e) => {
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return { x: 0, y: 0 };
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+            x: (clientX - rect.left) * (canvas.width / rect.width),
+            y: (clientY - rect.top) * (canvas.height / rect.height),
+        };
+    };
+
+    const startDrawingSig = (e) => {
+        e.preventDefault();
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const { x, y } = getSigCoordinates(e);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#0B63CE';
+        setIsDrawingSig(true);
+        setHasDrawnSig(true);
+    };
+
+    const drawSig = (e) => {
+        if (!isDrawingSig) return;
+        e.preventDefault();
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const { x, y } = getSigCoordinates(e);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+    };
+
+    const stopDrawingSig = () => {
+        if (!isDrawingSig) return;
+        setIsDrawingSig(false);
+        const canvas = signatureCanvasRef.current;
+        if (canvas) {
+            const dataUrl = canvas.toDataURL('image/png');
+            signatureForm.setData('signature_data', dataUrl);
+            setSignaturePreview(dataUrl);
+        }
+    };
+
+    const clearSignatureCanvas = () => {
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setHasDrawnSig(false);
+        signatureForm.setData('signature_data', '');
+        setSignaturePreview(certificateSignatureSettings.signature_url || null);
+    };
+
+    const autoGenerateSignature = () => {
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const name = signatureForm.data.signer_name || certificateSignatureDefaults.signer_name || 'Ketua Umum';
+        ctx.font = 'italic 30px "Brush Script MT", "Caveat", "Segoe Script", cursive';
+        ctx.fillStyle = '#0B63CE';
+        ctx.fillText(name, 20, canvas.height / 2 + 8);
+
+        ctx.beginPath();
+        ctx.moveTo(15, canvas.height / 2 + 22);
+        ctx.lineTo(canvas.width - 25, canvas.height / 2 + 18);
+        ctx.strokeStyle = '#0B63CE';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const dataUrl = canvas.toDataURL('image/png');
+        setHasDrawnSig(true);
+        signatureForm.setData('signature_data', dataUrl);
+        setSignaturePreview(dataUrl);
+    };
+
+    const handleSignatureSubmit = (e) => {
+        e.preventDefault();
+        signatureForm.post(`/admin/event/${event.id}/pengaturan-ttd`, {
+            preserveScroll: true,
+            forceFormData: true,
+            onSuccess: () => {
+                signatureForm.reset('signature_image', 'signature_data');
+                setHasDrawnSig(false);
+            },
+        });
+    };
+
+    const handleDeleteSignature = () => {
+        if (!confirm('Hapus gambar TTD digital? Tanda tangan akan kembali kosong.')) return;
+        setIsDeletingSignature(true);
+        router.delete(`/admin/event/${event.id}/pengaturan-ttd/signature`, {
+            preserveScroll: true,
+            onFinish: () => {
+                setIsDeletingSignature(false);
+                clearSignatureCanvas();
+            },
+        });
+    };
     const roomForm = useForm({ name: '' });
     const trackForm = useForm({ code: '', name: '', description: '' });
     const legendForm = useForm({ acronym: '', full_name: '', category: 'istilah', description: '' });
@@ -4462,7 +4591,7 @@ export default function Show({
                                 </div>
                                 <h2 id="certificate-heading" className="text-balance font-display text-2xl font-semibold text-[#0A3F82] sm:text-3xl">E-Sertifikat & E-Transkrip</h2>
                                 <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6B7C93]">Kelola PDF final per peserta. Sertifikat memuat pengukuhan, sedangkan transkrip memuat rekap kompetensi dan beban JP. Seluruh berkas disimpan privat.</p>
-                                <p className="mt-3 max-w-2xl border-l-2 border-[#0B63CE] bg-[#EAF5FF] px-3 py-2 text-xs leading-5 text-[#112743]">Cukup atur kode surat dan nomor awal. Nomor peserta diurutkan otomatis per jalur; bulan Romawi dan tahun mengikuti tanggal akhir kegiatan. PDF baru memakai A4 lanskap. Tempat/tanggal lahir belum tersimpan dan tetap kosong. Preview tersedia setelah dokumen dibuat.</p>
+                                <p className="mt-3 max-w-2xl border-l-2 border-[#0B63CE] bg-[#EAF5FF] px-3 py-2 text-xs leading-5 text-[#112743]">Atur nomor surat dan informasi penandatangan (TTD) event. Tempat/tanggal lahir otomatis diambil dari data peserta, dan masa berlaku sertifikat dihitung 3 tahun dari tanggal generate/terbit. Nomor dokumen diurutkan otomatis per jalur; preview dokumen tersedia setelah dibuat.</p>
                             </div>
                             <div className="grid grid-cols-2 border border-[#DCE7F3] bg-white" aria-label="Panduan format dokumen">
                                 <div className="border-r border-[#DCE7F3] p-4">
@@ -4477,6 +4606,211 @@ export default function Show({
                                 </div>
                             </div>
                         </div>
+
+                        {/* Pengaturan Penandatangan (TTD) & Tanggal Sertifikat */}
+                        <details className="group border border-[#DCE7F3] bg-white">
+                            <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 p-4 font-semibold text-[#0E2747] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] sm:px-5">
+                                <div className="flex items-center gap-2">
+                                    <Edit3 className="size-4 text-[#0B63CE]" aria-hidden="true" />
+                                    <span>Pengaturan TTD & Tanggal Sertifikat</span>
+                                </div>
+                                <span className="text-xs font-normal text-[#6B7C93]">Kota, Tanggal Terbit, Organisasi, Jabatan, Nama & TTD Digital</span>
+                            </summary>
+                            <form onSubmit={handleSignatureSubmit} className="border-t border-[#DCE7F3] p-4 sm:p-5">
+                                <p className="max-w-3xl text-sm leading-6 text-[#6B7C93]">
+                                    Atur informasi penandatangan pada bagian kanan bawah e-sertifikat. Tanggal generate menentukan tanggal terbit sertifikat dan masa berlaku 3 tahun. Unggah gambar TTD digital (disarankan PNG transparan) untuk disematkan otomatis pada sertifikat.
+                                </p>
+                                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    <Input
+                                        id="sig-city"
+                                        label="Kota"
+                                        value={signatureForm.data.city}
+                                        onChange={(e) => signatureForm.setData('city', e.target.value)}
+                                        placeholder={certificateSignatureDefaults.city || 'Jakarta'}
+                                        error={signatureForm.errors.city}
+                                    />
+                                    <Input
+                                        id="sig-date"
+                                        label="Tanggal Generate / Terbit"
+                                        type="date"
+                                        value={signatureForm.data.date}
+                                        onChange={(e) => signatureForm.setData('date', e.target.value)}
+                                        helperText="Tanggal surat & acuan masa berlaku 3 tahun"
+                                        error={signatureForm.errors.date}
+                                    />
+                                    <Input
+                                        id="sig-org"
+                                        label="Organisasi"
+                                        value={signatureForm.data.organization}
+                                        onChange={(e) => signatureForm.setData('organization', e.target.value)}
+                                        placeholder={certificateSignatureDefaults.organization || 'Pengurus Besar PERKEMI'}
+                                        error={signatureForm.errors.organization}
+                                    />
+                                    <Input
+                                        id="sig-pos"
+                                        label="Jabatan"
+                                        value={signatureForm.data.position}
+                                        onChange={(e) => signatureForm.setData('position', e.target.value)}
+                                        placeholder={certificateSignatureDefaults.position || 'Ketua Umum,'}
+                                        error={signatureForm.errors.position}
+                                    />
+                                    <div className="sm:col-span-2">
+                                        <Input
+                                            id="sig-name"
+                                            label="Nama Penandatangan"
+                                            value={signatureForm.data.signer_name}
+                                            onChange={(e) => signatureForm.setData('signer_name', e.target.value)}
+                                            placeholder={certificateSignatureDefaults.signer_name || 'Laksdya TNI (Purn) Prof. Dr. Agus Setiadji, S.A.P., M.A.'}
+                                            error={signatureForm.errors.signer_name}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 border border-[#DCE7F3] bg-[#F8FBFF] p-4">
+                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                        <label className="block text-xs font-semibold uppercase tracking-wider text-[#112743]">
+                                            Tanda Tangan Digital (TTD)
+                                        </label>
+                                        <div className="inline-flex rounded-md border border-[#DCE7F3] bg-white p-0.5 shadow-2xs">
+                                            <button
+                                                type="button"
+                                                onClick={() => setSignatureMode('draw')}
+                                                className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                                                    signatureMode === 'draw'
+                                                        ? 'bg-[#0B63CE] text-white shadow-2xs'
+                                                        : 'text-[#596F88] hover:text-[#112743]'
+                                                }`}
+                                            >
+                                                <Edit3 className="size-3.5" aria-hidden="true" />
+                                                TTD Langsung (Layar)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSignatureMode('upload')}
+                                                className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                                                    signatureMode === 'upload'
+                                                        ? 'bg-[#0B63CE] text-white shadow-2xs'
+                                                        : 'text-[#596F88] hover:text-[#112743]'
+                                                }`}
+                                            >
+                                                <Upload className="size-3.5" aria-hidden="true" />
+                                                Upload File Gambar
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-start">
+                                        {signatureMode === 'draw' ? (
+                                            <div>
+                                                <div className="relative">
+                                                    <canvas
+                                                        ref={signatureCanvasRef}
+                                                        width={480}
+                                                        height={130}
+                                                        onMouseDown={startDrawingSig}
+                                                        onMouseMove={drawSig}
+                                                        onMouseUp={stopDrawingSig}
+                                                        onMouseLeave={stopDrawingSig}
+                                                        onTouchStart={startDrawingSig}
+                                                        onTouchMove={drawSig}
+                                                        onTouchEnd={stopDrawingSig}
+                                                        className="w-full touch-none rounded border-2 border-dashed border-[#BCE0FD] bg-white cursor-crosshair shadow-inner"
+                                                        style={{ height: '130px' }}
+                                                    />
+                                                    {!hasDrawnSig && !signatureForm.data.signature_data && (
+                                                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-[#9AA8BC]">
+                                                            Gores tanda tangan langsung di sini atau klik Generate
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={clearSignatureCanvas}
+                                                            className="inline-flex items-center gap-1 rounded border border-[#DCE7F3] bg-white px-2.5 py-1 text-xs font-medium text-[#112743] hover:bg-[#F4F8FD]"
+                                                        >
+                                                            <RotateCcw className="size-3 text-[#6B7C93]" aria-hidden="true" />
+                                                            Bersihkan Canvas
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={autoGenerateSignature}
+                                                            className="inline-flex items-center gap-1 rounded border border-[#BCE0FD] bg-[#F0F6FE] px-2.5 py-1 text-xs font-medium text-[#0B63CE] hover:bg-[#E1EFFE]"
+                                                        >
+                                                            <Sparkles className="size-3" aria-hidden="true" />
+                                                            Generate dari Nama
+                                                        </button>
+                                                    </div>
+                                                    <span className="text-[11px] text-[#6B7C93]">Disimpan transparan</span>
+                                                </div>
+                                                {signatureForm.errors.signature_data && (
+                                                    <p className="mt-1 text-xs text-[#DD4D7C]">{signatureForm.errors.signature_data}</p>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <FileInput
+                                                    id="sig-image"
+                                                    accept="image/png,image/jpeg,image/webp"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0] || null;
+                                                        signatureForm.setData('signature_image', file);
+                                                        if (file) {
+                                                            const reader = new FileReader();
+                                                            reader.onload = (ev) => setSignaturePreview(ev.target.result);
+                                                            reader.readAsDataURL(file);
+                                                        }
+                                                    }}
+                                                    error={signatureForm.errors.signature_image}
+                                                    helperText="Format PNG transparan disarankan. Maksimal 2MB."
+                                                />
+                                                <p className="mt-2 text-xs text-[#6B7C93]">
+                                                    TTD digital akan disematkan di antara Jabatan dan Nama Penandatangan pada sertifikat peserta.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {signaturePreview ? (
+                                            <div className="rounded-lg border border-[#DCE7F3] bg-white p-3 text-center shadow-xs">
+                                                <p className="mb-2 text-xs font-semibold text-[#0E2747]">Pratinjau TTD Digital</p>
+                                                <div className="flex h-24 items-center justify-center rounded border border-dashed border-[#BCE0FD] bg-[repeating-conic-gradient(#f0f4f8_0%_25%,#ffffff_0%_50%)] bg-[length:16px_16px] p-2">
+                                                    <img
+                                                        src={signaturePreview}
+                                                        alt="Pratinjau TTD"
+                                                        className="max-h-full max-w-full object-contain"
+                                                    />
+                                                </div>
+                                                <div className="mt-2 flex flex-col items-center gap-1">
+                                                    <span className="text-[11px] font-medium text-[#28A745]">✓ Siap disematkan</span>
+                                                    {certificateSignatureSettings.signature_path && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleDeleteSignature}
+                                                            disabled={isDeletingSignature}
+                                                            className="inline-flex items-center gap-1 text-xs text-[#DD4D7C] hover:underline"
+                                                        >
+                                                            <Trash2 className="size-3" aria-hidden="true" />
+                                                            {isDeletingSignature ? 'Menghapus...' : 'Hapus TTD Tersimpan'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-[#DCE7F3] bg-white p-4 text-center text-xs text-[#6B7C93]">
+                                                Belum ada TTD digital. Buat langsung atau unggah file.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-[#DCE7F3] pt-4">
+                                    <Button type="submit" icon={Save} loading={signatureForm.processing}>
+                                        Simpan Pengaturan TTD
+                                    </Button>
+                                </div>
+                            </form>
+                        </details>
 
                         <details className="group border border-[#DCE7F3] bg-white">
                             <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 p-4 font-semibold text-[#0E2747] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] sm:px-5">
@@ -4525,20 +4859,40 @@ export default function Show({
                             <div className="flex flex-wrap items-center justify-between gap-4 border border-[#BCE0FD] bg-[#EAF5FF] p-4 sm:p-5">
                                 <div>
                                     <h3 className="text-sm font-semibold text-[#0E2747]">Generate dokumen otomatis</h3>
-                                    <p className="mt-1 max-w-2xl text-xs leading-5 text-[#425973]">Simpan pengaturan nomor event terlebih dahulu. Sertifikat dan e-transkrip yang belum ada akan dibuat berurutan per jalur; PDF serta nomor yang sudah terbit tetap digunakan.</p>
+                                    <p className="mt-1 max-w-2xl text-xs leading-5 text-[#425973]">Simpan pengaturan nomor event & TTD terlebih dahulu. Anda dapat membuat berkas yang belum ada atau membuat ulang seluruh sertifikat agar memuat TTD dan tanggal terbit terbaru.</p>
                                 </div>
-                                <Button
-                                    type="button"
-                                    icon={Sparkles}
-                                    loading={isGeneratingDocuments}
-                                    onClick={() => router.post(`/admin/event/${event.id}/dokumen/generate`, {}, {
-                                        preserveScroll: true,
-                                        onStart: () => setIsGeneratingDocuments(true),
-                                        onFinish: () => setIsGeneratingDocuments(false),
-                                    })}
-                                >
-                                    Generate semua yang belum ada
-                                </Button>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {(stats.certificate_files_count > 0 || stats.transcript_files_count > 0) && (
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            icon={RotateCcw}
+                                            loading={isGeneratingDocuments}
+                                            onClick={() => {
+                                                if (!confirm('Generate ulang semua sertifikat & transkrip agar menggunakan TTD digital, tanggal terbit, dan nomor terbaru?')) return;
+                                                router.post(`/admin/event/${event.id}/dokumen/generate`, { regenerate: true }, {
+                                                    preserveScroll: true,
+                                                    onStart: () => setIsGeneratingDocuments(true),
+                                                    onFinish: () => setIsGeneratingDocuments(false),
+                                                });
+                                            }}
+                                        >
+                                            Generate Ulang Semua
+                                        </Button>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        icon={Sparkles}
+                                        loading={isGeneratingDocuments}
+                                        onClick={() => router.post(`/admin/event/${event.id}/dokumen/generate`, {}, {
+                                            preserveScroll: true,
+                                            onStart: () => setIsGeneratingDocuments(true),
+                                            onFinish: () => setIsGeneratingDocuments(false),
+                                        })}
+                                    >
+                                        Generate yang belum ada
+                                    </Button>
+                                </div>
                             </div>
                         )}
 

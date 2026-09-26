@@ -622,6 +622,8 @@ class AdminEventDetailService
             'documentNumberLabels' => EventDocumentGenerator::NUMBER_LABELS,
             'documentNumberDefaults' => $this->documentGenerator->adminNumberSettings(),
             'documentNumberOverrides' => $event->document_number_settings ?? [],
+            'certificateSignatureSettings' => $this->documentGenerator->effectiveSignatureSettings($event),
+            'certificateSignatureDefaults' => $this->documentGenerator->adminSignatureSettings(),
             'event' => [
                 'id' => $event->id,
                 'name' => $event->name,

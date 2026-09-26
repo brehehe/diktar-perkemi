@@ -5,6 +5,9 @@ namespace App\Services;
 use App\Models\Event;
 use App\Models\EventParticipant;
 use App\Models\Setting;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -207,6 +210,95 @@ class EventDocumentGenerator
         return 'document_number_'.strtolower($trackCode).'_'.$field;
     }
 
+    public const DEFAULT_SIGNATURE_SETTINGS = [
+        'city' => 'Jakarta',
+        'organization' => 'Pengurus Besar PERKEMI',
+        'position' => 'Ketua Umum,',
+        'signer_name' => 'Laksdya TNI (Purn) Prof. Dr. Agus Setiadji, S.A.P., M.A.',
+        'signature_path' => null,
+    ];
+
+    /** @return array{city: string, organization: string, position: string, signer_name: string, signature_path: ?string, signature_url: ?string} */
+    public function adminSignatureSettings(): array
+    {
+        $saved = Setting::query()
+            ->where('group', 'certificate_signatures')
+            ->pluck('value', 'key')
+            ->all();
+
+        $path = $saved['signature_path'] ?? null;
+
+        return [
+            'city' => filled($saved['signature_city'] ?? null) ? trim($saved['signature_city']) : self::DEFAULT_SIGNATURE_SETTINGS['city'],
+            'organization' => filled($saved['signature_organization'] ?? null) ? trim($saved['signature_organization']) : self::DEFAULT_SIGNATURE_SETTINGS['organization'],
+            'position' => filled($saved['signature_position'] ?? null) ? trim($saved['signature_position']) : self::DEFAULT_SIGNATURE_SETTINGS['position'],
+            'signer_name' => filled($saved['signature_signer_name'] ?? null) ? trim($saved['signature_signer_name']) : self::DEFAULT_SIGNATURE_SETTINGS['signer_name'],
+            'signature_path' => $path,
+            'signature_url' => ! empty($path) && Storage::disk('public')->exists($path)
+                ? Storage::disk('public')->url($path)
+                : null,
+        ];
+    }
+
+    /** @return array{city: string, date: string, date_formatted: string, parsed_date: ?CarbonInterface, organization: string, position: string, signer_name: string, signature_path: ?string, signature_url: ?string} */
+    public function effectiveSignatureSettings(Event $event): array
+    {
+        $defaults = $this->adminSignatureSettings();
+        $override = $event->certificate_signature_settings ?? [];
+
+        $city = filled($override['city'] ?? null) ? trim($override['city']) : $defaults['city'];
+        $organization = filled($override['organization'] ?? null) ? trim($override['organization']) : $defaults['organization'];
+        $position = filled($override['position'] ?? null) ? trim($override['position']) : $defaults['position'];
+        $signerName = filled($override['signer_name'] ?? null) ? trim($override['signer_name']) : $defaults['signer_name'];
+        $signaturePath = filled($override['signature_path'] ?? null) ? $override['signature_path'] : $defaults['signature_path'];
+
+        $rawDate = $override['date'] ?? null;
+        $dateFormatted = null;
+        $parsedDate = null;
+
+        if (filled($rawDate)) {
+            try {
+                $parsedDate = Carbon::parse($rawDate);
+                $dateFormatted = $this->indonesianDate($parsedDate);
+            } catch (\Throwable) {
+                $dateFormatted = trim($rawDate);
+            }
+        }
+
+        if (! $dateFormatted) {
+            $parsedDate = $event->end_date ?? today();
+            $dateFormatted = $this->indonesianDate($parsedDate);
+        }
+
+        $signatureUrl = null;
+        if (! empty($signaturePath) && Storage::disk('public')->exists($signaturePath)) {
+            $signatureUrl = Storage::disk('public')->url($signaturePath);
+        }
+
+        return [
+            'city' => $city,
+            'date' => $rawDate ?: ($event->end_date ? $event->end_date->format('Y-m-d') : today()->format('Y-m-d')),
+            'date_formatted' => $dateFormatted,
+            'parsed_date' => $parsedDate,
+            'organization' => $organization,
+            'position' => $position,
+            'signer_name' => $signerName,
+            'signature_path' => $signaturePath,
+            'signature_url' => $signatureUrl,
+        ];
+    }
+
+    public function indonesianDate(CarbonInterface $date): string
+    {
+        $months = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+
+        return $date->format('j').' '.($months[$date->month] ?? $date->format('F')).' '.$date->format('Y');
+    }
+
     /** @return array<string, string> */
     private function savedAdminNumberSettings(): array
     {
@@ -275,28 +367,114 @@ class EventDocumentGenerator
     public function generateCertificate(EventParticipant $eventParticipant, string $certificateNumber, ?string $documentTrackCode = null): string
     {
         $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
+        $eventParticipant->loadMissing(['participant', 'event']);
         $participant = $eventParticipant->participant;
+        $event = $eventParticipant->event ?? Event::query()->find($eventParticipant->event_id);
+        $sigSettings = $event ? $this->effectiveSignatureSettings($event) : [
+            'city' => self::DEFAULT_SIGNATURE_SETTINGS['city'],
+            'organization' => self::DEFAULT_SIGNATURE_SETTINGS['organization'],
+            'position' => self::DEFAULT_SIGNATURE_SETTINGS['position'],
+            'signer_name' => self::DEFAULT_SIGNATURE_SETTINGS['signer_name'],
+            'date_formatted' => $this->indonesianDate(today()),
+            'parsed_date' => today(),
+            'signature_path' => null,
+        ];
+
         $overlays = $trackCode === 'PD' ? $this->pdCertificateOverlays() : [];
-        $overlays[] = $this->whiteRectangle(750, 260, 440, 48);
-        $overlays[] = $this->text($certificateNumber, 780, 297, 27, true);
+
+        // 1. Nomor Sertifikat: Starts right after "Nomor : " (ends ~688 on PED/PEN)
+        $certNumTop = match ($trackCode) {
+            'PN', 'PD' => 285,
+            'WAD' => 292,
+            'WAN' => 274,
+            default => 304,
+        };
+        $overlays[] = $this->whiteRectangle(698, 260, 520, 52);
+        $overlays[] = $this->text($certificateNumber, 708, $certNumTop, 26, true);
+
+        // 2. Colons & Data Peserta alignment
+        $colonX = match ($trackCode) {
+            'PN', 'PD' => 700,
+            'PEN' => 720,
+            default => 730,
+        };
+        $dataX = $colonX + 18;
 
         if ($participant?->name) {
-            $overlays[] = $this->text($participant->name, 790, 410, $this->participantNameSize($participant->name), true);
+            $overlays[] = $this->text($participant->name, $dataX, 417, $this->participantNameSize($participant->name), true);
         }
 
+        // Tingkat (y=460)
+        // Keep Dan Roman numeral strictly aligned with all other participant details at $dataX
         $danRoman = $this->danRoman($participant?->dan_rank);
-
         if ($danRoman) {
-            $overlays[] = $this->text($danRoman, 790, 452, 26);
+            $overlays[] = $this->text($danRoman, $dataX, 460, 25);
         }
 
         if ($participant?->kenshi_id_number) {
-            $overlays[] = $this->text($participant->kenshi_id_number, 790, 494, 25);
+            $overlays[] = $this->text($participant->kenshi_id_number, $dataX, 502, 25);
         }
 
+        // Tempat/Tanggal Lahir
+        $birthPlace = trim((string) ($participant?->birth_place ?? ''));
+        $birthDate = $participant?->birth_date;
+        $formattedBirthDate = $birthDate ? $this->indonesianDate($birthDate) : '';
+        $ttl = match (true) {
+            $birthPlace !== '' && $formattedBirthDate !== '' => "{$birthPlace}, {$formattedBirthDate}",
+            $birthPlace !== '' => $birthPlace,
+            $formattedBirthDate !== '' => $formattedBirthDate,
+            default => '-',
+        };
+        $overlays[] = $this->text($ttl, $dataX, 544, 25);
+
         if ($participant?->origin_province) {
-            $overlays[] = $this->text($participant->origin_province, 790, 577, 25);
+            $overlays[] = $this->text($participant->origin_province, $dataX, 584, 25);
         }
+
+        // 3. Masa Berlaku 3 Tahun
+        $issueDate = $sigSettings['parsed_date'] ?? $event?->end_date ?? today();
+        $validUntil = $issueDate->copy()->addYears(3);
+        $validUntilStr = $this->indonesianDate($validUntil).',';
+
+        // Cover gap and template printed "2029," without covering "kecuali" (starts at x=786)
+        $overlays[] = $this->whiteRectangle(432, 698, 350, 34);
+        $overlays[] = $this->text($validUntilStr, 436, 723, 23, true);
+
+        // 4. TTD Block
+        $overlays[] = $this->whiteRectangle(650, 775, 750, 185);
+
+        $centerX = 1020;
+        // Line 1: Kota, Tanggal
+        $cityDateLine = "{$sigSettings['city']}, {$sigSettings['date_formatted']}";
+        $cityDateWidth = mb_strlen($cityDateLine) * 23 * 0.44;
+        $overlays[] = $this->text($cityDateLine, $centerX - ($cityDateWidth / 2), 804, 23);
+
+        // Line 2: Organisasi (bold)
+        $orgLine = $sigSettings['organization'];
+        $orgWidth = mb_strlen($orgLine) * 24 * 0.52;
+        $overlays[] = $this->text($orgLine, $centerX - ($orgWidth / 2), 834, 24, true);
+
+        // Line 3: Jabatan
+        $posLine = $sigSettings['position'];
+        $posWidth = mb_strlen($posLine) * 23 * 0.44;
+        $overlays[] = $this->text($posLine, $centerX - ($posWidth / 2), 864, 23);
+
+        // Signature image (if exists)
+        if (! empty($sigSettings['signature_path']) && Storage::disk('public')->exists($sigSettings['signature_path'])) {
+            $fullSigPath = Storage::disk('public')->path($sigSettings['signature_path']);
+            if (is_readable($fullSigPath)) {
+                $sigW = 180;
+                $sigH = 65;
+                $overlays[] = $this->imageOverlay($fullSigPath, $centerX - ($sigW / 2), 870, $sigW, $sigH);
+            }
+        }
+
+        // Line 4: Nama Penandatangan
+        $nameLine = $sigSettings['signer_name'];
+        $nameWidth = mb_strlen($nameLine) * 22 * 0.41;
+        $nameX = $centerX - ($nameWidth / 2);
+        $overlays[] = $this->text($nameLine, $nameX, 946, 22);
+        $overlays[] = $this->coloredRectangle($nameX, 949, $nameWidth, 1.5, [0, 0, 0]);
 
         return $this->createPdf(
             $this->templatePath('certificate', $trackCode),
@@ -309,8 +487,31 @@ class EventDocumentGenerator
     {
         $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
         $overlays = $trackCode === 'PD' ? $this->pdTranscriptOverlays($eventParticipant) : [];
-        $overlays[] = $this->whiteRectangle(750, 267, 420, 40);
-        $overlays[] = $this->text($transcriptNumber, 780, 297, 24, true);
+
+        $rectX = match ($trackCode) {
+            'WAD' => 690,
+            'PEN' => 718,
+            'PN', 'PD' => 725,
+            'WAN' => 722,
+            default => 732, // PED colon ends at 724
+        };
+
+        $textX = match ($trackCode) {
+            'WAD' => 698,
+            'PEN' => 726,
+            'PN', 'PD' => 733,
+            'WAN' => 730,
+            default => 740, // PED
+        };
+
+        $top = match ($trackCode) {
+            'WAD' => 319,
+            'PED', 'WAN' => 294,
+            default => 304, // PEN, PN, PD
+        };
+
+        $overlays[] = $this->whiteRectangle($rectX, 260, 480, 52);
+        $overlays[] = $this->text($transcriptNumber, $textX, $top, 24, true);
 
         return $this->createPdf(
             $this->templatePath('transcript', $trackCode),
@@ -415,7 +616,7 @@ class EventDocumentGenerator
     }
 
     /**
-     * @param  array<int, array{type: string, x: float, top: float, width?: float, height?: float, text?: string, size?: float, bold?: bool, color?: array<int, float>}>  $overlays
+     * @param  array<int, array{type: string, x: float, top: float, width?: float, height?: float, text?: string, size?: float, bold?: bool, color?: array<int, float>, path?: string}>  $overlays
      */
     private function createPdf(string $templatePath, array $overlays, string $title): string
     {
@@ -435,12 +636,71 @@ class EventDocumentGenerator
         $content = sprintf("q\n%.6F 0 0 %.6F %.6F %.6F cm\n", $scale, $scale, $offsetX, $offsetY);
         $content .= "q\n{$width} 0 0 {$height} 0 0 cm\n/Im0 Do\nQ\n";
 
+        $extraObjects = [];
+        $imageXObjects = [];
+        $nextObjNum = 9;
+        $imgCount = 0;
+
+        foreach ($overlays as $overlay) {
+            if ($overlay['type'] === 'image' && ! empty($overlay['path']) && is_readable($overlay['path'])) {
+                $gd = @imagecreatefromstring((string) file_get_contents($overlay['path']));
+                if ($gd) {
+                    $imgCount++;
+                    $imName = "/Im{$imgCount}";
+                    $sw = imagesx($gd);
+                    $sh = imagesy($gd);
+                    $rgb = '';
+                    $alpha = '';
+                    $hasAlpha = false;
+
+                    for ($y = 0; $y < $sh; $y++) {
+                        for ($x = 0; $x < $sw; $x++) {
+                            $rgba = imagecolorat($gd, $x, $y);
+                            $r = ($rgba >> 16) & 0xFF;
+                            $g = ($rgba >> 8) & 0xFF;
+                            $b = $rgba & 0xFF;
+                            $a = ($rgba >> 24) & 0x7F;
+                            if ($a > 0) {
+                                $hasAlpha = true;
+                            }
+                            $rgb .= chr($r).chr($g).chr($b);
+                            $alpha .= chr((int) round((127 - $a) * 255 / 127));
+                        }
+                    }
+                    imagedestroy($gd);
+
+                    $rgbData = gzcompress($rgb);
+                    $imgObjNum = $nextObjNum++;
+
+                    if ($hasAlpha) {
+                        $smaskData = gzcompress($alpha);
+                        $smaskObjNum = $nextObjNum++;
+                        $extraObjects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask {$smaskObjNum} 0 R /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
+                        $extraObjects[$smaskObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($smaskData)." >>\nstream\n{$smaskData}\nendstream";
+                    } else {
+                        $extraObjects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
+                    }
+
+                    $pdfY = $height - $overlay['top'] - $overlay['height'];
+                    $imageStream = "q\n{$overlay['width']} 0 0 {$overlay['height']} {$overlay['x']} {$pdfY} cm\n{$imName} Do\nQ\n";
+                    $imageXObjects[$imName] = [
+                        'objNum' => $imgObjNum,
+                        'stream' => $imageStream,
+                    ];
+                }
+            }
+        }
+
         foreach ($overlays as $overlay) {
             if ($overlay['type'] === 'rectangle') {
                 $pdfY = $height - $overlay['top'] - $overlay['height'];
                 $color = implode(' ', $overlay['color'] ?? [1, 1, 1]);
                 $content .= "{$color} rg\n{$overlay['x']} {$pdfY} {$overlay['width']} {$overlay['height']} re f\n";
 
+                continue;
+            }
+
+            if ($overlay['type'] === 'image') {
                 continue;
             }
 
@@ -451,18 +711,33 @@ class EventDocumentGenerator
             $content .= "{$color} rg\nBT\n{$font} {$overlay['size']} Tf\n1 0 0 1 {$overlay['x']} {$pdfY} Tm\n({$text}) Tj\nET\n";
         }
 
+        foreach ($imageXObjects as $imgData) {
+            $content .= $imgData['stream'];
+        }
+
         $content .= "Q\n";
+
+        $xObjectsDict = '/Im0 4 0 R';
+        foreach ($imageXObjects as $name => $imgData) {
+            $xObjectsDict .= " {$name} {$imgData['objNum']} 0 R";
+        }
 
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
             2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-            3 => "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Resources << /XObject << /Im0 4 0 R >> /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 7 0 R >>",
+            3 => "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Resources << /XObject << {$xObjectsDict} >> /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 7 0 R >>",
             4 => "<< /Type /XObject /Subtype /Image /Width {$width} /Height {$height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ".strlen($image)." >>\nstream\n{$image}\nendstream",
             5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>',
             6 => '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>',
             7 => '<< /Length '.strlen($content)." >>\nstream\n{$content}endstream",
             8 => '<< /Title ('.$this->pdfText($title).') /Creator (Pustaka Penataran) >>',
         ];
+
+        foreach ($extraObjects as $num => $obj) {
+            $objects[$num] = $obj;
+        }
+
+        ksort($objects);
 
         $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
         $offsets = [0];
@@ -485,6 +760,12 @@ class EventDocumentGenerator
         $pdf .= "startxref\n{$xrefOffset}\n%%EOF";
 
         return $pdf;
+    }
+
+    /** @return array{type: string, path: string, x: float, top: float, width: float, height: float} */
+    private function imageOverlay(string $path, float $x, float $top, float $width, float $height): array
+    {
+        return compact('path', 'x', 'top', 'width', 'height') + ['type' => 'image'];
     }
 
     /** @param  array<int, float>  $color

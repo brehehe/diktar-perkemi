@@ -14,6 +14,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -109,6 +110,7 @@ class ParticipantController extends Controller
                 'email' => $p->email,
                 'kenshi_id' => $p->kenshi_id,
                 'phone' => $p->phone,
+                'photo_url' => $p->photo_url,
                 'dan_level' => $p->dan_level,
                 'dan_roman' => $p->dan_roman,
                 'origin' => $p->origin,
@@ -240,6 +242,7 @@ class ParticipantController extends Controller
                 'email' => $participant->email,
                 'kenshi_id' => $participant->kenshi_id,
                 'phone' => $participant->phone,
+                'photo_url' => $participant->photo_url,
                 'origin' => $participant->origin,
                 'dojo' => $participant->dojo,
                 'dan_level' => $participant->dan_level,
@@ -294,6 +297,14 @@ class ParticipantController extends Controller
 
             $participant = Participant::create($participantData);
 
+            if ($request->hasFile('photo')) {
+                $path = $request->file('photo')->store("participants/{$participant->id}", 'public');
+                $participant->update(['photo_path' => $path]);
+                if ($participant->user) {
+                    $participant->user->update(['avatar_path' => $path]);
+                }
+            }
+
             if (! empty($validated['event_id'])) {
                 $trackCode = $request->input('track_code', 'PD');
                 EventParticipant::firstOrCreate(
@@ -322,6 +333,25 @@ class ParticipantController extends Controller
         $validated = $request->validated();
         DB::transaction(function () use ($participant, $validated, $request): void {
             $participant->update($this->participantAttributes($validated));
+
+            if ($request->boolean('remove_photo')) {
+                if ($participant->photo_path) {
+                    Storage::disk('public')->delete($participant->photo_path);
+                }
+                $participant->update(['photo_path' => null]);
+                if ($participant->user) {
+                    $participant->user->update(['avatar_path' => null]);
+                }
+            } elseif ($request->hasFile('photo')) {
+                if ($participant->photo_path) {
+                    Storage::disk('public')->delete($participant->photo_path);
+                }
+                $path = $request->file('photo')->store("participants/{$participant->id}", 'public');
+                $participant->update(['photo_path' => $path]);
+                if ($participant->user) {
+                    $participant->user->update(['avatar_path' => $path]);
+                }
+            }
 
             if (! empty($validated['event_id'])) {
                 $trackCode = $request->input('track_code', 'PD');

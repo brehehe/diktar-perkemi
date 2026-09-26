@@ -174,6 +174,7 @@ class AdminEventDetailService
             'id' => $ep->id,
             'participant_id' => $ep->participant_id,
             'name' => $ep->participant?->name ?? '-',
+            'photo_url' => $ep->participant?->photo_url,
             'email' => $ep->participant?->email ?? '-',
             'kenshi_id' => $ep->participant?->kenshi_id ?? '-',
             'phone' => $ep->participant?->phone ?? '-',

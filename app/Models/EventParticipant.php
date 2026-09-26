@@ -129,4 +129,9 @@ class EventParticipant extends Model
 
         return null;
     }
+
+    public function getPhotoUrlAttribute(): ?string
+    {
+        return $this->participant?->photo_url;
+    }
 }

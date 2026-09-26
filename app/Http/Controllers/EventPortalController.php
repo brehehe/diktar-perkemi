@@ -19,6 +19,7 @@ use App\Models\QuestionBank;
 use App\Services\EventAttendanceService;
 use App\Services\EventDocumentGenerator;
 use App\Services\EventLearningRoomService;
+use App\Services\QrCodeService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -447,10 +448,12 @@ class EventPortalController extends Controller
 
         abort_unless($module->event_id === $event->id && $module->publication_status === 'published'
             && $module->source_type === 'uploaded_pdf' && $module->source_file_path, 404);
+        abort_unless((bool) $enrollment->checked_in_at, 403, 'Anda harus melakukan check-in terlebih dahulu sebelum membuka materi.');
         abort_unless(! $module->track_codes || in_array($enrollment->track_code, $module->track_codes, true), 403);
 
-        $activeRequiredSessionIds = $event->sessions()->where('event_module_id', $module->id)
-            ->filter(fn ($s) => ! in_array($s->attendance_setting, ['none', 'disabled'], true))
+        $activeRequiredSessionIds = $event->sessions()
+            ->where('event_module_id', $module->id)
+            ->whereNotIn('attendance_setting', ['none', 'disabled'])
             ->pluck('id');
         if ($activeRequiredSessionIds->isNotEmpty()) {
             abort_unless(EventAttendance::where('event_id', $event->id)
@@ -1048,5 +1051,55 @@ class EventPortalController extends Controller
             : "Ujian selesai. Nilai Anda: {$finalScore} (Kriteria kelulusan: {$package->passing_score}).";
 
         return redirect()->route('event.learning-room', $slug)->with('success', $statusMessage);
+    }
+
+    /**
+     * View and print participant's own ID card.
+     */
+    public function myIdCard(Request $request, string $slug): Response|RedirectResponse
+    {
+        $event = Event::where('slug', $slug)->firstOrFail();
+        $participant = Participant::where('user_id', $request->user()->id)->first();
+
+        if (! $participant) {
+            return redirect()->route('event.mine')->with('error', 'Data kenshi Anda belum terdaftar.');
+        }
+
+        $ep = EventParticipant::with(['participant.user', 'track'])
+            ->where('event_id', $event->id)
+            ->where('participant_id', $participant->id)
+            ->firstOrFail();
+
+        $qrSvg = QrCodeService::svg($ep->participant?->kenshi_id_number ?? "KNS-{$ep->id}", 200, '#0E2747', '#FFFFFF');
+
+        return Inertia::render('Admin/Events/PrintIdCard', [
+            'event' => [
+                'id' => $event->id,
+                'title' => $event->title ?? $event->name,
+                'name' => $event->name,
+                'slug' => $event->slug,
+                'place' => $event->place ?? $event->location,
+                'start_date' => $event->start_date?->format('d F Y'),
+                'end_date' => $event->end_date?->format('d F Y'),
+                'date_formatted' => $event->date_formatted,
+            ],
+            'cards' => [
+                [
+                    'id' => $ep->id,
+                    'name' => $ep->participant?->name ?? 'Peserta',
+                    'kenshi_id' => $ep->participant?->kenshi_id ?? '-',
+                    'dan_roman' => $ep->participant?->dan_roman ?? '-',
+                    'origin' => $ep->participant?->origin ?? '-',
+                    'dojo' => $ep->participant?->dojo ?? '-',
+                    'track_name' => $ep->track?->name ?? $ep->track_code,
+                    'track_code' => $ep->track_code,
+                    'track_badge' => $ep->track?->badge_color ?? 'bg-slate-100 text-slate-700',
+                    'rotation_group' => $ep->rotation_group,
+                    'photo_url' => $ep->participant?->photo_url,
+                    'qr_svg' => $qrSvg,
+                ],
+            ],
+            'single' => true,
+        ]);
     }
 }

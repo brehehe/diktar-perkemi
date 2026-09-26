@@ -11,8 +11,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
-#[Fillable(['name', 'email', 'password', 'role'])]
+#[Fillable(['name', 'email', 'password', 'role', 'avatar_path'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -79,6 +81,24 @@ class User extends Authenticatable
     public function participants(): HasMany
     {
         return $this->hasMany(Participant::class);
+    }
+
+    public function participant(): HasOne
+    {
+        return $this->hasOne(Participant::class);
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if ($this->avatar_path) {
+            if (Str::startsWith($this->avatar_path, ['http://', 'https://', '/'])) {
+                return $this->avatar_path;
+            }
+
+            return Storage::disk('public')->url($this->avatar_path);
+        }
+
+        return $this->participant?->photo_url;
     }
 
     /**

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Participant extends Model
@@ -40,6 +41,7 @@ class Participant extends Model
         'last_certificate_number',
         'target_certification',
         'simperkemi_data',
+        'photo_path',
         'notes',
         'admin_notes',
     ];
@@ -56,6 +58,7 @@ class Participant extends Model
         'admin_notes',
         'dan_level',
         'dan_roman',
+        'photo_url',
     ];
 
     /**
@@ -210,5 +213,18 @@ class Participant extends Model
         }
 
         return str_replace('-DAN', '', $this->dan_rank);
+    }
+
+    public function getPhotoUrlAttribute(): ?string
+    {
+        if (empty($this->photo_path)) {
+            return null;
+        }
+
+        if (Str::startsWith($this->photo_path, ['http://', 'https://', '/'])) {
+            return $this->photo_path;
+        }
+
+        return Storage::disk('public')->url($this->photo_path);
     }
 }

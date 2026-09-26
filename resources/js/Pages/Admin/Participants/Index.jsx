@@ -33,6 +33,7 @@ import {
     Upload,
     Download,
     FileSpreadsheet,
+    Camera,
 } from 'lucide-react';
 
 export default function Index({ participants, filters = {}, stats = {}, availableTracks = [], events = [] }) {
@@ -57,6 +58,8 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
         track_code: '',
     });
 
+    const [photoPreview, setPhotoPreview] = useState(null);
+
     const form = useForm({
         name: '',
         email: '',
@@ -67,6 +70,8 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
         dan_level: 2,
         admin_notes: '',
         event_id: '',
+        photo: null,
+        remove_photo: false,
     });
 
     const applyFilters = (customParams = {}) => {
@@ -105,6 +110,7 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
 
     const openCreateModal = () => {
         setEditingParticipant(null);
+        setPhotoPreview(null);
         form.setData({
             name: '',
             email: '',
@@ -115,12 +121,15 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
             dan_level: 2,
             admin_notes: '',
             event_id: '',
+            photo: null,
+            remove_photo: false,
         });
         setIsModalOpen(true);
     };
 
     const openEditModal = (p) => {
         setEditingParticipant(p);
+        setPhotoPreview(p.photo_url || null);
         form.setData({
             name: p.name || '',
             email: p.email || '',
@@ -131,24 +140,43 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
             dan_level: p.dan_level || 2,
             admin_notes: p.admin_notes || '',
             event_id: p.event_id ? String(p.event_id) : '',
+            photo: null,
+            remove_photo: false,
         });
         setIsModalOpen(true);
+    };
+
+    const handlePhotoChange = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            form.setData((prev) => ({ ...prev, photo: file, remove_photo: false }));
+            setPhotoPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleRemovePhoto = () => {
+        form.setData((prev) => ({ ...prev, photo: null, remove_photo: true }));
+        setPhotoPreview(null);
     };
 
     const handleSave = (e) => {
         e.preventDefault();
         if (editingParticipant) {
-            form.put(`/admin/master/peserta/${editingParticipant.id}`, {
+            form.post(`/admin/master/peserta/${editingParticipant.id}`, {
+                forceFormData: true,
                 onSuccess: () => {
                     setIsModalOpen(false);
                     setEditingParticipant(null);
+                    setPhotoPreview(null);
                 },
             });
         } else {
             form.post('/admin/master/peserta', {
+                forceFormData: true,
                 onSuccess: () => {
                     setIsModalOpen(false);
                     form.reset();
+                    setPhotoPreview(null);
                 },
             });
         }
@@ -171,8 +199,12 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
             header: 'Nama Kenshi & Kontak',
             cell: (row) => (
                 <div className="flex items-center gap-3 py-1">
-                    <div className="w-10 h-10 rounded-full bg-[#EAF5FF] border border-[#0B63CE]/30 flex items-center justify-center text-[#0B63CE] font-bold text-xs shrink-0">
-                        {row.name.substring(0, 2).toUpperCase()}
+                    <div className="w-10 h-10 rounded-full bg-[#EAF5FF] border border-[#0B63CE]/30 flex items-center justify-center text-[#0B63CE] font-bold text-xs shrink-0 overflow-hidden shadow-xs">
+                        {row.photo_url ? (
+                            <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                        ) : (
+                            row.name.substring(0, 2).toUpperCase()
+                        )}
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
@@ -461,6 +493,52 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
                 }
             >
                 <form id="participant-modal-form" onSubmit={handleSave} className="space-y-4">
+                    {/* Foto Kenshi Upload */}
+                    <div className="p-3.5 rounded-xl border border-[#DCE7F3] bg-[#F8FBFF] flex items-center gap-4">
+                        <div className="relative w-16 h-16 rounded-full border-2 border-[#0B63CE]/30 bg-white overflow-hidden shadow-xs shrink-0 flex items-center justify-center">
+                            {photoPreview ? (
+                                <img src={photoPreview} alt="Preview Foto" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="flex flex-col items-center justify-center text-[#6B7C93]">
+                                    <Camera className="w-6 h-6 text-[#0B63CE]" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                            <label className="block text-xs font-bold text-[#0E2747]">
+                                Pasfoto Resmi Kenshi
+                            </label>
+                            <p className="text-[11px] text-[#6B7C93] leading-tight">
+                                JPG, PNG, atau WEBP maks. 5MB. Otomatis terhubung ke akun user, ID card & formulir pendaftaran.
+                            </p>
+                            <div className="flex items-center gap-2 pt-1">
+                                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#DCE7F3] text-xs font-semibold text-[#0E2747] hover:bg-slate-50 hover:border-[#0B63CE] cursor-pointer shadow-xs transition-colors">
+                                    <Camera className="w-3.5 h-3.5 text-[#0B63CE]" />
+                                    <span>{photoPreview ? 'Ganti Foto' : 'Unggah Foto'}</span>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        onChange={handlePhotoChange}
+                                        className="sr-only"
+                                    />
+                                </label>
+                                {photoPreview && (
+                                    <button
+                                        type="button"
+                                        onClick={handleRemovePhoto}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span>Hapus</span>
+                                    </button>
+                                )}
+                            </div>
+                            {form.errors.photo && (
+                                <p className="text-xs text-rose-600 font-medium">{form.errors.photo}</p>
+                            )}
+                        </div>
+                    </div>
+
                     <FormField label="Cakupan (Admin / Event)" error={form.errors.event_id}>
                         <Select
                             value={form.data.event_id || ''}

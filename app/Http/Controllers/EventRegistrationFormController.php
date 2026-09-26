@@ -137,6 +137,7 @@ class EventRegistrationFormController extends Controller
             'submitted_at' => $existingForm->submitted_at?->format('d M Y H:i'),
             'verified_at' => $existingForm->verified_at?->format('d M Y H:i'),
             'verified_by_name' => $existingForm->verifier?->name ?? ($existingForm->status === 'verified' ? 'Budi Santoso' : null),
+            'photo_url' => $participant->photo_url,
         ] : [
             'id' => null,
             'form_type' => $resolved['form_type'],
@@ -185,6 +186,7 @@ class EventRegistrationFormController extends Controller
             'submitted_at' => null,
             'verified_at' => null,
             'verified_by_name' => null,
+            'photo_url' => $participant->photo_url,
         ];
 
         return Inertia::render('Event/RegistrationForm', [
@@ -204,6 +206,7 @@ class EventRegistrationFormController extends Controller
                 'dojo' => $participant->origin_dojo,
                 'city' => $participant->origin_city,
                 'province' => $participant->origin_province,
+                'photo_url' => $participant->photo_url,
                 'track_name' => $enrollment?->track?->name ?? $enrollment?->track_code,
             ],
             'form' => $formData,
@@ -522,6 +525,7 @@ class EventRegistrationFormController extends Controller
             'submitted_at' => $form->submitted_at?->format('d M Y H:i'),
             'verified_at' => $form->verified_at?->format('d M Y H:i'),
             'verified_by_name' => $form->verifier?->name ?? ($form->status === 'verified' ? 'Budi Santoso' : null),
+            'photo_url' => $participant->photo_url,
         ] : [
             'id' => null,
             'form_type' => $resolved['form_type'],
@@ -553,6 +557,7 @@ class EventRegistrationFormController extends Controller
             'submitted_at' => null,
             'verified_at' => null,
             'verified_by_name' => null,
+            'photo_url' => $participant->photo_url,
         ];
 
         return Inertia::render('Event/PrintRegistrationForm', [
@@ -572,6 +577,7 @@ class EventRegistrationFormController extends Controller
                 'dojo' => $participant->origin_dojo,
                 'city' => $participant->origin_city,
                 'province' => $participant->origin_province,
+                'photo_url' => $participant->photo_url,
                 'track_name' => $enrollment?->track?->name ?? $enrollment?->track_code,
             ],
             'form' => $formData,

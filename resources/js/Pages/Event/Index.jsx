@@ -44,6 +44,14 @@ export default function Index({ events = [] }) {
                                     {event.transcript_download_url && <a href={event.transcript_download_url} className="ml-4 mt-2 inline-block text-sm font-semibold text-[#0B63CE] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh transkrip PDF</a>}
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-2">
+                                    <a
+                                        href={`/event/${event.slug}/id-card`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex min-h-11 items-center justify-center px-3.5 py-2 text-sm font-semibold border border-[#DCE7F3] bg-white text-[#0E2747] hover:bg-[#F8FBFF] hover:border-[#0B63CE] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"
+                                    >
+                                        ID Card
+                                    </a>
                                     <Link
                                         href={event.registration_form_url}
                                         className={`inline-flex min-h-11 items-center justify-center px-4 py-2 text-sm font-semibold border ${

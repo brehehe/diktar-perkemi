@@ -63,6 +63,8 @@ import {
     Upload,
     FileEdit,
     Key,
+    CreditCard,
+    Camera,
 } from 'lucide-react';
 
 export default function Show({
@@ -544,6 +546,7 @@ export default function Show({
     const [isAddParticipantModalOpen, setIsAddParticipantModalOpen] = useState(false);
     const [participantMode, setParticipantMode] = useState('existing');
     const [editingParticipant, setEditingParticipant] = useState(null);
+    const [editingParticipantPhotoPreview, setEditingParticipantPhotoPreview] = useState(null);
 
     // Master Linking Modals
     const [isAttachModuleModalOpen, setIsAttachModuleModalOpen] = useState(false);
@@ -672,6 +675,8 @@ export default function Show({
         graduation_status: 'graduated',
         certificate_number: '',
         notes: '',
+        photo: null,
+        remove_photo: false,
     });
 
     const participantAddForm = useForm({
@@ -841,12 +846,27 @@ export default function Show({
         }
     };
 
+    const handleParticipantPhotoChange = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            participantEditForm.setData((prev) => ({ ...prev, photo: file, remove_photo: false }));
+            setEditingParticipantPhotoPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleParticipantRemovePhoto = () => {
+        participantEditForm.setData((prev) => ({ ...prev, photo: null, remove_photo: true }));
+        setEditingParticipantPhotoPreview(null);
+    };
+
     const handleUpdateParticipant = (e) => {
         e.preventDefault();
         if (!editingParticipant) return;
-        participantEditForm.put(`/admin/event/${event.id}/peserta/${editingParticipant.id}`, {
+        participantEditForm.post(`/admin/event/${event.id}/peserta/${editingParticipant.id}`, {
+            forceFormData: true,
             onSuccess: () => {
                 setEditingParticipant(null);
+                setEditingParticipantPhotoPreview(null);
             },
         });
     };
@@ -1099,6 +1119,7 @@ export default function Show({
 
     const openEditParticipantModal = (ep) => {
         setEditingParticipant(ep);
+        setEditingParticipantPhotoPreview(ep.photo_url || null);
         participantEditForm.setData({
             rotation_group: ep.rotation_group || 'A1',
             admin_status: ep.admin_status || 'verified',
@@ -1108,6 +1129,8 @@ export default function Show({
             graduation_status: ep.graduation_status || 'graduated',
             certificate_number: ep.certificate_number || '',
             notes: ep.notes || '',
+            photo: null,
+            remove_photo: false,
         });
     };
 
@@ -2481,6 +2504,20 @@ export default function Show({
                                         Export Excel (Data & Login)
                                     </Button>
                                 </a>
+                                <a
+                                    href={`/admin/event/${event.id}/id-card-semua`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <Button
+                                        variant="secondary"
+                                        icon={<CreditCard className="w-4 h-4" />}
+                                        disabled={participants.length === 0}
+                                        title="Cetak kartu tanda peserta (ID Card) resmi seluruh peserta"
+                                    >
+                                        Cetak Semua ID Card
+                                    </Button>
+                                </a>
                                 <Button
                                     variant="danger"
                                     icon={<Trash2 className="w-4 h-4" />}
@@ -2633,8 +2670,19 @@ export default function Show({
                                             paginatedParticipants.map((p) => (
                                                 <tr key={p.id} className="hover:bg-[#F8FBFF] transition-colors">
                                                     <td className="px-4 py-3">
-                                                        <div className="font-bold text-[#0E2747]">{p.name}</div>
-                                                        <div className="text-[11px] font-mono text-[#6B7C93]">{p.kenshi_id}</div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-9 h-9 rounded-full bg-[#EAF5FF] border border-[#0B63CE]/30 flex items-center justify-center text-[#0B63CE] font-bold text-xs shrink-0 overflow-hidden shadow-xs">
+                                                                {p.photo_url ? (
+                                                                    <img src={p.photo_url} alt={p.name} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    p.name?.substring(0, 2).toUpperCase() || 'KS'
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-bold text-[#0E2747]">{p.name}</div>
+                                                                <div className="text-[11px] font-mono text-[#6B7C93]">{p.kenshi_id}</div>
+                                                            </div>
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.track_badge}`}>
@@ -2677,6 +2725,16 @@ export default function Show({
                                                     </td>
                                                     <td className="px-4 py-3 text-right whitespace-nowrap">
                                                         <div className="flex items-center justify-end gap-1">
+                                                            <a
+                                                                href={`/admin/event/${event.id}/peserta/${p.id}/id-card`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#6B7C93] hover:bg-[#EAF5FF] hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-[#0B63CE]"
+                                                                aria-label={`ID Card peserta ${p.name}`}
+                                                                title={`Cetak ID Card ${p.name}`}
+                                                            >
+                                                                <CreditCard className="w-3.5 h-3.5" />
+                                                            </a>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => openEditParticipantModal(p)}
@@ -6426,6 +6484,52 @@ export default function Show({
                 }
             >
                 <form id="participant-edit-form" onSubmit={handleUpdateParticipant} className="space-y-4">
+                    {/* Foto Kenshi Upload */}
+                    <div className="p-3.5 rounded-xl border border-[#DCE7F3] bg-[#F8FBFF] flex items-center gap-4">
+                        <div className="relative w-16 h-16 rounded-full border-2 border-[#0B63CE]/30 bg-white overflow-hidden shadow-xs shrink-0 flex items-center justify-center">
+                            {editingParticipantPhotoPreview ? (
+                                <img src={editingParticipantPhotoPreview} alt="Preview Foto" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="flex flex-col items-center justify-center text-[#6B7C93]">
+                                    <Camera className="w-6 h-6 text-[#0B63CE]" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                            <label className="block text-xs font-bold text-[#0E2747]">
+                                Pasfoto Resmi Kenshi
+                            </label>
+                            <p className="text-[11px] text-[#6B7C93] leading-tight">
+                                JPG, PNG, atau WEBP maks. 5MB. Otomatis disinkronkan ke Master Peserta, ID card, dan akun user.
+                            </p>
+                            <div className="flex items-center gap-2 pt-1">
+                                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#DCE7F3] text-xs font-semibold text-[#0E2747] hover:bg-slate-50 hover:border-[#0B63CE] cursor-pointer shadow-xs transition-colors">
+                                    <Camera className="w-3.5 h-3.5 text-[#0B63CE]" />
+                                    <span>{editingParticipantPhotoPreview ? 'Ganti Foto' : 'Unggah Foto'}</span>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        onChange={handleParticipantPhotoChange}
+                                        className="sr-only"
+                                    />
+                                </label>
+                                {editingParticipantPhotoPreview && (
+                                    <button
+                                        type="button"
+                                        onClick={handleParticipantRemovePhoto}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span>Hapus</span>
+                                    </button>
+                                )}
+                            </div>
+                            {participantEditForm.errors.photo && (
+                                <p className="text-xs text-rose-600 font-medium">{participantEditForm.errors.photo}</p>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <FormField label="Kelompok Rotasi">
                             <Select

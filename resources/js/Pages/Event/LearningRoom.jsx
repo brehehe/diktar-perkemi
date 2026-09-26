@@ -29,6 +29,7 @@ import {
     Filter,
     History,
     TrendingUp,
+    CreditCard,
 } from 'lucide-react';
 import Button from '../../Components/ui/Button';
 import Badge from '../../Components/ui/Badge';
@@ -136,6 +137,18 @@ export default function LearningRoom({
                             <ArrowLeft className="w-3.5 h-3.5" />
                             <span className="text-[11px]">Event Saya</span>
                         </Link>
+
+                        <a
+                            href={`/event/${event.slug}/id-card`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Cetak ID Card Peserta"
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#DCE7F3] bg-white px-2.5 py-2 text-xs font-semibold text-[#0E2747] shadow-xs transition-colors hover:border-[#0B63CE] hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
+                            title="Buka / Cetak Kartu Tanda Peserta (ID Card)"
+                        >
+                            <CreditCard className="w-3.5 h-3.5 text-[#0B63CE]" />
+                            <span className="hidden sm:inline">ID Card</span>
+                        </a>
 
                         <Link
                             href={`/event/${event.slug}/scan`}
@@ -343,6 +356,15 @@ export default function LearningRoom({
                                     className="font-semibold text-slate-600 hover:text-slate-900"
                                 >
                                     Cetak PB PERKEMI
+                                </a>
+                                <span className="text-slate-300">·</span>
+                                <a
+                                    href={`/event/${event.slug}/id-card`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-semibold text-[#0B63CE] hover:text-[#0A3F82]"
+                                >
+                                    Cetak ID Card
                                 </a>
                             </div>
                         </div>

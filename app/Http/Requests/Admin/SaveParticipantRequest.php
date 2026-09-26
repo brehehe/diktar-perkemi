@@ -34,6 +34,8 @@ class SaveParticipantRequest extends FormRequest
             'dojo' => ['nullable', 'string', 'max:255'],
             'dan_level' => ['nullable', 'integer', 'min:1', 'max:10'],
             'admin_notes' => ['nullable', 'string'],
+            'photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
+            'remove_photo' => ['nullable', 'boolean'],
         ];
     }
 

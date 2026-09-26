@@ -43,7 +43,23 @@ export default function Show({ participant, enrolledEvents = [], matchingUser = 
                 <div className="space-y-6">
                     <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
                         <section aria-labelledby="participant-identity" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
-                            <h2 id="participant-identity" className="font-display text-lg font-bold text-[#0E2747]">Informasi peserta</h2>
+                            <div className="flex items-center gap-4 mb-4 pb-4 border-b border-[#DCE7F3]">
+                                <div className="w-16 h-16 rounded-full border-2 border-[#0B63CE]/30 bg-[#EAF5FF] overflow-hidden flex items-center justify-center font-bold text-[#0B63CE] text-xl shrink-0 shadow-xs">
+                                    {participant.photo_url ? (
+                                        <img src={participant.photo_url} alt={participant.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        participant.name.substring(0, 2).toUpperCase()
+                                    )}
+                                </div>
+                                <div>
+                                    <h2 id="participant-identity" className="font-display text-lg font-bold text-[#0E2747]">{participant.name}</h2>
+                                    <div className="text-xs text-[#6B7C93] flex items-center gap-2 mt-0.5">
+                                        <span className="font-mono font-bold text-[#0B63CE] bg-[#EAF5FF] px-2 py-0.5 rounded">DAN {participant.dan_roman || participant.dan_level}</span>
+                                        <span>•</span>
+                                        <span>{participant.kenshi_id || 'ID Kenshi -'}</span>
+                                    </div>
+                                </div>
+                            </div>
                             <dl className="mt-3">
                                 <Detail label="Nama" value={participant.name} />
                                 <Detail label="Email" value={participant.email} />

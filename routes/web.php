@@ -181,6 +181,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/event/{event}/peserta-baru', [EventController::class, 'createAndAddParticipant'])->name('event.participant.create-and-add');
         Route::post('/event/{event}/jalur', [EventController::class, 'storeTrack'])->name('event.track.store');
         Route::put('/event/{event}/peserta/{eventParticipant}', [EventController::class, 'updateParticipant'])->name('event.participant.update');
+        Route::post('/event/{event}/peserta/{eventParticipant}', [EventController::class, 'updateParticipant'])->name('event.participant.update.post');
+        Route::get('/event/{event}/peserta/{eventParticipant}/id-card', [EventController::class, 'printIdCard'])->name('event.participant.id-card');
+        Route::get('/event/{event}/id-card-semua', [EventController::class, 'printAllIdCards'])->name('event.id-cards.all');
         Route::delete('/event/{event}/peserta/{eventParticipant}/hasil', [AttendanceController::class, 'destroyParticipantResults'])->name('event.participant-results.destroy');
         Route::delete('/event/{event}/peserta/{eventParticipant}', [EventController::class, 'removeParticipant'])->name('event.participant.destroy');
         Route::post('/event/{event}/formulir/{form}/verifikasi', [EventRegistrationFormController::class, 'verify'])->name('event.registration-form.verify');
@@ -238,6 +241,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/master/peserta', [ParticipantController::class, 'store'])->name('master.peserta.store');
         Route::get('/master/peserta/{participant}', [ParticipantController::class, 'show'])->name('master.peserta.show');
         Route::put('/master/peserta/{participant}', [ParticipantController::class, 'update'])->name('master.peserta.update');
+        Route::post('/master/peserta/{participant}', [ParticipantController::class, 'update'])->name('master.peserta.update.post');
         Route::patch('/master/peserta/{participant}/akun', [ParticipantController::class, 'linkAccount'])->name('master.peserta.link-account');
         Route::delete('/master/peserta/{participant}', [ParticipantController::class, 'destroy'])->name('master.peserta.destroy');
 
@@ -323,6 +327,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/event/{event}/pakta-integritas/{participant}/cetak-admin', [EventIntegrityPactController::class, 'print'])->name('event.integrity-pact.admin-print');
     Route::get('/event/{slug}/ruang-belajar', [EventPortalController::class, 'learningRoom'])->name('event.learning-room');
     Route::get('/event/{slug}/scan', [EventPortalController::class, 'scan'])->name('event.scan');
+    Route::get('/event/{slug}/id-card', [EventPortalController::class, 'myIdCard'])->name('event.id-card.mine');
     Route::get('/event/{slug}/sertifikat', [EventPortalController::class, 'downloadCertificate'])->name('event.certificate.mine');
     Route::get('/event/{slug}/transkrip', [EventPortalController::class, 'downloadTranscript'])->name('event.transcript.mine');
     Route::get('/event/{slug}/materi/{module}/pdf', [EventPortalController::class, 'moduleFile'])->name('event.module.file');

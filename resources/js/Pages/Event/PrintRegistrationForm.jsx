@@ -143,11 +143,30 @@ export default function PrintRegistrationForm({
                         </p>
                     </div>
 
-                    {/* Recipient */}
-                    <div className="pt-1 text-[11pt]">
-                        <div>Kepada Yth.</div>
-                        <div className="font-bold">PB PERKEMI</div>
-                        <div>di Jakarta.</div>
+                    {/* Recipient & Pasfoto 3x4 Resmi */}
+                    <div className="pt-1 flex items-start justify-between gap-4">
+                        <div className="text-[11pt]">
+                            <div>Kepada Yth.</div>
+                            <div className="font-bold">PB PERKEMI</div>
+                            <div>di Jakarta.</div>
+                        </div>
+
+                        {/* Pasfoto Resmi 3x4 */}
+                        <div className="w-[110px] h-[145px] border-2 border-slate-700 rounded bg-slate-50 flex flex-col items-center justify-center p-1 text-center shrink-0 overflow-hidden shadow-xs">
+                            {form.photo_url ? (
+                                <img
+                                    src={form.photo_url}
+                                    alt="Pasfoto Peserta Resmi"
+                                    className="w-full h-full object-cover rounded-xs"
+                                />
+                            ) : (
+                                <div className="text-[9pt] font-sans text-slate-500 flex flex-col items-center justify-center">
+                                    <span className="font-bold uppercase tracking-wider text-slate-700">Pas Foto</span>
+                                    <span className="text-[8pt] text-slate-500 font-medium">3 x 4 cm</span>
+                                    <span className="text-[7.5pt] text-slate-400 italic mt-1 leading-tight">(Seragam Dogi)</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Salutation & Opening Paragraph */}

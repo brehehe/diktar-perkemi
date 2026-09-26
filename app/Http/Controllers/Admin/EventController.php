@@ -27,6 +27,7 @@ use App\Services\AdminEventDetailService;
 use App\Services\EventAttendanceScheduleService;
 use App\Services\EventExportService;
 use App\Services\MaterialSourceService;
+use App\Services\QrCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -752,6 +753,8 @@ class EventController extends Controller
             'graduation_status' => ['sometimes', 'in:pending,graduated,not_graduated,remedial'],
             'certificate_number' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string'],
+            'photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
+            'remove_photo' => ['nullable', 'boolean'],
         ]);
 
         if (isset($validated['participant_track_id'])) {
@@ -773,6 +776,29 @@ class EventController extends Controller
             }
         }
 
+        $participant = $eventParticipant->participant;
+        if ($participant) {
+            if ($request->boolean('remove_photo')) {
+                if ($participant->photo_path) {
+                    Storage::disk('public')->delete($participant->photo_path);
+                }
+                $participant->update(['photo_path' => null]);
+                if ($participant->user) {
+                    $participant->user->update(['avatar_path' => null]);
+                }
+            } elseif ($request->hasFile('photo')) {
+                if ($participant->photo_path) {
+                    Storage::disk('public')->delete($participant->photo_path);
+                }
+                $path = $request->file('photo')->store("participants/{$participant->id}", 'public');
+                $participant->update(['photo_path' => $path]);
+                if ($participant->user) {
+                    $participant->user->update(['avatar_path' => $path]);
+                }
+            }
+        }
+
+        unset($validated['photo'], $validated['remove_photo']);
         $eventParticipant->update($validated);
 
         return back()->with('success', 'Data peserta event berhasil diperbarui.');
@@ -1005,6 +1031,91 @@ class EventController extends Controller
                 'duration_jp' => $s->duration_jp,
                 'status' => $s->status ?? 'scheduled',
             ]),
+        ]);
+    }
+
+    /**
+     * Print ID Card for a single event participant.
+     */
+    public function printIdCard(Request $request, Event $event, EventParticipant $eventParticipant): Response
+    {
+        $eventParticipant->load(['participant.user', 'track']);
+
+        $qrSvg = QrCodeService::svg($eventParticipant->participant?->kenshi_id_number ?? "KNS-{$eventParticipant->id}", 200, '#0E2747', '#FFFFFF');
+
+        return Inertia::render('Admin/Events/PrintIdCard', [
+            'event' => [
+                'id' => $event->id,
+                'title' => $event->title ?? $event->name,
+                'name' => $event->name,
+                'slug' => $event->slug,
+                'place' => $event->place ?? $event->location,
+                'start_date' => $event->start_date?->format('d F Y'),
+                'end_date' => $event->end_date?->format('d F Y'),
+                'date_formatted' => $event->date_formatted,
+            ],
+            'cards' => [
+                [
+                    'id' => $eventParticipant->id,
+                    'name' => $eventParticipant->participant?->name ?? 'Peserta',
+                    'kenshi_id' => $eventParticipant->participant?->kenshi_id ?? '-',
+                    'dan_roman' => $eventParticipant->participant?->dan_roman ?? '-',
+                    'origin' => $eventParticipant->participant?->origin ?? '-',
+                    'dojo' => $eventParticipant->participant?->dojo ?? '-',
+                    'track_name' => $eventParticipant->track?->name ?? $eventParticipant->track_code,
+                    'track_code' => $eventParticipant->track_code,
+                    'track_badge' => $eventParticipant->track?->badge_color ?? 'bg-slate-100 text-slate-700',
+                    'rotation_group' => $eventParticipant->rotation_group,
+                    'photo_url' => $eventParticipant->participant?->photo_url,
+                    'qr_svg' => $qrSvg,
+                ],
+            ],
+            'single' => true,
+        ]);
+    }
+
+    /**
+     * Print ID Cards for all verified participants in the event.
+     */
+    public function printAllIdCards(Request $request, Event $event): Response
+    {
+        $eventParticipants = $event->eventParticipants()
+            ->with(['participant.user', 'track'])
+            ->where('admin_status', 'verified')
+            ->get();
+
+        $cards = $eventParticipants->map(function (EventParticipant $ep) {
+            $qrSvg = QrCodeService::svg($ep->participant?->kenshi_id_number ?? "KNS-{$ep->id}", 200, '#0E2747', '#FFFFFF');
+
+            return [
+                'id' => $ep->id,
+                'name' => $ep->participant?->name ?? 'Peserta',
+                'kenshi_id' => $ep->participant?->kenshi_id ?? '-',
+                'dan_roman' => $ep->participant?->dan_roman ?? '-',
+                'origin' => $ep->participant?->origin ?? '-',
+                'dojo' => $ep->participant?->dojo ?? '-',
+                'track_name' => $ep->track?->name ?? $ep->track_code,
+                'track_code' => $ep->track_code,
+                'track_badge' => $ep->track?->badge_color ?? 'bg-slate-100 text-slate-700',
+                'rotation_group' => $ep->rotation_group,
+                'photo_url' => $ep->participant?->photo_url,
+                'qr_svg' => $qrSvg,
+            ];
+        })->values();
+
+        return Inertia::render('Admin/Events/PrintIdCard', [
+            'event' => [
+                'id' => $event->id,
+                'title' => $event->title ?? $event->name,
+                'name' => $event->name,
+                'slug' => $event->slug,
+                'place' => $event->place ?? $event->location,
+                'start_date' => $event->start_date?->format('d F Y'),
+                'end_date' => $event->end_date?->format('d F Y'),
+                'date_formatted' => $event->date_formatted,
+            ],
+            'cards' => $cards,
+            'single' => false,
         ]);
     }
 }

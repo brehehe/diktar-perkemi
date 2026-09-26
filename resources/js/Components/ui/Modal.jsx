@@ -1,4 +1,5 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export default function Modal({
@@ -13,11 +14,16 @@ export default function Modal({
     isProcessing = false,
     onSubmit,
 }) {
+    const [mounted, setMounted] = useState(false);
     const modalRef = useRef(null);
     const previousActiveElement = useRef(null);
     const generatedId = useId();
     const titleId = `${generatedId}-title`;
     const descriptionId = `${generatedId}-description`;
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -64,7 +70,7 @@ export default function Modal({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, isProcessing, onClose]);
 
-    if (!isOpen) return null;
+    if (!isOpen || (!mounted && typeof document === 'undefined')) return null;
 
     const resolvedSize = maxWidth || size;
     const sizes = {
@@ -76,8 +82,12 @@ export default function Modal({
         'max-w-2xl': 'max-w-2xl',
         'max-w-3xl': 'max-w-3xl',
         'max-w-4xl': 'max-w-4xl',
+        'max-w-5xl': 'max-w-5xl',
+        'max-w-6xl': 'max-w-6xl',
         '3xl': 'max-w-3xl',
         '4xl': 'max-w-4xl',
+        '5xl': 'max-w-5xl',
+        '6xl': 'max-w-6xl',
         lg: 'max-w-2xl',
         xl: 'max-w-3xl',
         '2xl': 'max-w-4xl',
@@ -86,9 +96,9 @@ export default function Modal({
 
     const ContainerElement = onSubmit ? 'form' : 'div';
 
-    return (
+    const modalMarkup = (
         <div
-                className={`fixed inset-0 z-50 overflow-y-auto flex items-center justify-center ${resolvedSize === 'full' ? 'p-0' : 'p-4 sm:p-6 py-8 sm:py-12'}`}
+            className={`fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center ${resolvedSize === 'full' ? 'p-0 sm:p-4 md:p-6' : 'p-3 sm:p-6 py-6 sm:py-10'}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? titleId : undefined}
@@ -96,7 +106,7 @@ export default function Modal({
         >
             {/* Backdrop */}
             <div
-                className="fixed inset-0 bg-[#0E2747]/60 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+                className="fixed inset-0 bg-[#0E2747]/75 backdrop-blur-xs motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200 cursor-pointer"
                 onClick={() => !isProcessing && onClose()}
             />
 
@@ -106,17 +116,17 @@ export default function Modal({
                 onSubmit={onSubmit}
                 className={`
                     relative w-full ${sizes[resolvedSize] || sizes.md} my-auto
-                    ${resolvedSize === 'full' ? 'h-dvh max-h-dvh rounded-none pb-[env(safe-area-inset-bottom)]' : 'max-h-[calc(100vh-5rem)] sm:max-h-[calc(100vh-6rem)] rounded-xl'}
+                    ${resolvedSize === 'full' ? 'h-full max-h-screen sm:h-[92vh] sm:max-h-[92vh] rounded-none sm:rounded-2xl' : 'max-h-[calc(100vh-3rem)] sm:max-h-[calc(100vh-5rem)] rounded-xl sm:rounded-2xl'}
                     bg-white shadow-2xl border border-[#DCE7F3]
                     flex flex-col z-10 motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200 overflow-hidden
                 `}
             >
                 {/* Header - Fixed at top */}
                 {(title || onClose) && (
-                    <div className="px-6 py-4 border-b border-[#DCE7F3] flex items-center justify-between gap-4 bg-[#F8FBFF] shrink-0">
+                    <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-[#DCE7F3] flex items-center justify-between gap-3 bg-[#F8FBFF] shrink-0">
                         <div className="min-w-0 flex-1">
                             {title && (
-                                <h3 id={titleId} className="text-base font-bold text-[#112743] truncate">
+                                <h3 id={titleId} className="text-sm sm:text-base font-bold text-[#112743] truncate">
                                     {title}
                                 </h3>
                             )}
@@ -126,30 +136,35 @@ export default function Modal({
                                 </p>
                             )}
                         </div>
-                        <button
-                            type="button"
-                            disabled={isProcessing}
-                            onClick={onClose}
-                            aria-label="Tutup dialog"
-                            className="min-h-11 min-w-11 text-[#6B7C93] hover:text-[#112743] hover:bg-[#EAF5FF] p-1.5 rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] disabled:opacity-40 shrink-0 cursor-pointer"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button
+                                type="button"
+                                disabled={isProcessing}
+                                onClick={onClose}
+                                aria-label="Tutup dialog"
+                                className="inline-flex min-h-9 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#DCE7F3] bg-white text-xs font-semibold text-[#0E2747] hover:bg-[#EAF5FF] hover:border-[#0B63CE] hover:text-[#0B63CE] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] disabled:opacity-40 cursor-pointer shadow-2xs"
+                            >
+                                <X className="w-4 h-4 text-slate-500" />
+                                <span>Tutup</span>
+                            </button>
+                        </div>
                     </div>
                 )}
 
                 {/* Content - Scrollable with proper margins */}
-                <div className={`px-4 pt-5 pb-6 sm:px-6 overflow-y-auto flex-1 overscroll-contain ${resolvedSize === 'full' ? 'w-full max-w-5xl mx-auto' : ''}`}>
+                <div className={`overflow-y-auto flex-1 overscroll-contain ${resolvedSize === 'full' ? 'w-full max-w-6xl mx-auto p-3 sm:p-5' : 'px-4 pt-4 pb-6 sm:px-6'}`}>
                     {children}
                 </div>
 
                 {/* Optional Footer */}
                 {footer && (
-                    <div className="px-4 py-3.5 sm:px-6 border-t border-[#DCE7F3] bg-[#F8FBFF] flex flex-wrap items-center justify-end gap-2.5 shrink-0">
+                    <div className="px-4 py-3 sm:px-6 border-t border-[#DCE7F3] bg-[#F8FBFF] flex flex-wrap items-center justify-end gap-2.5 shrink-0">
                         {footer}
                     </div>
                 )}
             </ContainerElement>
         </div>
     );
+
+    return typeof document !== 'undefined' ? createPortal(modalMarkup, document.body) : modalMarkup;
 }

@@ -556,6 +556,9 @@ export default function Show({
     const [isQrPreviewModalOpen, setIsQrPreviewModalOpen] = useState(false);
     const [previewQrSession, setPreviewQrSession] = useState(null);
 
+    // Document Preview Modal (E-Sertifikat & E-Transkrip)
+    const [activeDocumentPreview, setActiveDocumentPreview] = useState(null);
+
     // Attendance Override & Generate Modal
     const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
     const [isEditAttendanceModalOpen, setIsEditAttendanceModalOpen] = useState(false);
@@ -5002,7 +5005,12 @@ export default function Show({
                                 ) : (
                                     <ul className="divide-y divide-[#DCE7F3] border-y border-[#DCE7F3] bg-white" aria-label="Dokumen kelulusan peserta">
                                         {credentialParticipants.map((participant) => (
-                                            <ParticipantCredentialRow key={participant.id} eventId={event.id} participant={participant} />
+                                            <ParticipantCredentialRow
+                                                key={participant.id}
+                                                eventId={event.id}
+                                                participant={participant}
+                                                onOpenPreview={setActiveDocumentPreview}
+                                            />
                                         ))}
                                     </ul>
                                 )}
@@ -7971,11 +7979,68 @@ export default function Show({
                     </div>
                 </form>
             </Modal>
+
+            {/* MODAL: Preview E-Sertifikat & E-Transkrip Peserta */}
+            {activeDocumentPreview && (
+                <Modal
+                    isOpen
+                    onClose={() => setActiveDocumentPreview(null)}
+                    title={`Preview ${activeDocumentPreview.title} — ${activeDocumentPreview.participantName}`}
+                    description={`${activeDocumentPreview.trackLabel} · Nomor: ${activeDocumentPreview.number || 'Belum dicatat'}`}
+                    size="full"
+                    footer={
+                        <div className="flex flex-wrap items-center justify-between w-full gap-3">
+                            <span className="text-xs text-[#6B7C93]">
+                                Nomor: <strong className="text-[#0E2747]">{activeDocumentPreview.number || 'Belum dicatat'}</strong>
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <a
+                                    href={activeDocumentPreview.previewUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs font-semibold text-[#0E2747] hover:border-[#0B63CE] hover:text-[#0B63CE] transition-colors"
+                                >
+                                    <ExternalLink className="size-3.5" />
+                                    <span>Buka di Tab Baru</span>
+                                </a>
+                                {activeDocumentPreview.downloadUrl && (
+                                    <a
+                                        href={activeDocumentPreview.downloadUrl}
+                                        className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-[#0B63CE] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0A3F82] transition-colors shadow-2xs"
+                                    >
+                                        <Download className="size-3.5" />
+                                        <span>Unduh PDF</span>
+                                    </a>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveDocumentPreview(null)}
+                                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                                >
+                                    <X className="size-3.5" />
+                                    <span>Tutup</span>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                >
+                    <div className="h-[calc(100vh-14rem)] min-h-[500px] w-full bg-slate-100 rounded-xl overflow-hidden border border-[#DCE7F3]">
+                        <iframe
+                            src={activeDocumentPreview.previewUrl}
+                            title={`${activeDocumentPreview.title} ${activeDocumentPreview.participantName}`}
+                            className="w-full h-full border-0"
+                        />
+                    </div>
+                    <p className="mt-2 text-xs text-[#6B7C93] text-center">
+                        Gunakan tombol Buka di Tab Baru atau Unduh PDF jika browser Anda tidak menampilkan PDF secara langsung.
+                    </p>
+                </Modal>
+            )}
         </AdminLayout>
     );
 }
 
-function ParticipantCredentialRow({ eventId, participant }) {
+function ParticipantCredentialRow({ eventId, participant, onOpenPreview }) {
     const documentVariants = participant.document_variants?.length
         ? participant.document_variants
         : [{ ...participant, track_code: participant.track_code, label: participant.track_name }];
@@ -8014,6 +8079,7 @@ function ParticipantCredentialRow({ eventId, participant }) {
                                     configuredNumber={variant.configured_certificate_number}
                                     downloadUrl={variant.certificate_download_url}
                                     previewUrl={variant.certificate_preview_url}
+                                    onOpenPreview={onOpenPreview}
                                 />
                                 <ParticipantDocumentUpload
                                     eventId={eventId}
@@ -8028,6 +8094,7 @@ function ParticipantCredentialRow({ eventId, participant }) {
                                     configuredNumber={variant.configured_transcript_number}
                                     downloadUrl={variant.transcript_download_url}
                                     previewUrl={variant.transcript_preview_url}
+                                    onOpenPreview={onOpenPreview}
                                 />
                             </div>
                         </div>
@@ -8038,7 +8105,7 @@ function ParticipantCredentialRow({ eventId, participant }) {
     );
 }
 
-function ParticipantDocumentUpload({ eventId, participant, variant, type, title, description, icon: Icon, number, suggestedNumber, configuredNumber, downloadUrl, previewUrl }) {
+function ParticipantDocumentUpload({ eventId, participant, variant, type, title, description, icon: Icon, number, suggestedNumber, configuredNumber, downloadUrl, previewUrl, onOpenPreview }) {
     const isCertificate = type === 'certificate';
     const fileField = isCertificate ? 'certificate' : 'transcript';
     const numberField = isCertificate ? 'certificate_number' : 'transcript_number';
@@ -8056,6 +8123,21 @@ function ParticipantDocumentUpload({ eventId, participant, variant, type, title,
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleOpenPreview = () => {
+        if (onOpenPreview) {
+            onOpenPreview({
+                title,
+                participantName: participant.name,
+                trackLabel: variant.label,
+                number,
+                downloadUrl,
+                previewUrl,
+            });
+        } else {
+            setIsPreviewOpen(true);
+        }
+    };
 
     const updateNumber = (value) => {
         form.setData(numberField, value);
@@ -8118,7 +8200,15 @@ function ParticipantDocumentUpload({ eventId, participant, variant, type, title,
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-[#6B7C93]">{number ? `Nomor ${number}` : 'Nomor belum dicatat'}</span>
                         <div className="flex flex-wrap items-center gap-4">
-                            {previewUrl && <button type="button" onClick={() => setIsPreviewOpen(true)} className="inline-flex min-h-11 items-center gap-1 font-semibold text-[#0B63CE] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"><Eye className="size-3.5" aria-hidden="true" /> Preview</button>}
+                            {previewUrl && (
+                                <button
+                                    type="button"
+                                    onClick={handleOpenPreview}
+                                    className="inline-flex min-h-11 items-center gap-1 font-semibold text-[#0B63CE] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] cursor-pointer"
+                                >
+                                    <Eye className="size-3.5" aria-hidden="true" /> Preview
+                                </button>
+                            )}
                             <a href={downloadUrl} className="inline-flex min-h-11 items-center font-semibold text-[#0B63CE] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]">Unduh PDF</a>
                             <button type="button" onClick={() => setDeleteOpen(true)} className="inline-flex min-h-11 items-center gap-1 font-semibold text-[#B42318] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B42318]">
                                 <Trash2 className="size-3.5" aria-hidden="true" /> Hapus PDF
@@ -8176,7 +8266,7 @@ function ParticipantDocumentUpload({ eventId, participant, variant, type, title,
                     </Button>
                 </div>
             </form>
-            {isPreviewOpen && previewUrl && (
+            {isPreviewOpen && previewUrl && !onOpenPreview && (
                 <Modal
                     isOpen
                     onClose={() => setIsPreviewOpen(false)}

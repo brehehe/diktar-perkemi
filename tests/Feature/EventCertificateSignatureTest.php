@@ -140,7 +140,7 @@ test('generated certificate includes Tempat/Tanggal Lahir, 3-year validity, and 
         ->toStartWith('%PDF-1.4')
         ->toContain('SK-PED-JTM-2026-001')
         ->toContain('Surabaya, 5 Juni 1996')
-        ->toContain('27 September')
+        ->toContain('31 Desember')
         ->toContain('Surabaya, 27 September 2026')
         ->toContain('Pengurus Besar PERKEMI')
         ->toContain('Ketua Umum,')

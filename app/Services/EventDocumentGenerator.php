@@ -759,7 +759,50 @@ class EventDocumentGenerator
         // Background is clean/blank — write ALL content from code
         // Canvas: 3508 x 2480 px, full page landscape A4 PDF (841.89 x 595.28 pt)
         // Watermark logo on bottom-left: x: [816, 1071], y: [1847, 2157]
-        // Top-right corner track badge: x: [2410, 3464], y: [80,         $overlays = [];
+
+        $overlays = [];
+
+        // --- Top-right track badge box (Wasit Kuning, Penguji Hijau, Pelatih Merah) ---
+        // Cover pre-existing badge on template background with clean white rectangle
+        $overlays[] = $this->coloredRectangle(2350, 60, 1130, 200, [1.0, 1.0, 1.0]);
+
+        $badgeConfig = match ($trackCode) {
+            'WAD', 'WAN' => [
+                'text' => 'WASIT',
+                'bg' => [0.996, 0.835, 0.129], // Kuning PERKEMI (#FED521)
+                'text_color' => [0.08, 0.08, 0.08], // Teks Gelap/Hitam
+            ],
+            'PED', 'PEN' => [
+                'text' => 'PENGUJI',
+                'bg' => [0.0, 0.494, 0.243], // Hijau PERKEMI (#007E3E)
+                'text_color' => [1.0, 1.0, 1.0], // Teks Putih
+            ],
+            'PD', 'PN' => [
+                'text' => 'PELATIH',
+                'bg' => [0.925, 0.008, 0.137], // Merah PERKEMI (#EC0223)
+                'text_color' => [1.0, 1.0, 1.0], // Teks Putih
+            ],
+            default => null,
+        };
+
+        if ($badgeConfig !== null) {
+            $badgeW = 860;
+            $badgeH = 130;
+            $badgeX = 2590;
+            $badgeY = 85;
+
+            // Kotakan badge
+            $overlays[] = $this->coloredRectangle($badgeX, $badgeY, $badgeW, $badgeH, $badgeConfig['bg']);
+            // Teks kotakan (WASIT / PENGUJI / PELATIH)
+            $overlays[] = $this->centeredText(
+                $badgeConfig['text'],
+                $badgeX + ($badgeW / 2),
+                $badgeY + 88,
+                68,
+                true,
+                $badgeConfig['text_color']
+            );
+        }
 
         // --- Header block ---
         // Lowered to Y=360 so it has generous vertical clearance (130px) below the top-right badge (which ends at Y=230)

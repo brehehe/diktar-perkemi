@@ -763,7 +763,8 @@ class EventDocumentGenerator
 
         // --- Header block ---
         // Lowered to Y=360 so it has generous vertical clearance (130px) below the top-right badge (which ends at Y=230)
-        $headerCenterX = 1754;
+        // Shifted right (headerCenterX = 2000) so it does not collide with the folder ribbon on the left
+        $headerCenterX = 2000;
         $dark = [0.05, 0.05, 0.05];
 
         // 20 pt in Word -> 80 in canvas
@@ -781,7 +782,7 @@ class EventDocumentGenerator
             'WAN' => 'SERTIFIKAT WASIT SHORINJI KEMPO NASIONAL',
             default => 'SERTIFIKAT',
         };
-        $titleCenterX = 1754;
+        $titleCenterX = 2000;
         $titleY = 560;
         // 16 pt in Word -> 66 in canvas
         $titleFontSize = 66;
@@ -800,9 +801,9 @@ class EventDocumentGenerator
         $nomorStartX = $titleCenterX - ($totalNomorWidth / 2);
         $nomorEndX = $nomorStartX + $totalNomorWidth;
 
-        // Content margins shifted right: left = 580, right = 2950 (balanced margins ~560-580px)
-        $contentLeft = 580;
-        $contentRight = 2950;
+        // Content margins shifted further right: left = 880, right = 3130 (generous clearance for left folder ribbon)
+        $contentLeft = 880;
+        $contentRight = 3130;
         $goldColor = [0.85, 0.70, 0.20];
         $overlays[] = $this->coloredRectangle($contentLeft, $nomorY - 14, max(20, $nomorStartX - 42 - $contentLeft), 5.2, $goldColor);
         $overlays[] = $this->coloredRectangle($nomorEndX + 42, $nomorY - 14, max(20, $contentRight - ($nomorEndX + 42)), 5.2, $goldColor);
@@ -818,9 +819,9 @@ class EventDocumentGenerator
         );
 
         // --- Participant data fields (shifted right, 14 pt in Word -> 56 in canvas) ---
-        $labelX = 680;
-        $colonX = 1440;
-        $dataX = 1520;
+        $labelX = 980;
+        $colonX = 1740;
+        $dataX = 1820;
         $fieldSize = 56;
 
         $fields = [
@@ -943,7 +944,7 @@ class EventDocumentGenerator
             if (is_readable($fullPhotoPath)) {
                 $photoW = 280;
                 $photoH = 373;
-                $photoX = 1260;
+                $photoX = 1380;
                 $photoTop = 1750;
 
                 // Gold frame & white matting around photo
@@ -954,7 +955,7 @@ class EventDocumentGenerator
         }
 
         // --- Signature block (14 pt in Word -> 54-56 in canvas) ---
-        $sigCenterX = 2350;
+        $sigCenterX = 2500;
         $sigY = 1760;
 
         $cityDateLine = "{$sigSettings['city']}, {$sigSettings['date_formatted']}";

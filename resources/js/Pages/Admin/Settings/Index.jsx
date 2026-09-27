@@ -342,7 +342,19 @@ export default function Index({ settings = {}, documentNumberLabels = {}, docume
                                         <legend className="px-1 text-sm font-semibold text-[#0E2747]">{label} ({trackCode})</legend>
                                         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
                                             <Input id={prefixKey} label="Kode surat" value={documentNumberForm.data[prefixKey] ?? ''} onChange={(event) => documentNumberForm.setData(prefixKey, event.target.value.toUpperCase())} error={documentNumberForm.errors[prefixKey]} required maxLength={32} />
-                                            <Input id={startKey} label="Nomor awal" type="number" min="1" max="999999" value={documentNumberForm.data[startKey] ?? ''} onChange={(event) => documentNumberForm.setData(startKey, event.target.value)} error={documentNumberForm.errors[startKey]} required />
+                                            <Input
+                                                id={startKey}
+                                                label="Nomor awal"
+                                                type="text"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                maxLength={8}
+                                                value={documentNumberForm.data[startKey] ?? ''}
+                                                onChange={(event) => documentNumberForm.setData(startKey, event.target.value.replace(/\D/g, ''))}
+                                                error={documentNumberForm.errors[startKey]}
+                                                helperText="Bisa diisi 001, 056, 0056, dst."
+                                                required
+                                            />
                                         </div>
                                     </fieldset>
                                 );

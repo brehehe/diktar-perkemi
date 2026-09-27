@@ -1158,6 +1158,36 @@ test('event number settings override admin defaults and preserve existing issued
     expect($enrollment->fresh()->certificate_number)->toBe('007/WST-JABAR/IX/2026');
 });
 
+test('event number settings support leading zeros and custom digit sequence padding', function () {
+    $admin = User::factory()->create(['role' => 'Admin']);
+    $numbers = [];
+
+    foreach (['PD', 'PN', 'PED', 'PEN', 'WAD', 'WAN'] as $trackCode) {
+        $numbers[$trackCode] = ['prefix' => '', 'start' => ''];
+    }
+
+    $numbers['PED'] = ['prefix' => 'SK-PED-JTM-2026', 'start' => '0056'];
+    $numbers['PD'] = ['prefix' => 'SK-PD-JTM-2026', 'start' => '056'];
+
+    $this->actingAs($admin)->put("/admin/event/{$this->event->id}/nomor-dokumen", [
+        'numbers' => $numbers,
+        'apply_to_participants' => true,
+    ])->assertSessionHasNoErrors();
+
+    $settings = $this->event->fresh()->document_number_settings;
+    expect($settings['PED']['start'])->toBe('0056');
+    expect($settings['PD']['start'])->toBe('056');
+
+    $generator = app(EventDocumentGenerator::class);
+    $pedEnrollment = EventParticipant::query()->where('event_id', $this->event->id)->where('track_code', 'PED')->firstOrFail();
+    $pdEnrollment = EventParticipant::query()->where('event_id', $this->event->id)->where('track_code', 'PD')->firstOrFail();
+
+    expect($generator->configuredNumber($this->event->fresh(), $pedEnrollment, 'certificate'))->toBe('0056/SK-PED-JTM-2026/IX/2026');
+    expect($generator->configuredNumber($this->event->fresh(), $pdEnrollment, 'certificate'))->toBe('056/SK-PD-JTM-2026/IX/2026');
+    expect($pedEnrollment->fresh()->certificate_number)->toBe('0056/SK-PED-JTM-2026/IX/2026');
+    expect($pdEnrollment->fresh()->certificate_number)->toBe('056/SK-PD-JTM-2026/IX/2026');
+});
+
 test('pelatih daerah uses the event month and year for suggested number and supports generation', function () {
     $admin = User::factory()->create(['role' => 'Admin']);
     $enrollment = EventParticipant::query()->where('event_id', $this->event->id)->where('track_code', 'PD')->firstOrFail();

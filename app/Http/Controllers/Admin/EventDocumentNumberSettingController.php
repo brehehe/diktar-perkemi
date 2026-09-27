@@ -25,12 +25,14 @@ class EventDocumentNumberSettingController extends Controller
             if (isset($numbers[$trackCode])) {
                 $input = $numbers[$trackCode];
                 $prefix = trim((string) ($input['prefix'] ?? ''));
-                $start = $input['start'] ?? null;
+                $start = isset($input['start']) ? trim((string) $input['start']) : null;
 
                 if ($prefix !== '' || ($start !== null && $start !== '')) {
                     $certSettings[$trackCode] = array_filter([
                         'prefix' => $prefix !== '' ? $prefix : null,
-                        'start' => ($start !== null && $start !== '') ? (int) $start : null,
+                        'start' => ($start !== null && $start !== '')
+                            ? (str_starts_with($start, '0') ? $start : (int) $start)
+                            : null,
                     ], fn ($value) => $value !== null);
                 }
             }
@@ -39,12 +41,14 @@ class EventDocumentNumberSettingController extends Controller
             if (isset($transNumbers[$trackCode])) {
                 $tInput = $transNumbers[$trackCode];
                 $tPrefix = trim((string) ($tInput['prefix'] ?? ''));
-                $tStart = $tInput['start'] ?? null;
+                $tStart = isset($tInput['start']) ? trim((string) $tInput['start']) : null;
 
                 if ($tPrefix !== '' || ($tStart !== null && $tStart !== '')) {
                     $transSettings[$trackCode] = array_filter([
                         'prefix' => $tPrefix !== '' ? $tPrefix : null,
-                        'start' => ($tStart !== null && $tStart !== '') ? (int) $tStart : null,
+                        'start' => ($tStart !== null && $tStart !== '')
+                            ? (str_starts_with($tStart, '0') ? $tStart : (int) $tStart)
+                            : null,
                     ], fn ($value) => $value !== null);
                 }
             }
@@ -69,7 +73,7 @@ class EventDocumentNumberSettingController extends Controller
 
         $message = 'Pengaturan nomor surat event berhasil disimpan.';
         if ($syncedCount > 0) {
-            $message .= " Nomor surat {$syncedCount} peserta telah disinkronkan dengan urutan 001, 002, dst.";
+            $message .= " Nomor surat {$syncedCount} peserta telah disinkronkan dengan urutan nomor terbaru.";
         }
         if ($regenerated) {
             $message .= " Berkas PDF {$regenerated['certificate']} sertifikat dan {$regenerated['transcript']} e-transkrip telah otomatis diperbarui.";

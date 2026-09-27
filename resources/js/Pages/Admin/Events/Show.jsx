@@ -393,6 +393,20 @@ export default function Show({
             start: documentNumberOverrides.transcript?.[trackCode]?.start ?? '',
         }])),
     });
+
+    useEffect(() => {
+        documentNumberForm.setData((prev) => ({
+            ...prev,
+            numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
+                prefix: (documentNumberOverrides.certificate?.[trackCode]?.prefix ?? documentNumberOverrides[trackCode]?.prefix) ?? '',
+                start: (documentNumberOverrides.certificate?.[trackCode]?.start ?? documentNumberOverrides[trackCode]?.start) ?? '',
+            }])),
+            transcript_numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
+                prefix: documentNumberOverrides.transcript?.[trackCode]?.prefix ?? '',
+                start: documentNumberOverrides.transcript?.[trackCode]?.start ?? '',
+            }])),
+        }));
+    }, [documentNumberOverrides, documentNumberLabels]);
     const signatureForm = useForm({
         city: certificateSignatureSettings.city ?? certificateSignatureDefaults.city ?? 'Jakarta',
         date: certificateSignatureSettings.date ?? event.end_date ?? '',
@@ -4937,13 +4951,13 @@ export default function Show({
                                         <div>
                                             <div className="mb-3 flex items-center justify-between">
                                                 <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Pengaturan Nomor Sertifikat Per Jalur</h4>
-                                                <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong></span>
+                                                <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong> (panjang digit mengikuti nomor awal, misal 056 atau 0056)</span>
                                             </div>
                                             <div className="grid gap-4 lg:grid-cols-2">
                                                 {Object.entries(documentNumberLabels).map(([trackCode, label]) => (
                                                     <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4 rounded-lg">
                                                         <legend className="px-1 text-sm font-semibold text-[#0E2747]">{label} ({trackCode})</legend>
-                                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
                                                             <Input
                                                                 id={`event-cert-${trackCode}-prefix`}
                                                                 label="Kode surat sertifikat"
@@ -4956,12 +4970,17 @@ export default function Show({
                                                             <Input
                                                                 id={`event-cert-${trackCode}-start`}
                                                                 label="Nomor awal"
-                                                                type="number"
-                                                                min="1"
-                                                                max="999999"
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                pattern="[0-9]*"
+                                                                maxLength={8}
                                                                 value={documentNumberForm.data.numbers[trackCode]?.start ?? ''}
-                                                                onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], start: change.target.value } })}
-                                                                placeholder={String(documentNumberDefaults[trackCode]?.start || 1)}
+                                                                onChange={(change) => {
+                                                                    const val = change.target.value.replace(/\D/g, '');
+                                                                    documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], start: val } });
+                                                                }}
+                                                                placeholder={String(documentNumberDefaults[trackCode]?.raw_start || documentNumberDefaults[trackCode]?.start || '001')}
+                                                                helperText="Bisa diisi 001, 056, 0056, dst."
                                                                 error={documentNumberForm.errors[`numbers.${trackCode}.start`]}
                                                             />
                                                         </div>
@@ -4975,13 +4994,13 @@ export default function Show({
                                         <div>
                                             <div className="mb-3 flex items-center justify-between">
                                                 <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Pengaturan Nomor E-Transkrip Per Jalur</h4>
-                                                <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong></span>
+                                                <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong> (panjang digit mengikuti nomor awal, misal 056 atau 0056)</span>
                                             </div>
                                             <div className="grid gap-4 lg:grid-cols-2">
                                                 {Object.entries(transcriptNumberLabels && Object.keys(transcriptNumberLabels).length > 0 ? transcriptNumberLabels : documentNumberLabels).map(([trackCode, label]) => (
                                                     <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4 rounded-lg">
                                                         <legend className="px-1 text-sm font-semibold text-[#0E2747]">{transcriptNumberLabels[trackCode] || `E-Transkrip (${trackCode})`}</legend>
-                                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
                                                             <Input
                                                                 id={`event-trans-${trackCode}-prefix`}
                                                                 label="Kode surat transkrip"
@@ -4994,12 +5013,17 @@ export default function Show({
                                                             <Input
                                                                 id={`event-trans-${trackCode}-start`}
                                                                 label="Nomor awal"
-                                                                type="number"
-                                                                min="1"
-                                                                max="999999"
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                pattern="[0-9]*"
+                                                                maxLength={8}
                                                                 value={documentNumberForm.data.transcript_numbers[trackCode]?.start ?? ''}
-                                                                onChange={(change) => documentNumberForm.setData('transcript_numbers', { ...documentNumberForm.data.transcript_numbers, [trackCode]: { ...documentNumberForm.data.transcript_numbers[trackCode], start: change.target.value } })}
-                                                                placeholder={String(transcriptNumberDefaults[trackCode]?.start || 1)}
+                                                                onChange={(change) => {
+                                                                    const val = change.target.value.replace(/\D/g, '');
+                                                                    documentNumberForm.setData('transcript_numbers', { ...documentNumberForm.data.transcript_numbers, [trackCode]: { ...documentNumberForm.data.transcript_numbers[trackCode], start: val } });
+                                                                }}
+                                                                placeholder={String(transcriptNumberDefaults[trackCode]?.raw_start || transcriptNumberDefaults[trackCode]?.start || '001')}
+                                                                helperText="Bisa diisi 001, 056, 0056, dst."
                                                                 error={documentNumberForm.errors[`transcript_numbers.${trackCode}.start`]}
                                                             />
                                                         </div>
@@ -5019,7 +5043,7 @@ export default function Show({
                                                 onChange={(e) => documentNumberForm.setData('apply_to_participants', e.target.checked)}
                                                 className="size-4 rounded border-gray-300 text-[#0B63CE] focus:ring-[#0B63CE]"
                                             />
-                                            <span>Otomatis isi & urutkan nomor di data peserta (001, 002, dst.)</span>
+                                            <span>Otomatis isi & urutkan nomor di data peserta (mengikuti nomor awal & jumlah digit)</span>
                                         </label>
                                         <label className="flex items-center gap-2 text-xs font-medium text-[#0E2747] cursor-pointer select-none">
                                             <input
@@ -8275,6 +8299,12 @@ function ParticipantDocumentUpload({ eventId, participant, variant, type, title,
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    useEffect(() => {
+        const nextNumber = (isLegacyDualPlaceholder ? suggestedNumber : number) || suggestedNumber || '';
+        form.setData(numberField, nextNumber);
+        generationForm.setData(numberField, nextNumber);
+    }, [number, suggestedNumber, isLegacyDualPlaceholder, numberField]);
 
     const handleOpenPreview = () => {
         if (onOpenPreview) {

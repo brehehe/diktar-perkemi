@@ -30,10 +30,28 @@ class UpdateSettingsRequest extends FormRequest
         if ($this->input('settings_group') === 'certificate_numbers') {
             foreach (array_keys(EventDocumentGenerator::NUMBER_LABELS) as $trackCode) {
                 $rules[EventDocumentGenerator::settingKey($trackCode, 'prefix')] = ['required', 'string', 'max:32', 'regex:/^[A-Z0-9-]+$/'];
-                $rules[EventDocumentGenerator::settingKey($trackCode, 'start')] = ['required', 'integer', 'min:1', 'max:999999'];
+                $rules[EventDocumentGenerator::settingKey($trackCode, 'start')] = [
+                    'required',
+                    'regex:/^0*[1-9]\d*$/',
+                    function ($attribute, $value, $fail) {
+                        if ((int) $value > 999999) {
+                            $fail('Nomor awal tidak boleh lebih dari 999999.');
+                        }
+                    },
+                ];
             }
         }
 
         return $rules;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'document_number_*_start.regex' => 'Nomor awal harus berupa angka lebih besar dari 0 (contoh: 001, 056, atau 0056).',
+        ];
     }
 }

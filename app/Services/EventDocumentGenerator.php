@@ -489,17 +489,19 @@ class EventDocumentGenerator
         $issuedAt = $event->end_date;
         $settings = $this->effectiveNumberSettings($event, $trackCode, $type);
         $sequence = $settings['start'] + $this->sequenceOffset($event, $eventParticipant, $trackCode);
+        $padLength = $settings['pad_length'] ?? 3;
+        $formattedSequence = sprintf('%0'.$padLength.'d', $sequence);
 
         return sprintf(
-            '%03d/%s/%s/%s',
-            $sequence,
+            '%s/%s/%s/%s',
+            $formattedSequence,
             $settings['prefix'],
             self::ROMAN_MONTHS[$issuedAt->month - 1],
             $issuedAt->format('Y')
         );
     }
 
-    /** @return array<string, array{prefix: string, start: int}> */
+    /** @return array<string, array{prefix: string, start: int, pad_length: int, raw_start: string}> */
     public function adminNumberSettings(): array
     {
         $saved = $this->savedAdminNumberSettings();
@@ -507,17 +509,21 @@ class EventDocumentGenerator
 
         foreach (self::NUMBER_LABELS as $trackCode => $label) {
             $prefix = trim($saved[$this->settingKey($trackCode, 'prefix')] ?? '');
-            $start = (int) ($saved[$this->settingKey($trackCode, 'start')] ?? 1);
+            $rawStart = $saved[$this->settingKey($trackCode, 'start')] ?? null;
+            $start = filled($rawStart) ? (int) $rawStart : 1;
+            $padLength = filled($rawStart) ? max(3, strlen((string) $rawStart)) : 3;
             $settings[$trackCode] = [
                 'prefix' => $prefix !== '' ? $prefix : self::NUMBER_SUFFIXES[$trackCode],
                 'start' => max(1, $start),
+                'pad_length' => $padLength,
+                'raw_start' => filled($rawStart) ? (string) $rawStart : sprintf('%0'.$padLength.'d', max(1, $start)),
             ];
         }
 
         return $settings;
     }
 
-    /** @return array<string, array{prefix: string, start: int}> */
+    /** @return array<string, array{prefix: string, start: int, pad_length: int, raw_start: string}> */
     public function adminTranscriptNumberSettings(?Event $event = null): array
     {
         $settings = [];
@@ -538,34 +544,48 @@ class EventDocumentGenerator
             $settings[$trackCode] = [
                 'prefix' => $defaultPrefix,
                 'start' => 1,
+                'pad_length' => 3,
+                'raw_start' => '001',
             ];
         }
 
         return $settings;
     }
 
-    /** @return array{prefix: string, start: int} */
+    /** @return array{prefix: string, start: int, pad_length: int, raw_start: string} */
     public function effectiveNumberSettings(Event $event, string $trackCode, string $type = 'certificate'): array
     {
         if ($type === 'transcript') {
             $transcriptDefaults = $this->adminTranscriptNumberSettings($event)[$trackCode] ?? [
                 'prefix' => self::TRANSCRIPT_NUMBER_SUFFIXES[$trackCode] ?? 'TR-'.$trackCode,
                 'start' => 1,
+                'pad_length' => 3,
+                'raw_start' => '001',
             ];
             $override = $event->document_number_settings['transcript'][$trackCode] ?? [];
+            $rawStart = $override['start'] ?? null;
+            $start = filled($rawStart) ? (int) $rawStart : $transcriptDefaults['start'];
+            $padLength = filled($rawStart) ? max(3, strlen((string) $rawStart)) : ($transcriptDefaults['pad_length'] ?? 3);
 
             return [
                 'prefix' => filled($override['prefix'] ?? null) ? trim($override['prefix']) : $transcriptDefaults['prefix'],
-                'start' => filled($override['start'] ?? null) ? (int) $override['start'] : $transcriptDefaults['start'],
+                'start' => $start,
+                'pad_length' => $padLength,
+                'raw_start' => filled($rawStart) ? (string) $rawStart : sprintf('%0'.$padLength.'d', $start),
             ];
         }
 
         $defaults = $this->adminNumberSettings()[$trackCode];
         $override = $event->document_number_settings['certificate'][$trackCode] ?? $event->document_number_settings[$trackCode] ?? [];
+        $rawStart = $override['start'] ?? null;
+        $start = filled($rawStart) ? (int) $rawStart : $defaults['start'];
+        $padLength = filled($rawStart) ? max(3, strlen((string) $rawStart)) : ($defaults['pad_length'] ?? 3);
 
         return [
             'prefix' => filled($override['prefix'] ?? null) ? trim($override['prefix']) : $defaults['prefix'],
-            'start' => filled($override['start'] ?? null) ? (int) $override['start'] : $defaults['start'],
+            'start' => $start,
+            'pad_length' => $padLength,
+            'raw_start' => filled($rawStart) ? (string) $rawStart : sprintf('%0'.$padLength.'d', $start),
         ];
     }
 

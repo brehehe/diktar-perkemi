@@ -22,12 +22,12 @@ class EventDocumentGenerator
     /** @var array<string, array<string, string>> */
     private const TEMPLATES = [
         'certificate' => [
-            'PD' => 'pd-certificate-background.png',
-            'WAD' => 'wad-certificate-background.png',
-            'WAN' => 'wan-certificate-background.png',
-            'PED' => 'ped-certificate-background.png',
-            'PEN' => 'pen-certificate-background.png',
-            'PN' => 'pn-certificate-background.png',
+            'PD' => 'pelatih-daerah-a4.png',
+            'WAD' => 'wasit-daerah-a4.png',
+            'WAN' => 'wasit-nasional-a4.png',
+            'PED' => 'penguji-daerah-a4.png',
+            'PEN' => 'penguji-nasional-a4.png',
+            'PN' => 'pelatih-nasional-a4.png',
         ],
         'transcript' => [
             'PD' => 'transkrip-background-tanpa-garis.png',
@@ -764,20 +764,20 @@ class EventDocumentGenerator
         $overlays = [];
 
         // --- Header block ---
-        // Header text is centered across the content area (center = 2040) with generous clearance from top-right badge
-        $headerCenterX = 2040;
+        // Centered across the full A4 landscape page (center = 1754) with generous clearance from top-right badge
+        $headerCenterX = 1754;
         $dark = [0.05, 0.05, 0.05];
 
-        $overlays[] = $this->centeredText('PENGURUS BESAR', $headerCenterX, 215, 52, true, $dark);
-        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $headerCenterX, 310, 64, true, $dark);
-        $overlays[] = $this->centeredText('(INDONESIA SHORINJI KEMPO FEDERATION)', $headerCenterX, 375, 42, false, $dark);
+        $overlays[] = $this->centeredText('PENGURUS BESAR', $headerCenterX, 215, 54, true, $dark);
+        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $headerCenterX, 310, 68, true, $dark);
+        $overlays[] = $this->centeredText('(INDONESIA SHORINJI KEMPO FEDERATION)', $headerCenterX, 375, 44, false, $dark);
 
         $hasKomisi = in_array($trackCode, ['PED', 'PEN'], true);
         if ($hasKomisi) {
-            $overlays[] = $this->centeredText('KOMISI PENDIDIKAN DAN PENATARAN', $headerCenterX, 438, 47, true, $dark);
+            $overlays[] = $this->centeredText('KOMISI PENDIDIKAN DAN PENATARAN', $headerCenterX, 440, 48, true, $dark);
         }
 
-        // --- Certificate title (centered, sized to never touch left graphic) ---
+        // --- Certificate title (centered across full page) ---
         $certTitle = match ($trackCode) {
             'PED' => 'SERTIFIKAT PENGUJI SHORINJI KEMPO DAERAH',
             'PEN' => 'SERTIFIKAT PENGUJI SHORINJI KEMPO NASIONAL',
@@ -787,14 +787,14 @@ class EventDocumentGenerator
             'WAN' => 'SERTIFIKAT WASIT SHORINJI KEMPO NASIONAL',
             default => 'SERTIFIKAT',
         };
-        $titleCenterX = 2040;
+        $titleCenterX = 1754;
         $titleY = $hasKomisi ? 565 : 520;
-        $titleFontSize = 72;
+        $titleFontSize = 74;
         $overlays[] = $this->centeredText($certTitle, $titleCenterX, $titleY, $titleFontSize, true, $dark);
 
-        // --- Nomor line with flanking gold rules ---
+        // --- Nomor line with flanking gold rules (widened symmetrically) ---
         $nomorY = $hasKomisi ? 665 : 635;
-        $nomorSize = 50;
+        $nomorSize = 52;
         $nomorLabel = 'Nomor :';
         $nomorNum = (string) $certificateNumber;
         $nomorGap = 28;
@@ -804,30 +804,28 @@ class EventDocumentGenerator
         $nomorStartX = $titleCenterX - ($totalNomorWidth / 2);
         $nomorEndX = $nomorStartX + $totalNomorWidth;
 
-        // Gold rule flanking left and right (safe bounds 1040 to 3280: clear from left chevron and right margin)
-        $ruleLeft = 1040;
-        $ruleRight = 3280;
+        // Content margins widened symmetrically: left = 450, right = 3058 (center = 1754)
+        $contentLeft = 450;
+        $contentRight = 3058;
         $goldColor = [0.85, 0.70, 0.20];
-        $overlays[] = $this->coloredRectangle($ruleLeft, $nomorY - 14, max(20, $nomorStartX - 42 - $ruleLeft), 5.2, $goldColor);
-        $overlays[] = $this->coloredRectangle($nomorEndX + 42, $nomorY - 14, max(20, $ruleRight - ($nomorEndX + 42)), 5.2, $goldColor);
+        $overlays[] = $this->coloredRectangle($contentLeft, $nomorY - 14, max(20, $nomorStartX - 42 - $contentLeft), 5.2, $goldColor);
+        $overlays[] = $this->coloredRectangle($nomorEndX + 42, $nomorY - 14, max(20, $contentRight - ($nomorEndX + 42)), 5.2, $goldColor);
 
         // Nomor text (single instance, no duplicates)
         $overlays[] = $this->text($nomorLabel, $nomorStartX, $nomorY, $nomorSize, true, $dark);
         $overlays[] = $this->text($nomorNum, $nomorStartX + $labelWidth + $nomorGap, $nomorY, $nomorSize, false, $dark);
 
         // --- Body paragraph opening ---
-        $contentLeft = 880;
-        $contentRight = 3300;
         $overlays[] = $this->text(
             'Pengurus Besar Persaudaraan Shorinji Kempo Indonesia menyatakan bahwa :',
-            $contentLeft, 785, 57, false, $dark
+            $contentLeft, 785, 60, false, $dark
         );
 
-        // --- Participant data fields (enlarged and well-aligned) ---
-        $labelX = 960;
-        $colonX = 1800;
-        $dataX = 1880;
-        $fieldSize = 58;
+        // --- Participant data fields (widened and well-proportioned) ---
+        $labelX = 550;
+        $colonX = 1400;
+        $dataX = 1480;
+        $fieldSize = 60;
 
         $fields = [
             ['Nama Lengkap', 895],
@@ -900,9 +898,9 @@ class EventDocumentGenerator
             default => ['dan berhak memberikan', 'latihan Shorinji Kempo'],
         };
 
-        $bodySize = 59;
+        $bodySize = 62;
         $bodyY = 1445;
-        $lineSpacing = 88;
+        $lineSpacing = 92;
 
         // Line 1: Dikukuhkan sebagai [ROLE], [line1End] (justified from contentLeft to contentRight)
         $line1Segments = [
@@ -961,8 +959,8 @@ class EventDocumentGenerator
         }
 
         // --- Signature block ---
-        // Centered between photo right edge (1540) and right margin (3320)
-        $sigCenterX = 2430;
+        // Centered between photo right edge (1540) and right margin (3058)
+        $sigCenterX = 2350;
         $sigY = 1825;
 
         $cityDateLine = "{$sigSettings['city']}, {$sigSettings['date_formatted']}";
@@ -1190,6 +1188,25 @@ class EventDocumentGenerator
 
         if ($type === 'certificate') {
             $trackTemplate = match ($code) {
+                'PD' => 'pelatih-daerah-a4.png',
+                'PN' => 'pelatih-nasional-a4.png',
+                'PED' => 'penguji-daerah-a4.png',
+                'PEN' => 'penguji-nasional-a4.png',
+                'WAD' => 'wasit-daerah-a4.png',
+                'WAN' => 'wasit-nasional-a4.png',
+                default => 'sertifikat-background-universal.png',
+            };
+
+            foreach ([
+                resource_path('document-templates/'.self::TEMPLATE_DIR."/{$trackTemplate}"),
+                resource_path('document-templates/'.self::TEMPLATE_DIR."/new/{$trackTemplate}"),
+            ] as $candidate) {
+                if (is_readable($candidate)) {
+                    return $candidate;
+                }
+            }
+
+            $legacyTemplate = match ($code) {
                 'PD' => 'pd-certificate-background.png',
                 'PN' => 'pn-certificate-background.png',
                 'PED' => 'ped-certificate-background.png',
@@ -1198,9 +1215,9 @@ class EventDocumentGenerator
                 'WAN' => 'wan-certificate-background.png',
                 default => 'sertifikat-background-universal.png',
             };
-            $path = resource_path('document-templates/'.self::TEMPLATE_DIR."/{$trackTemplate}");
-            if (is_readable($path)) {
-                return $path;
+            $legacyPath = resource_path('document-templates/'.self::TEMPLATE_DIR."/{$legacyTemplate}");
+            if (is_readable($legacyPath)) {
+                return $legacyPath;
             }
         }
 

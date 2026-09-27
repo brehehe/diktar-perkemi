@@ -27,6 +27,7 @@ use App\Services\AdminEventDetailService;
 use App\Services\EventAttendanceScheduleService;
 use App\Services\EventExportService;
 use App\Services\MaterialSourceService;
+use App\Services\ParticipantPhotoService;
 use App\Services\QrCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -790,7 +791,7 @@ class EventController extends Controller
                 if ($participant->photo_path) {
                     Storage::disk('public')->delete($participant->photo_path);
                 }
-                $path = $request->file('photo')->store("participants/{$participant->id}", 'public');
+                $path = ParticipantPhotoService::storePhoto($request->file('photo'), $participant->id);
                 $participant->update(['photo_path' => $path]);
                 if ($participant->user) {
                     $participant->user->update(['avatar_path' => $path]);

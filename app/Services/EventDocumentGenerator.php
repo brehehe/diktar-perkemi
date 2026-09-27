@@ -1528,6 +1528,7 @@ class EventDocumentGenerator
 
                     $gd = @imagecreatefromstring((string) file_get_contents($path));
                     if ($gd) {
+                        $gd = ParticipantPhotoService::autoOrientGdImage($gd, $path);
                         $sw = imagesx($gd);
                         $sh = imagesy($gd);
                         $targetRatio = (float) $overlay['width'] / (float) $overlay['height'];

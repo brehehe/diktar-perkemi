@@ -11,6 +11,7 @@ use App\Models\EventParticipant;
 use App\Models\Participant;
 use App\Models\ParticipantTrack;
 use App\Models\User;
+use App\Services\ParticipantPhotoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -298,7 +299,7 @@ class ParticipantController extends Controller
             $participant = Participant::create($participantData);
 
             if ($request->hasFile('photo')) {
-                $path = $request->file('photo')->store("participants/{$participant->id}", 'public');
+                $path = ParticipantPhotoService::storePhoto($request->file('photo'), $participant->id);
                 $participant->update(['photo_path' => $path]);
                 if ($participant->user) {
                     $participant->user->update(['avatar_path' => $path]);
@@ -346,7 +347,7 @@ class ParticipantController extends Controller
                 if ($participant->photo_path) {
                     Storage::disk('public')->delete($participant->photo_path);
                 }
-                $path = $request->file('photo')->store("participants/{$participant->id}", 'public');
+                $path = ParticipantPhotoService::storePhoto($request->file('photo'), $participant->id);
                 $participant->update(['photo_path' => $path]);
                 if ($participant->user) {
                     $participant->user->update(['avatar_path' => $path]);

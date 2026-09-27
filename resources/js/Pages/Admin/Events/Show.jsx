@@ -66,6 +66,7 @@ import {
     Key,
     Camera,
     FileBadge,
+    CreditCard,
 } from 'lucide-react';
 
 export default function Show({

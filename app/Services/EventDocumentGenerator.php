@@ -764,18 +764,12 @@ class EventDocumentGenerator
         $overlays = [];
 
         // --- Header block ---
-        // Centered across the full A4 landscape page (center = 1754) with generous clearance from top-right badge
+        // Centered across the full A4 landscape page (center = 1754) with generous clearance below top-right badge
         $headerCenterX = 1754;
         $dark = [0.05, 0.05, 0.05];
 
-        $overlays[] = $this->centeredText('PENGURUS BESAR', $headerCenterX, 215, 54, true, $dark);
-        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $headerCenterX, 310, 68, true, $dark);
+        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $headerCenterX, 305, 68, true, $dark);
         $overlays[] = $this->centeredText('(INDONESIA SHORINJI KEMPO FEDERATION)', $headerCenterX, 375, 44, false, $dark);
-
-        $hasKomisi = in_array($trackCode, ['PED', 'PEN'], true);
-        if ($hasKomisi) {
-            $overlays[] = $this->centeredText('KOMISI PENDIDIKAN DAN PENATARAN', $headerCenterX, 440, 48, true, $dark);
-        }
 
         // --- Certificate title (centered across full page) ---
         $certTitle = match ($trackCode) {
@@ -788,12 +782,12 @@ class EventDocumentGenerator
             default => 'SERTIFIKAT',
         };
         $titleCenterX = 1754;
-        $titleY = $hasKomisi ? 565 : 520;
+        $titleY = 515;
         $titleFontSize = 74;
         $overlays[] = $this->centeredText($certTitle, $titleCenterX, $titleY, $titleFontSize, true, $dark);
 
         // --- Nomor line with flanking gold rules (widened symmetrically) ---
-        $nomorY = $hasKomisi ? 665 : 635;
+        $nomorY = 625;
         $nomorSize = 52;
         $nomorLabel = 'Nomor :';
         $nomorNum = (string) $certificateNumber;
@@ -818,7 +812,7 @@ class EventDocumentGenerator
         // --- Body paragraph opening ---
         $overlays[] = $this->text(
             'Pengurus Besar Persaudaraan Shorinji Kempo Indonesia menyatakan bahwa :',
-            $contentLeft, 785, 60, false, $dark
+            $contentLeft, 770, 60, false, $dark
         );
 
         // --- Participant data fields (widened and well-proportioned) ---

@@ -22,12 +22,12 @@ class EventDocumentGenerator
     /** @var array<string, array<string, string>> */
     private const TEMPLATES = [
         'certificate' => [
-            'PD' => 'pn-certificate-background.png',
-            'WAD' => 'wad-certificate-background.png',
-            'WAN' => 'wan-certificate-background.png',
-            'PED' => 'ped-certificate-background.png',
-            'PEN' => 'pen-certificate-background.png',
-            'PN' => 'pn-certificate-background.png',
+            'PD' => 'sertifikat-background-universal.png',
+            'WAD' => 'sertifikat-background-universal.png',
+            'WAN' => 'sertifikat-background-universal.png',
+            'PED' => 'sertifikat-background-universal.png',
+            'PEN' => 'sertifikat-background-universal.png',
+            'PN' => 'sertifikat-background-universal.png',
         ],
         'transcript' => [
             'PD' => 'transkrip-background-tanpa-garis.png',
@@ -466,7 +466,14 @@ class EventDocumentGenerator
             return null;
         }
 
+        $certNumField = self::documentField('certificate', 'number', $eventParticipant->track_code, $trackCode);
         $numberField = self::documentField($type, 'number', $eventParticipant->track_code, $trackCode);
+
+        if ($type === 'transcript') {
+            if ($eventParticipant->{$certNumField} && ! $this->isLegacyDualPlaceholder($eventParticipant, $eventParticipant->{$certNumField})) {
+                return $eventParticipant->{$certNumField};
+            }
+        }
 
         if ($eventParticipant->{$numberField} && ! $this->isLegacyDualPlaceholder($eventParticipant, $eventParticipant->{$numberField})) {
             return $eventParticipant->{$numberField};
@@ -526,57 +533,16 @@ class EventDocumentGenerator
     /** @return array<string, array{prefix: string, start: int, pad_length: int, raw_start: string}> */
     public function adminTranscriptNumberSettings(?Event $event = null): array
     {
-        $settings = [];
-
-        foreach (self::NUMBER_LABELS as $trackCode => $label) {
-            $certPrefix = $event?->document_number_settings['certificate'][$trackCode]['prefix']
-                ?? $event?->document_number_settings[$trackCode]['prefix']
-                ?? null;
-
-            if ($certPrefix && str_starts_with(strtoupper($certPrefix), 'SK-')) {
-                $defaultPrefix = preg_replace('/^SK-/i', 'TR-', $certPrefix);
-            } elseif ($certPrefix) {
-                $defaultPrefix = 'TR-'.$certPrefix;
-            } else {
-                $defaultPrefix = self::TRANSCRIPT_NUMBER_SUFFIXES[$trackCode] ?? 'TR-'.$trackCode;
-            }
-
-            $settings[$trackCode] = [
-                'prefix' => $defaultPrefix,
-                'start' => 1,
-                'pad_length' => 3,
-                'raw_start' => '001',
-            ];
-        }
-
-        return $settings;
+        return $this->adminNumberSettings();
     }
 
     /** @return array{prefix: string, start: int, pad_length: int, raw_start: string} */
     public function effectiveNumberSettings(Event $event, string $trackCode, string $type = 'certificate'): array
     {
-        if ($type === 'transcript') {
-            $transcriptDefaults = $this->adminTranscriptNumberSettings($event)[$trackCode] ?? [
-                'prefix' => self::TRANSCRIPT_NUMBER_SUFFIXES[$trackCode] ?? 'TR-'.$trackCode,
-                'start' => 1,
-                'pad_length' => 3,
-                'raw_start' => '001',
-            ];
-            $override = $event->document_number_settings['transcript'][$trackCode] ?? [];
-            $rawStart = $override['start'] ?? null;
-            $start = filled($rawStart) ? (int) $rawStart : $transcriptDefaults['start'];
-            $padLength = filled($rawStart) ? max(3, strlen((string) $rawStart)) : ($transcriptDefaults['pad_length'] ?? 3);
-
-            return [
-                'prefix' => filled($override['prefix'] ?? null) ? trim($override['prefix']) : $transcriptDefaults['prefix'],
-                'start' => $start,
-                'pad_length' => $padLength,
-                'raw_start' => filled($rawStart) ? (string) $rawStart : sprintf('%0'.$padLength.'d', $start),
-            ];
-        }
-
         $defaults = $this->adminNumberSettings()[$trackCode];
-        $override = $event->document_number_settings['certificate'][$trackCode] ?? $event->document_number_settings[$trackCode] ?? [];
+        $override = $event->document_number_settings['certificate'][$trackCode]
+            ?? $event->document_number_settings[$trackCode]
+            ?? [];
         $rawStart = $override['start'] ?? null;
         $start = filled($rawStart) ? (int) $rawStart : $defaults['start'];
         $padLength = filled($rawStart) ? max(3, strlen((string) $rawStart)) : ($defaults['pad_length'] ?? 3);
@@ -797,8 +763,9 @@ class EventDocumentGenerator
         $overlays = [];
 
         // --- Header block ---
-        // Header text is centered in the open top area between PERKEMI badge and the ribbon (~x=745)
-        $headerCenterX = 745;
+        // --- Header block ---
+        // Header text is centered across the certificate content area (~x=890)
+        $headerCenterX = 890;
         $dark = [0.05, 0.05, 0.05];
 
         $overlays[] = $this->centeredText('PENGURUS BESAR', $headerCenterX, 82, 25, true, $dark);
@@ -820,7 +787,7 @@ class EventDocumentGenerator
             'WAN' => 'SERTIFIKAT WASIT SHORINJI KEMPO NASIONAL',
             default => 'SERTIFIKAT',
         };
-        $titleCenterX = 845;
+        $titleCenterX = 890;
         $titleY = $hasKomisi ? 236 : 225;
         $titleFontSize = mb_strlen($certTitle) > 42 ? 37 : 41;
         $overlays[] = $this->centeredText($certTitle, $titleCenterX, $titleY, $titleFontSize, true, $dark);
@@ -837,9 +804,9 @@ class EventDocumentGenerator
         $nomorStartX = $titleCenterX - ($totalNomorWidth / 2);
         $nomorEndX = $nomorStartX + $totalNomorWidth;
 
-        // Gold rule flanking left and right (aligned with paragraph content margins 266 to 1353)
-        $contentLeft = 266;
-        $contentRight = 1353;
+        // Gold rule flanking left and right (aligned with paragraph content margins 360 to 1420)
+        $contentLeft = 360;
+        $contentRight = 1420;
         $goldColor = [0.85, 0.70, 0.20];
         $overlays[] = $this->coloredRectangle($contentLeft, $nomorY - 6, max(10, $nomorStartX - 18 - $contentLeft), 2.2, $goldColor);
         $overlays[] = $this->coloredRectangle($nomorEndX + 18, $nomorY - 6, max(10, $contentRight - ($nomorEndX + 18)), 2.2, $goldColor);
@@ -855,9 +822,9 @@ class EventDocumentGenerator
         );
 
         // --- Participant data fields (enlarged and well-aligned) ---
-        $labelX = 320;
-        $colonX = 700;
-        $dataX = 740;
+        $labelX = 400;
+        $colonX = 760;
+        $dataX = 800;
         $fieldSize = 25.5;
 
         $fields = [
@@ -981,7 +948,7 @@ class EventDocumentGenerator
             if (is_readable($fullPhotoPath)) {
                 $photoW = 120;
                 $photoH = 160;
-                $photoX = 420;
+                $photoX = 450;
                 $photoTop = 775;
 
                 // Gold frame & white matting around photo
@@ -992,14 +959,11 @@ class EventDocumentGenerator
         }
 
         // --- Signature block ---
-        $sigCenterX = 875;
+        $sigCenterX = 960;
         $sigY = 785;
 
         $cityDateLine = "{$sigSettings['city']}, {$sigSettings['date_formatted']}";
-        $cityDateWidth = $this->textWidth($cityDateLine, 22, false);
-        $cityDateX = $sigCenterX - ($cityDateWidth / 2);
-        $overlays[] = $this->text($cityDateLine, $cityDateX, $sigY, 22, false, $dark);
-        $overlays[] = $this->coloredRectangle($cityDateX, $sigY + 3, $cityDateWidth, 1.2, $dark);
+        $overlays[] = $this->centeredText($cityDateLine, $sigCenterX, $sigY, 22, false, $dark);
 
         $orgLine = $sigSettings['organization'];
         $overlays[] = $this->centeredText($orgLine, $sigCenterX, $sigY + 32, 25, true, $dark);
@@ -1017,12 +981,9 @@ class EventDocumentGenerator
             }
         }
 
-        // Signer name with underline
+        // Signer name (without underline)
         $nameLine = $sigSettings['signer_name'];
-        $nameWidth = $this->textWidth($nameLine, 24, false);
-        $nameX = $sigCenterX - ($nameWidth / 2);
-        $overlays[] = $this->text($nameLine, $nameX, $sigY + 150, 24, false, $dark);
-        $overlays[] = $this->coloredRectangle($nameX, $sigY + 153, $nameWidth, 1.5, $dark);
+        $overlays[] = $this->centeredText($nameLine, $sigCenterX, $sigY + 150, 24, false, $dark);
 
         return $overlays;
     }
@@ -1222,6 +1183,13 @@ class EventDocumentGenerator
 
     private function templatePath(string $type, ?string $trackCode): string
     {
+        if ($type === 'certificate') {
+            $cleanPath = resource_path('document-templates/'.self::TEMPLATE_DIR.'/sertifikat-background-universal.png');
+            if (is_readable($cleanPath)) {
+                return $cleanPath;
+            }
+        }
+
         if ($type === 'transcript') {
             $cleanPath = resource_path('document-templates/'.self::TEMPLATE_DIR.'/transkrip-background-tanpa-garis.png');
             if (is_readable($cleanPath)) {
@@ -1302,14 +1270,14 @@ class EventDocumentGenerator
                 $certNumField = self::documentField('certificate', 'number', $ep->track_code, $documentTrack);
                 $transNumField = self::documentField('transcript', 'number', $ep->track_code, $documentTrack);
 
-                $newCertNum = $this->configuredNumber($event, $ep, 'certificate', $documentTrack);
-                if ($newCertNum && $ep->{$certNumField} !== $newCertNum) {
-                    $updates[$certNumField] = $newCertNum;
-                }
-
-                $newTransNum = $this->configuredNumber($event, $ep, 'transcript', $documentTrack);
-                if ($newTransNum && $ep->{$transNumField} !== $newTransNum) {
-                    $updates[$transNumField] = $newTransNum;
+                $newNum = $this->configuredNumber($event, $ep, 'certificate', $documentTrack);
+                if ($newNum) {
+                    if ($ep->{$certNumField} !== $newNum) {
+                        $updates[$certNumField] = $newNum;
+                    }
+                    if ($ep->{$transNumField} !== $newNum) {
+                        $updates[$transNumField] = $newNum;
+                    }
                 }
             }
 

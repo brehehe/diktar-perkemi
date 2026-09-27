@@ -16,12 +16,9 @@ class EventDocumentNumberSettingController extends Controller
         EventDocumentGenerator $generator
     ): RedirectResponse {
         $certSettings = [];
-        $transSettings = [];
         $numbers = $request->validated('numbers') ?? [];
-        $transNumbers = $request->validated('transcript_numbers') ?? [];
 
         foreach (array_keys(EventDocumentGenerator::NUMBER_LABELS) as $trackCode) {
-            // Certificate settings
             if (isset($numbers[$trackCode])) {
                 $input = $numbers[$trackCode];
                 $prefix = trim((string) ($input['prefix'] ?? ''));
@@ -36,30 +33,9 @@ class EventDocumentNumberSettingController extends Controller
                     ], fn ($value) => $value !== null);
                 }
             }
-
-            // Transcript settings
-            if (isset($transNumbers[$trackCode])) {
-                $tInput = $transNumbers[$trackCode];
-                $tPrefix = trim((string) ($tInput['prefix'] ?? ''));
-                $tStart = isset($tInput['start']) ? trim((string) $tInput['start']) : null;
-
-                if ($tPrefix !== '' || ($tStart !== null && $tStart !== '')) {
-                    $transSettings[$trackCode] = array_filter([
-                        'prefix' => $tPrefix !== '' ? $tPrefix : null,
-                        'start' => ($tStart !== null && $tStart !== '')
-                            ? (str_starts_with($tStart, '0') ? $tStart : (int) $tStart)
-                            : null,
-                    ], fn ($value) => $value !== null);
-                }
-            }
         }
 
-        $allSettings = $certSettings;
-        if (! empty($transSettings)) {
-            $allSettings['transcript'] = $transSettings;
-        }
-
-        $event->update(['document_number_settings' => $allSettings]);
+        $event->update(['document_number_settings' => $certSettings]);
 
         $syncedCount = 0;
         if ($request->boolean('apply_to_participants')) {

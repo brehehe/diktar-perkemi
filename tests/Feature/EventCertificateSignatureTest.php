@@ -221,8 +221,7 @@ test('saving document number settings can synchronize participant numbers', func
 
     $enrollment->refresh();
     expect($enrollment->certificate_number)->toContain('001/SK-PED-BARU')
-        ->and($enrollment->transcript_number)->toContain('001/TR-PED-BARU')
-        ->and($enrollment->certificate_number)->not->toBe($enrollment->transcript_number)
+        ->and($enrollment->transcript_number)->toBe($enrollment->certificate_number)
         ->and($enrollment->certificate_file_path)->not->toBeNull()
         ->and($enrollment->transcript_file_path)->not->toBeNull();
 });

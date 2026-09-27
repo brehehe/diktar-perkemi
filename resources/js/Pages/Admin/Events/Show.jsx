@@ -380,17 +380,12 @@ export default function Show({
         }
     }, [activeTab, participantPage]);
     const [isGeneratingDocuments, setIsGeneratingDocuments] = useState(false);
-    const [documentNumberSubTab, setDocumentNumberSubTab] = useState('certificate');
     const documentNumberForm = useForm({
         apply_to_participants: true,
         regenerate_documents: true,
         numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
             prefix: (documentNumberOverrides.certificate?.[trackCode]?.prefix ?? documentNumberOverrides[trackCode]?.prefix) ?? '',
             start: (documentNumberOverrides.certificate?.[trackCode]?.start ?? documentNumberOverrides[trackCode]?.start) ?? '',
-        }])),
-        transcript_numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
-            prefix: documentNumberOverrides.transcript?.[trackCode]?.prefix ?? '',
-            start: documentNumberOverrides.transcript?.[trackCode]?.start ?? '',
         }])),
     });
 
@@ -400,10 +395,6 @@ export default function Show({
             numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
                 prefix: (documentNumberOverrides.certificate?.[trackCode]?.prefix ?? documentNumberOverrides[trackCode]?.prefix) ?? '',
                 start: (documentNumberOverrides.certificate?.[trackCode]?.start ?? documentNumberOverrides[trackCode]?.start) ?? '',
-            }])),
-            transcript_numbers: Object.fromEntries(Object.keys(documentNumberLabels).map((trackCode) => [trackCode, {
-                prefix: documentNumberOverrides.transcript?.[trackCode]?.prefix ?? '',
-                start: documentNumberOverrides.transcript?.[trackCode]?.start ?? '',
             }])),
         }));
     }, [documentNumberOverrides, documentNumberLabels]);
@@ -4916,122 +4907,49 @@ export default function Show({
                             <form onSubmit={(submitEvent) => { submitEvent.preventDefault(); documentNumberForm.put(`/admin/event/${event.id}/nomor-dokumen`, { preserveScroll: true }); }} className="border-t border-[#DCE7F3]">
                                 <div className="p-4 sm:p-5 border-b border-[#DCE7F3] bg-[#F8FBFF]">
                                     <p className="max-w-3xl text-sm leading-6 text-[#425973]">
-                                        Atur kode surat dan nomor awal untuk <strong>Sertifikat</strong> dan <strong>E-Transkrip</strong> per jalur peserta. Nomor urut otomatis diformat 3 digit (contoh: <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[#0B63CE] border border-[#DCE7F3]">001/SK-PED-JTM-2026/IX/2026</code> dan <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[#0B63CE] border border-[#DCE7F3]">001/TR-PED-JTM-2026/IX/2026</code>). Saat disimpan, nomor seluruh peserta dan berkas PDF sertifikat / transkrip akan otomatis disinkronkan.
+                                        Atur kode surat dan nomor awal per jalur peserta. Nomor surat ini digunakan sama persis untuk <strong>Sertifikat</strong> dan <strong>E-Transkrip</strong> peserta tanpa tambahan TR-. Nomor urut otomatis diformat sesuai nomor awal (contoh: <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[#0B63CE] border border-[#DCE7F3]">051/PGJ-DRH/IX/2026</code>). Saat disimpan, nomor seluruh peserta dan berkas PDF sertifikat & transkrip akan otomatis disinkronkan.
                                     </p>
-                                    <div className="mt-4 flex flex-wrap gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setDocumentNumberSubTab('certificate')}
-                                            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
-                                                documentNumberSubTab === 'certificate'
-                                                    ? 'bg-[#0B63CE] text-white shadow-2xs'
-                                                    : 'bg-white border border-[#DCE7F3] text-[#425973] hover:bg-slate-50'
-                                            }`}
-                                        >
-                                            <Award className="size-3.5" />
-                                            <span>Nomor Sertifikat</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setDocumentNumberSubTab('transcript')}
-                                            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
-                                                documentNumberSubTab === 'transcript'
-                                                    ? 'bg-[#0B63CE] text-white shadow-2xs'
-                                                    : 'bg-white border border-[#DCE7F3] text-[#425973] hover:bg-slate-50'
-                                            }`}
-                                        >
-                                            <FileText className="size-3.5" />
-                                            <span>Nomor E-Transkrip</span>
-                                        </button>
-                                    </div>
                                 </div>
 
                                 <div className="p-4 sm:p-5">
-                                    {documentNumberSubTab === 'certificate' && (
-                                        <div>
-                                            <div className="mb-3 flex items-center justify-between">
-                                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Pengaturan Nomor Sertifikat Per Jalur</h4>
-                                                <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong> (panjang digit mengikuti nomor awal, misal 056 atau 0056)</span>
-                                            </div>
-                                            <div className="grid gap-4 lg:grid-cols-2">
-                                                {Object.entries(documentNumberLabels).map(([trackCode, label]) => (
-                                                    <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4 rounded-lg">
-                                                        <legend className="px-1 text-sm font-semibold text-[#0E2747]">{label} ({trackCode})</legend>
-                                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
-                                                            <Input
-                                                                id={`event-cert-${trackCode}-prefix`}
-                                                                label="Kode surat sertifikat"
-                                                                value={documentNumberForm.data.numbers[trackCode]?.prefix ?? ''}
-                                                                onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], prefix: change.target.value.toUpperCase() } })}
-                                                                placeholder={documentNumberDefaults[trackCode]?.prefix || ''}
-                                                                error={documentNumberForm.errors[`numbers.${trackCode}.prefix`]}
-                                                                maxLength={32}
-                                                            />
-                                                            <Input
-                                                                id={`event-cert-${trackCode}-start`}
-                                                                label="Nomor awal"
-                                                                type="text"
-                                                                inputMode="numeric"
-                                                                pattern="[0-9]*"
-                                                                maxLength={8}
-                                                                value={documentNumberForm.data.numbers[trackCode]?.start ?? ''}
-                                                                onChange={(change) => {
-                                                                    const val = change.target.value.replace(/\D/g, '');
-                                                                    documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], start: val } });
-                                                                }}
-                                                                placeholder={String(documentNumberDefaults[trackCode]?.raw_start || documentNumberDefaults[trackCode]?.start || '001')}
-                                                                helperText="Bisa diisi 001, 056, 0056, dst."
-                                                                error={documentNumberForm.errors[`numbers.${trackCode}.start`]}
-                                                            />
-                                                        </div>
-                                                    </fieldset>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {documentNumberSubTab === 'transcript' && (
-                                        <div>
-                                            <div className="mb-3 flex items-center justify-between">
-                                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Pengaturan Nomor E-Transkrip Per Jalur</h4>
-                                                <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong> (panjang digit mengikuti nomor awal, misal 056 atau 0056)</span>
-                                            </div>
-                                            <div className="grid gap-4 lg:grid-cols-2">
-                                                {Object.entries(transcriptNumberLabels && Object.keys(transcriptNumberLabels).length > 0 ? transcriptNumberLabels : documentNumberLabels).map(([trackCode, label]) => (
-                                                    <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4 rounded-lg">
-                                                        <legend className="px-1 text-sm font-semibold text-[#0E2747]">{transcriptNumberLabels[trackCode] || `E-Transkrip (${trackCode})`}</legend>
-                                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
-                                                            <Input
-                                                                id={`event-trans-${trackCode}-prefix`}
-                                                                label="Kode surat transkrip"
-                                                                value={documentNumberForm.data.transcript_numbers[trackCode]?.prefix ?? ''}
-                                                                onChange={(change) => documentNumberForm.setData('transcript_numbers', { ...documentNumberForm.data.transcript_numbers, [trackCode]: { ...documentNumberForm.data.transcript_numbers[trackCode], prefix: change.target.value.toUpperCase() } })}
-                                                                placeholder={transcriptNumberDefaults[trackCode]?.prefix || ''}
-                                                                error={documentNumberForm.errors[`transcript_numbers.${trackCode}.prefix`]}
-                                                                maxLength={32}
-                                                            />
-                                                            <Input
-                                                                id={`event-trans-${trackCode}-start`}
-                                                                label="Nomor awal"
-                                                                type="text"
-                                                                inputMode="numeric"
-                                                                pattern="[0-9]*"
-                                                                maxLength={8}
-                                                                value={documentNumberForm.data.transcript_numbers[trackCode]?.start ?? ''}
-                                                                onChange={(change) => {
-                                                                    const val = change.target.value.replace(/\D/g, '');
-                                                                    documentNumberForm.setData('transcript_numbers', { ...documentNumberForm.data.transcript_numbers, [trackCode]: { ...documentNumberForm.data.transcript_numbers[trackCode], start: val } });
-                                                                }}
-                                                                placeholder={String(transcriptNumberDefaults[trackCode]?.raw_start || transcriptNumberDefaults[trackCode]?.start || '001')}
-                                                                helperText="Bisa diisi 001, 056, 0056, dst."
-                                                                error={documentNumberForm.errors[`transcript_numbers.${trackCode}.start`]}
-                                                            />
-                                                        </div>
-                                                    </fieldset>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Pengaturan Nomor Sertifikat Per Jalur</h4>
+                                        <span className="text-xs text-[#6B7C93]">Format: <strong className="font-mono text-[#0E2747]">001/[KODE]/IX/2026</strong> (panjang digit mengikuti nomor awal, misal 056 atau 0056)</span>
+                                    </div>
+                                    <div className="grid gap-4 lg:grid-cols-2">
+                                        {Object.entries(documentNumberLabels).map(([trackCode, label]) => (
+                                            <fieldset key={trackCode} className="min-w-0 border border-[#DCE7F3] bg-[#F8FBFF] p-4 rounded-lg">
+                                                <legend className="px-1 text-sm font-semibold text-[#0E2747]">{label} ({trackCode})</legend>
+                                                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                                                    <Input
+                                                        id={`event-cert-${trackCode}-prefix`}
+                                                        label="Kode surat sertifikat"
+                                                        value={documentNumberForm.data.numbers[trackCode]?.prefix ?? ''}
+                                                        onChange={(change) => documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], prefix: change.target.value.toUpperCase() } })}
+                                                        placeholder={documentNumberDefaults[trackCode]?.prefix || ''}
+                                                        error={documentNumberForm.errors[`numbers.${trackCode}.prefix`]}
+                                                        maxLength={32}
+                                                    />
+                                                    <Input
+                                                        id={`event-cert-${trackCode}-start`}
+                                                        label="Nomor awal"
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
+                                                        maxLength={8}
+                                                        value={documentNumberForm.data.numbers[trackCode]?.start ?? ''}
+                                                        onChange={(change) => {
+                                                            const val = change.target.value.replace(/\D/g, '');
+                                                            documentNumberForm.setData('numbers', { ...documentNumberForm.data.numbers, [trackCode]: { ...documentNumberForm.data.numbers[trackCode], start: val } });
+                                                        }}
+                                                        placeholder={String(documentNumberDefaults[trackCode]?.raw_start || documentNumberDefaults[trackCode]?.start || '001')}
+                                                        helperText="Bisa diisi 001, 056, 0056, dst."
+                                                        error={documentNumberForm.errors[`numbers.${trackCode}.start`]}
+                                                    />
+                                                </div>
+                                            </fieldset>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#DCE7F3] bg-white p-4 sm:p-5">

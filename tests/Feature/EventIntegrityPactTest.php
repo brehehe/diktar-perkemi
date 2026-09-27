@@ -164,3 +164,20 @@ test('organizer can view print page of participant integrity pact', function () 
         ->where('pact.full_name', $participant->name)
     );
 });
+
+test('organizer can view print page of participant integrity pact using numeric event id and participant id', function () {
+    $organizer = User::where('role', 'Penyelenggara')->first() ?? User::where('role', 'Admin')->first();
+    $participant = Participant::where('kenshi_id_number', '07.1.13.01.24.012')->firstOrFail();
+
+    $response = $this->actingAs($organizer)->get(route('admin.event.integrity-pact.admin-print', [
+        'event' => $this->event->id,
+        'participant' => $participant->id,
+    ]));
+
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Event/PrintIntegrityPact')
+        ->where('participant.id', $participant->id)
+        ->where('pact.full_name', $participant->name)
+    );
+});

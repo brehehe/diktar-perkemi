@@ -29,6 +29,17 @@ class EnsureEventAccess
         $event = $request->route('event');
         $routeName = $request->route()?->getName();
 
+        if (! $event instanceof Event && $event !== null) {
+            $resolvedEvent = is_numeric($event)
+                ? Event::find($event)
+                : Event::where('slug', $event)->first();
+
+            if ($resolvedEvent) {
+                $event = $resolvedEvent;
+                $request->route()->setParameter('event', $resolvedEvent);
+            }
+        }
+
         if ($routeName === 'admin.cbt.question.store' && $request->route('package') instanceof CbtExamPackage) {
             $packageEvent = $request->route('package')->event;
             if ($packageEvent) {

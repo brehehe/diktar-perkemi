@@ -462,9 +462,15 @@ class EventRegistrationFormController extends Controller
     /**
      * Show official printable/formatted registration form and waiver document.
      */
-    public function print(Request $request, string $slug, ?int $participantId = null): Response
+    public function print(Request $request, Event|string|int $slug, ?int $participantId = null): Response
     {
-        $event = Event::where('slug', $slug)->firstOrFail();
+        if ($slug instanceof Event) {
+            $event = $slug;
+        } elseif (is_numeric($slug)) {
+            $event = Event::find($slug) ?? Event::where('slug', $slug)->firstOrFail();
+        } else {
+            $event = Event::where('slug', $slug)->firstOrFail();
+        }
         $user = $request->user();
 
         $participant = $this->resolveParticipant($request, $event, $participantId);

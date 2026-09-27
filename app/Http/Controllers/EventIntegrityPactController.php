@@ -16,9 +16,20 @@ use Inertia\Response;
 
 class EventIntegrityPactController extends Controller
 {
-    protected function resolveEvent(Event|string $event): Event
+    protected function resolveEvent(Event|string|int $event): Event
     {
-        return $event instanceof Event ? $event : Event::where('slug', $event)->firstOrFail();
+        if ($event instanceof Event) {
+            return $event;
+        }
+
+        if (is_numeric($event)) {
+            $found = Event::find($event);
+            if ($found) {
+                return $found;
+            }
+        }
+
+        return Event::where('slug', $event)->firstOrFail();
     }
 
     public function show(Request $request, Event|string $event): Response|RedirectResponse
@@ -377,7 +388,7 @@ class EventIntegrityPactController extends Controller
         return back()->with('success', "Pakta Integritas untuk {$pact->full_name} berhasil diverifikasi.");
     }
 
-    public function print(Request $request, Event|string $event, ?Participant $participant = null): Response|RedirectResponse
+    public function print(Request $request, Event|string|int $event, Participant|string|int|null $participant = null): Response|RedirectResponse
     {
         $event = $this->resolveEvent($event);
         $user = Auth::user();
@@ -385,7 +396,14 @@ class EventIntegrityPactController extends Controller
             return redirect()->route('login');
         }
 
-        $targetParticipant = $participant;
+        $targetParticipant = null;
+        if ($participant instanceof Participant) {
+            $targetParticipant = $participant;
+        } elseif (is_numeric($participant)) {
+            $targetParticipant = Participant::find($participant)
+                ?? EventParticipant::find($participant)?->participant;
+        }
+
         $isOrganizerOrAdmin = in_array($user->role, ['Admin', 'Penyelenggara', 'Super Admin'], true);
 
         if (! $targetParticipant && $request->has('participant_id') && $isOrganizerOrAdmin) {
@@ -401,7 +419,8 @@ class EventIntegrityPactController extends Controller
                 ->with('error', 'Peserta tidak ditemukan.');
         }
 
-        $pact = EventIntegrityPact::where('event_id', $event->id)
+        $pact = EventIntegrityPact::with('verifier')
+            ->where('event_id', $event->id)
             ->where('participant_id', $targetParticipant->id)
             ->first();
 
@@ -413,6 +432,9 @@ class EventIntegrityPactController extends Controller
         $trackCode = $enrollment?->track_code ?? 'PD';
         $pactType = $pact?->pact_type ?? self::resolvePactType($trackCode);
 
+        $validStartDate = $pact?->valid_start_date ?? $event->end_date ?? now();
+        $validEndDate = $pact?->valid_end_date ?? ($validStartDate ? Carbon::parse($validStartDate)->addYears(4) : now()->addYears(4));
+
         $pactInstance = $pact ?? new EventIntegrityPact([
             'pact_type' => $pactType,
             'full_name' => $targetParticipant->name,
@@ -420,8 +442,8 @@ class EventIntegrityPactController extends Controller
             'birth_date' => $targetParticipant->birth_date,
             'kenshi_id_number' => $targetParticipant->kenshi_id_number,
             'certificate_number' => $enrollment?->certificate_number ?? '-',
-            'valid_start_date' => $event->end_date ?? now(),
-            'valid_end_date' => $event->end_date ? Carbon::parse($event->end_date)->addYears(4) : now()->addYears(4),
+            'valid_start_date' => $validStartDate,
+            'valid_end_date' => $validEndDate,
             'id_card_address' => $targetParticipant->address ?? '-',
             'current_address' => $targetParticipant->address ?? '-',
             'dan_level' => $targetParticipant->dan_rank ?? '1 DAN',
@@ -464,9 +486,9 @@ class EventIntegrityPactController extends Controller
                 'birth_place' => $pactInstance->birth_place,
                 'birth_date' => $pactInstance->birth_date?->format('d F Y') ?? ($pactInstance->birth_date ? Carbon::parse($pactInstance->birth_date)->locale('id')->isoFormat('D MMMM Y') : '-'),
                 'kenshi_id_number' => $pactInstance->kenshi_id_number,
-                'certificate_number' => $pactInstance->certificate_number ?? '-',
-                'valid_start_date' => $pactInstance->valid_start_date?->format('d F Y') ?? '-',
-                'valid_end_date' => $pactInstance->valid_end_date?->format('d F Y') ?? '-',
+                'certificate_number' => $pactInstance->certificate_number ?: ($enrollment?->certificate_number ?? '-'),
+                'valid_start_date' => $pactInstance->valid_start_date?->format('d F Y') ?? ($validStartDate ? Carbon::parse($validStartDate)->format('d F Y') : '-'),
+                'valid_end_date' => $pactInstance->valid_end_date?->format('d F Y') ?? ($validEndDate ? Carbon::parse($validEndDate)->format('d F Y') : '-'),
                 'id_card_address' => $pactInstance->id_card_address,
                 'current_address' => $pactInstance->current_address,
                 'dan_level' => $pactInstance->dan_level,
@@ -481,6 +503,8 @@ class EventIntegrityPactController extends Controller
                 'signature_data' => $pactInstance->signature_data,
                 'signed_at' => $pactInstance->signed_at?->format('d M Y H:i'),
                 'status' => $pactInstance->status,
+                'verified_at' => $pactInstance->verified_at?->format('d M Y, H:i'),
+                'verified_by_name' => $pactInstance->verifier?->name ?? ($pactInstance->status === 'verified' ? 'PB PERKEMI' : null),
             ],
             'pledgePoints' => $pactInstance->getPledgePoints(),
         ]);

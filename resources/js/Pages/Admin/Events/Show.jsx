@@ -7645,8 +7645,8 @@ export default function Show({
                                             <span className="text-slate-400 italic text-[11px]">(Belum Ditandatangani)</span>
                                         )}
                                     </div>
-                                    <div className="font-bold underline uppercase text-[#0E2747]">
-                                        {selectedPactForModal.full_name || selectedPactForModal.participant_name}
+                                    <div className="font-bold underline uppercase text-[#0E2747] whitespace-nowrap tracking-tight">
+                                        ({selectedPactForModal.full_name || selectedPactForModal.participant_name})
                                     </div>
                                     <div className="text-[10px] text-[#6B7C93] font-mono">
                                         NIK: {selectedPactForModal.kenshi_id_number}

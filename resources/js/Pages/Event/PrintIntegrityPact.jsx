@@ -16,8 +16,8 @@ export default function PrintIntegrityPact({
         pact.pact_type === 'penguji'
             ? 'Nomor Sertifikat Penguji'
             : pact.pact_type === 'wasit'
-            ? 'Nomor Sertifikat Wasit'
-            : 'Nomor Sertifikat Pelatih';
+                ? 'Nomor Sertifikat Wasit'
+                : 'Nomor Sertifikat Pelatih';
 
     return (
         <div className="min-h-screen bg-[#F0F2F5] py-4 print:bg-white print:py-0">
@@ -53,29 +53,39 @@ export default function PrintIntegrityPact({
             </header>
 
             {/* A4 Sheet Container */}
-            <article className="a4-sheet mx-auto max-w-[210mm] bg-white p-[18mm] text-[#111111] shadow-md print:max-w-none print:p-0 print:shadow-none font-serif leading-relaxed">
+            <article className="a4-sheet mx-auto max-w-[210mm] bg-white p-[12mm] text-[#111111] shadow-md print:max-w-none print:p-0 print:shadow-none font-serif leading-relaxed">
+                {/* Kop PB PERKEMI */}
+                <div className="border-b-2 border-black pb-2 text-center">
+                    <div className="font-bold text-[14px] tracking-wider uppercase">
+                        PERSAUDARAAN SHORINJI KEMPO INDONESIA
+                    </div>
+                    <div className="font-bold text-[12px] tracking-widest uppercase mt-0.5">
+                        PENGURUS BESAR (PB. PERKEMI)
+                    </div>
+                </div>
+
                 {/* Header Title */}
-                <div className="text-center pb-4">
-                    <h1 className="text-xl font-bold uppercase tracking-wider underline underline-offset-4">
-                        PAKTA INTEGRITAS
+                <div className="text-center my-2.5 pb-1">
+                    <h1 className="text-[15px] font-bold uppercase tracking-wider underline underline-offset-4">
+                        {pact.pact_title || `PAKTA INTEGRITAS ${pact.pact_type ? pact.pact_type.toUpperCase() : ''}`}
                     </h1>
                 </div>
 
                 {/* Body Intro */}
-                <p className="mt-4 text-[13px] leading-relaxed">
+                <p className="mt-2 text-[12px] leading-snug">
                     Saya yang bertanda tangan di bawah ini:
                 </p>
 
                 {/* Field List (Dotted line table layout matching docx) */}
-                <div className="mt-2 space-y-1.5 text-[12.5px] leading-snug">
+                <div className="mt-1.5 space-y-1 text-[11.5px] leading-snug">
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Nama Lengkap</span>
+                        <span className="w-52 shrink-0 font-medium">Nama Lengkap</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1 font-bold">{pact.full_name}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Tempat/Tanggal Lahir</span>
+                        <span className="w-52 shrink-0 font-medium">Tempat/Tanggal Lahir</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1">
                             {pact.birth_place ? `${pact.birth_place}, ` : ''}{pact.birth_date}
@@ -83,19 +93,19 @@ export default function PrintIntegrityPact({
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Nomor Induk Kenshi</span>
+                        <span className="w-52 shrink-0 font-medium">Nomor Induk Kenshi</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1 font-mono font-medium">{pact.kenshi_id_number}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">{certTitleLabel}</span>
+                        <span className="w-52 shrink-0 font-medium">{certTitleLabel}</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1 font-mono">{pact.certificate_number || '........................................................'}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Tanggal Berlaku Sertifikat</span>
+                        <span className="w-52 shrink-0 font-medium">Tanggal Berlaku Sertifikat</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1">
                             {pact.valid_start_date || '..........'} sd {pact.valid_end_date || '..........'}
@@ -103,49 +113,49 @@ export default function PrintIntegrityPact({
                     </div>
 
                     <div className="flex items-start">
-                        <span className="w-56 shrink-0 font-medium pt-0.5">Alamat lengkap sesuai KTP</span>
+                        <span className="w-52 shrink-0 font-medium pt-0.5">Alamat lengkap sesuai KTP</span>
                         <span className="mr-2 pt-0.5">:</span>
                         <span className="flex-1 leading-snug">{pact.id_card_address || '-'}</span>
                     </div>
 
                     <div className="flex items-start">
-                        <span className="w-56 shrink-0 font-medium pt-0.5">Alamat lengkap saat ini</span>
+                        <span className="w-52 shrink-0 font-medium pt-0.5">Alamat lengkap saat ini</span>
                         <span className="mr-2 pt-0.5">:</span>
                         <span className="flex-1 leading-snug">{pact.current_address || pact.id_card_address || '-'}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Tingkatan</span>
+                        <span className="w-52 shrink-0 font-medium">Tingkatan</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1 font-semibold">{pact.dan_level}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Agama</span>
+                        <span className="w-52 shrink-0 font-medium">Agama</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1">{pact.religion || 'Islam'}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Dojo</span>
+                        <span className="w-52 shrink-0 font-medium">Dojo</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1">{pact.dojo || '-'}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Kota</span>
+                        <span className="w-52 shrink-0 font-medium">Kota</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1">{pact.city || '-'}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Provinsi</span>
+                        <span className="w-52 shrink-0 font-medium">Provinsi</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1">{pact.province || 'Jawa Timur'}</span>
                     </div>
 
                     <div className="flex items-baseline">
-                        <span className="w-56 shrink-0 font-medium">Menjadi Pengurus pada</span>
+                        <span className="w-52 shrink-0 font-medium">Menjadi Pengurus pada</span>
                         <span className="mr-2">:</span>
                         <span className="flex-1">
                             {pact.management_organization || '-'}
@@ -156,50 +166,40 @@ export default function PrintIntegrityPact({
                 </div>
 
                 {/* Pernyataan Intro */}
-                <p className="mt-4 text-[12.5px] leading-relaxed">
+                <p className="mt-2 text-[11.5px] leading-snug">
                     dengan ini menyatakan secara sadar dan sungguh-sungguh atas hal-hal sebagai berikut:
                 </p>
 
                 {/* 5 Butir Poin Komitmen Resmi DOCX */}
-                <ol className="mt-2 list-outside list-decimal space-y-1.5 pl-6 text-[12px] leading-relaxed text-justify">
+                <ol className="mt-1 list-outside list-decimal space-y-0.5 pl-5 text-[11px] leading-normal text-justify">
                     {pledgePoints.map((point, index) => (
-                        <li key={index} className="pl-1">
+                        <li key={index} className="pl-0.5">
                             {point}
                         </li>
                     ))}
                 </ol>
 
                 {/* Paragraf Penutup */}
-                <p className="mt-3.5 text-[12px] leading-relaxed text-justify">
+                <p className="mt-2 text-[11px] leading-normal text-justify">
                     Demikian Pakta Integritas ini saya ditandatangani dengan kesadaran penuh tanpa desakan atau paksaan didalam bentuk yang bagaimanapun dan dari pihak manapun. Saya melakukan pelanggaran dengan sengaja ataupun tanpa sengaja, atas ketentuan dan/atau persyaratan Pakta Integritas ini, tertulis atau tersirat, maka Saya bersedia untuk bertanggung jawab sepenuhnya termasuk untuk mendapatkan sanksi Organisasi sesuai dengan ketentuan yang berlaku.
                 </p>
 
-                {/* Bagian Tanda Tangan & Materai */}
-                <div className="mt-6 flex justify-end">
-                    <div className="w-64 text-center text-[12.5px]">
+                {/* Bagian Tanda Tangan */}
+                <div className="mt-4 flex justify-end">
+                    {/* Yang menyatakan - Dibuat panjang agar nama dan gelar tidak terbagi 2 baris */}
+                    <div className="inline-flex flex-col items-center text-center min-w-[340px] max-w-[480px] text-[12px]">
                         <p>
                             {pact.sign_place}, {pact.sign_date}
                         </p>
-                        <p className="mt-0.5">Yang menyatakan,</p>
+                        <p className="mt-0.5 font-medium">Yang menyatakan,</p>
 
-                        {/* Kotak Materai Rp 10.000 + Overlay TTD Digital */}
-                        <div className="relative mx-auto my-2 flex h-28 w-44 items-center justify-center">
-                            {/* Kotak Materai 10.000 */}
-                            <div className="absolute inset-0 m-auto flex h-14 w-28 flex-col items-center justify-center rounded border border-dashed border-emerald-600 bg-emerald-50/70 text-center">
-                                <span className="text-[8px] font-black tracking-widest text-emerald-800 uppercase">
-                                    MATERAI
-                                </span>
-                                <span className="text-[10px] font-black text-emerald-700">
-                                    Rp. 10.000
-                                </span>
-                            </div>
-
-                            {/* Tanda Tangan Digital Overlay */}
+                        {/* Kotak Tanda Tangan Digital Overlay */}
+                        <div className="relative mx-auto my-1.5 flex h-20 w-52 items-center justify-center">
                             {pact.signature_data ? (
                                 <img
                                     src={pact.signature_data}
                                     alt="Tanda Tangan Digital"
-                                    className="relative z-10 max-h-24 max-w-full object-contain"
+                                    className="relative z-10 max-h-20 max-w-full object-contain"
                                 />
                             ) : (
                                 <div className="relative z-10 text-[10px] text-slate-400 italic">
@@ -208,10 +208,12 @@ export default function PrintIntegrityPact({
                             )}
                         </div>
 
-                        {/* Nama Terang Huruf Besar */}
-                        <p className="font-bold underline underline-offset-2 uppercase">
-                            ({pact.full_name})
-                        </p>
+                        {/* Nama Terang Huruf Besar - Garis Bawah Panjang dan Satu Baris (Tidak Bagi 2) */}
+                        <div className="pt-1">
+                            <span className="font-bold border-b border-black pb-0.5 uppercase whitespace-nowrap text-[12px] tracking-tight inline-block min-w-[260px] text-center">
+                                ({pact.full_name})
+                            </span>
+                        </div>
                     </div>
                 </div>
             </article>
@@ -229,7 +231,7 @@ export default function PrintIntegrityPact({
                     }
                     @page {
                         size: A4 portrait;
-                        margin: 15mm 18mm 15mm 18mm;
+                        margin: 10mm 14mm 10mm 14mm;
                     }
                     .a4-sheet {
                         width: 100% !important;
@@ -238,6 +240,8 @@ export default function PrintIntegrityPact({
                         margin: 0 !important;
                         box-shadow: none !important;
                         border: none !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }
                 }
             `}</style>

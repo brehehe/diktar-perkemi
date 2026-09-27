@@ -196,11 +196,10 @@ export default function PrintRundown({ event, sessions = [] }) {
                                 <button
                                     type="button"
                                     onClick={() => setSelectedDay('all')}
-                                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                                        selectedDay === 'all'
+                                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${selectedDay === 'all'
                                             ? 'bg-[#0E2747] text-white font-semibold'
                                             : 'bg-white border border-[#DCE7F3] text-[#6B7C93] hover:text-[#0E2747]'
-                                    }`}
+                                        }`}
                                 >
                                     Semua Hari ({sessions.length})
                                 </button>
@@ -209,11 +208,10 @@ export default function PrintRundown({ event, sessions = [] }) {
                                         key={d}
                                         type="button"
                                         onClick={() => setSelectedDay(String(d))}
-                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                                            selectedDay === String(d)
+                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${selectedDay === String(d)
                                                 ? 'bg-[#0E2747] text-white font-semibold'
                                                 : 'bg-white border border-[#DCE7F3] text-[#6B7C93] hover:text-[#0E2747]'
-                                        }`}
+                                            }`}
                                     >
                                         Hari ke-{d}
                                     </button>

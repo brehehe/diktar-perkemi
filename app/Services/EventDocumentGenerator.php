@@ -22,12 +22,12 @@ class EventDocumentGenerator
     /** @var array<string, array<string, string>> */
     private const TEMPLATES = [
         'certificate' => [
-            'PD' => 'sertifikat-background-universal.png',
-            'WAD' => 'sertifikat-background-universal.png',
-            'WAN' => 'sertifikat-background-universal.png',
-            'PED' => 'sertifikat-background-universal.png',
-            'PEN' => 'sertifikat-background-universal.png',
-            'PN' => 'sertifikat-background-universal.png',
+            'PD' => 'pd-certificate-background.png',
+            'WAD' => 'wad-certificate-background.png',
+            'WAN' => 'wan-certificate-background.png',
+            'PED' => 'ped-certificate-background.png',
+            'PEN' => 'pen-certificate-background.png',
+            'PN' => 'pn-certificate-background.png',
         ],
         'transcript' => [
             'PD' => 'transkrip-background-tanpa-garis.png',
@@ -757,27 +757,27 @@ class EventDocumentGenerator
         ];
 
         // Background is clean/blank — write ALL content from code
-        // Canvas: 1490 x 1055 px, landscape A4 PDF (841.89 x 595.28 pt)
-        // Content area starts ~x=300 (after left decorative strip ~240px wide)
+        // Canvas: 3508 x 2480 px, full page landscape A4 PDF (841.89 x 595.28 pt)
+        // Watermark logo on bottom-left: x: [816, 1071], y: [1847, 2157]
+        // Top-right corner track badge: x: [2410, 3464], y: [80, 215]
 
         $overlays = [];
 
         // --- Header block ---
-        // --- Header block ---
-        // Header text is centered across the certificate content area (~x=890)
-        $headerCenterX = 890;
+        // Header text is centered across the content area (center = 2040) with generous clearance from top-right badge
+        $headerCenterX = 2040;
         $dark = [0.05, 0.05, 0.05];
 
-        $overlays[] = $this->centeredText('PENGURUS BESAR', $headerCenterX, 82, 25, true, $dark);
-        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $headerCenterX, 118, 30, true, $dark);
-        $overlays[] = $this->centeredText('(INDONESIA SHORINJI KEMPO FEDERATION)', $headerCenterX, 148, 20, false, $dark);
+        $overlays[] = $this->centeredText('PENGURUS BESAR', $headerCenterX, 215, 52, true, $dark);
+        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $headerCenterX, 310, 64, true, $dark);
+        $overlays[] = $this->centeredText('(INDONESIA SHORINJI KEMPO FEDERATION)', $headerCenterX, 375, 42, false, $dark);
 
         $hasKomisi = in_array($trackCode, ['PED', 'PEN'], true);
         if ($hasKomisi) {
-            $overlays[] = $this->centeredText('KOMISI PENDIDIKAN DAN PENATARAN', $headerCenterX, 178, 22, true, $dark);
+            $overlays[] = $this->centeredText('KOMISI PENDIDIKAN DAN PENATARAN', $headerCenterX, 438, 47, true, $dark);
         }
 
-        // --- Certificate title (large & wide across the canvas) ---
+        // --- Certificate title (centered, sized to never touch left graphic) ---
         $certTitle = match ($trackCode) {
             'PED' => 'SERTIFIKAT PENGUJI SHORINJI KEMPO DAERAH',
             'PEN' => 'SERTIFIKAT PENGUJI SHORINJI KEMPO NASIONAL',
@@ -787,52 +787,54 @@ class EventDocumentGenerator
             'WAN' => 'SERTIFIKAT WASIT SHORINJI KEMPO NASIONAL',
             default => 'SERTIFIKAT',
         };
-        $titleCenterX = 890;
-        $titleY = $hasKomisi ? 236 : 225;
-        $titleFontSize = mb_strlen($certTitle) > 42 ? 37 : 41;
+        $titleCenterX = 2040;
+        $titleY = $hasKomisi ? 565 : 520;
+        $titleFontSize = 72;
         $overlays[] = $this->centeredText($certTitle, $titleCenterX, $titleY, $titleFontSize, true, $dark);
 
         // --- Nomor line with flanking gold rules ---
-        $nomorY = $hasKomisi ? 282 : 274;
-        $nomorSize = 22;
+        $nomorY = $hasKomisi ? 665 : 635;
+        $nomorSize = 50;
         $nomorLabel = 'Nomor :';
         $nomorNum = (string) $certificateNumber;
-        $nomorGap = 12;
+        $nomorGap = 28;
         $labelWidth = $this->textWidth($nomorLabel, $nomorSize, true);
         $numWidth = $this->textWidth($nomorNum, $nomorSize, false);
         $totalNomorWidth = $labelWidth + $nomorGap + $numWidth;
         $nomorStartX = $titleCenterX - ($totalNomorWidth / 2);
         $nomorEndX = $nomorStartX + $totalNomorWidth;
 
-        // Gold rule flanking left and right (aligned with paragraph content margins 360 to 1420)
-        $contentLeft = 360;
-        $contentRight = 1420;
+        // Gold rule flanking left and right (safe bounds 1040 to 3280: clear from left chevron and right margin)
+        $ruleLeft = 1040;
+        $ruleRight = 3280;
         $goldColor = [0.85, 0.70, 0.20];
-        $overlays[] = $this->coloredRectangle($contentLeft, $nomorY - 6, max(10, $nomorStartX - 18 - $contentLeft), 2.2, $goldColor);
-        $overlays[] = $this->coloredRectangle($nomorEndX + 18, $nomorY - 6, max(10, $contentRight - ($nomorEndX + 18)), 2.2, $goldColor);
+        $overlays[] = $this->coloredRectangle($ruleLeft, $nomorY - 14, max(20, $nomorStartX - 42 - $ruleLeft), 5.2, $goldColor);
+        $overlays[] = $this->coloredRectangle($nomorEndX + 42, $nomorY - 14, max(20, $ruleRight - ($nomorEndX + 42)), 5.2, $goldColor);
 
         // Nomor text (single instance, no duplicates)
         $overlays[] = $this->text($nomorLabel, $nomorStartX, $nomorY, $nomorSize, true, $dark);
         $overlays[] = $this->text($nomorNum, $nomorStartX + $labelWidth + $nomorGap, $nomorY, $nomorSize, false, $dark);
 
         // --- Body paragraph opening ---
+        $contentLeft = 880;
+        $contentRight = 3300;
         $overlays[] = $this->text(
             'Pengurus Besar Persaudaraan Shorinji Kempo Indonesia menyatakan bahwa :',
-            $contentLeft, 335, 24.5, false, $dark
+            $contentLeft, 785, 57, false, $dark
         );
 
         // --- Participant data fields (enlarged and well-aligned) ---
-        $labelX = 400;
-        $colonX = 760;
-        $dataX = 800;
-        $fieldSize = 25.5;
+        $labelX = 960;
+        $colonX = 1800;
+        $dataX = 1880;
+        $fieldSize = 58;
 
         $fields = [
-            ['Nama Lengkap', 385],
-            ['Tingkat', 428],
-            ['Nomor Induk Kenshi (NIK)', 470],
-            ['Tempat/Tanggal Lahir', 512],
-            ['Provinsi', 555],
+            ['Nama Lengkap', 895],
+            ['Tingkat', 995],
+            ['Nomor Induk Kenshi (NIK)', 1095],
+            ['Tempat/Tanggal Lahir', 1195],
+            ['Provinsi', 1295],
         ];
 
         foreach ($fields as [$label, $fieldY]) {
@@ -844,21 +846,21 @@ class EventDocumentGenerator
         if ($participant?->name) {
             $overlays[] = $this->text(
                 $participant->name,
-                $dataX, 385,
-                $this->participantNameSize($participant->name),
+                $dataX, 895,
+                62,
                 true, $dark
             );
         }
 
         $danRoman = $this->danRoman($participant?->dan_rank);
         if ($danRoman) {
-            $overlays[] = $this->text($danRoman, $dataX, 428, $fieldSize, true, $dark);
+            $overlays[] = $this->text($danRoman, $dataX, 995, $fieldSize, true, $dark);
             $danWidth = $this->textWidth($danRoman, $fieldSize, true);
-            $overlays[] = $this->text('- DAN', $dataX + $danWidth + 14, 428, $fieldSize, false, $dark);
+            $overlays[] = $this->text('- DAN', $dataX + $danWidth + 32, 995, $fieldSize, false, $dark);
         }
 
         if ($participant?->kenshi_id_number) {
-            $overlays[] = $this->text($participant->kenshi_id_number, $dataX, 470, $fieldSize, false, $dark);
+            $overlays[] = $this->text($participant->kenshi_id_number, $dataX, 1095, $fieldSize, false, $dark);
         }
 
         $birthPlace = trim((string) ($participant?->birth_place ?? ''));
@@ -870,11 +872,11 @@ class EventDocumentGenerator
             $formattedBirthDate !== '' => $formattedBirthDate,
             default => '-',
         };
-        $overlays[] = $this->text($ttl, $dataX, 512, $fieldSize, false, $dark);
+        $overlays[] = $this->text($ttl, $dataX, 1195, $fieldSize, false, $dark);
 
         $originProvince = trim(explode('/', (string) ($participant?->origin_province ?? ''))[0]);
         if ($originProvince !== '') {
-            $overlays[] = $this->text($originProvince, $dataX, 555, $fieldSize, false, $dark);
+            $overlays[] = $this->text($originProvince, $dataX, 1295, $fieldSize, false, $dark);
         }
 
         // --- Body conclusion paragraph ---
@@ -898,12 +900,11 @@ class EventDocumentGenerator
             default => ['dan berhak memberikan', 'latihan Shorinji Kempo'],
         };
 
-        // Render body paragraph justified to align flush with the right gold line at 1353
-        $bodySize = 25.5;
-        $bodyY = 620;
-        $lineSpacing = 38;
+        $bodySize = 59;
+        $bodyY = 1445;
+        $lineSpacing = 88;
 
-        // Line 1: Dikukuhkan sebagai [ROLE], [line1End] (justified from 266 to 1353)
+        // Line 1: Dikukuhkan sebagai [ROLE], [line1End] (justified from contentLeft to contentRight)
         $line1Segments = [
             ['text' => 'Dikukuhkan sebagai ', 'bold' => false],
             ['text' => $rolePhrase.',', 'bold' => true],
@@ -942,48 +943,50 @@ class EventDocumentGenerator
         $overlays[] = $this->text('keputusan PB.PERKEMI.', $contentLeft, $bodyY + ($lineSpacing * 3), $bodySize, false, $dark);
 
         // --- Participant photo (pas foto) on the left side of Ketua Umum signature ---
+        // Shifted to the right (photoX = 1260) to provide a clean, generous gap from the watermark logo (ends at 1071)
         $photoPath = $participant?->photo_path;
         if ($photoPath && Storage::disk('public')->exists($photoPath)) {
             $fullPhotoPath = Storage::disk('public')->path($photoPath);
             if (is_readable($fullPhotoPath)) {
-                $photoW = 120;
-                $photoH = 160;
-                $photoX = 450;
-                $photoTop = 775;
+                $photoW = 280;
+                $photoH = 373;
+                $photoX = 1260;
+                $photoTop = 1800;
 
                 // Gold frame & white matting around photo
-                $overlays[] = $this->coloredRectangle($photoX - 2, $photoTop - 2, $photoW + 4, $photoH + 4, [0.85, 0.70, 0.20]);
-                $overlays[] = $this->whiteRectangle($photoX - 1, $photoTop - 1, $photoW + 2, $photoH + 2);
+                $overlays[] = $this->coloredRectangle($photoX - 4, $photoTop - 4, $photoW + 8, $photoH + 8, [0.85, 0.70, 0.20]);
+                $overlays[] = $this->whiteRectangle($photoX - 2, $photoTop - 2, $photoW + 4, $photoH + 4);
                 $overlays[] = $this->imageOverlay($fullPhotoPath, $photoX, $photoTop, $photoW, $photoH, true);
             }
         }
 
         // --- Signature block ---
-        $sigCenterX = 960;
-        $sigY = 785;
+        // Centered between photo right edge (1540) and right margin (3320)
+        $sigCenterX = 2430;
+        $sigY = 1825;
 
         $cityDateLine = "{$sigSettings['city']}, {$sigSettings['date_formatted']}";
-        $overlays[] = $this->centeredText($cityDateLine, $sigCenterX, $sigY, 22, false, $dark);
+        $overlays[] = $this->centeredText($cityDateLine, $sigCenterX, $sigY, 51, false, $dark);
 
         $orgLine = $sigSettings['organization'];
-        $overlays[] = $this->centeredText($orgLine, $sigCenterX, $sigY + 32, 25, true, $dark);
+        $overlays[] = $this->centeredText($orgLine, $sigCenterX, $sigY + 75, 58, true, $dark);
 
         $posLine = $sigSettings['position'];
-        $overlays[] = $this->centeredText($posLine, $sigCenterX, $sigY + 60, 23, false, $dark);
+        $overlays[] = $this->centeredText($posLine, $sigCenterX, $sigY + 140, 53, false, $dark);
 
         // Signature image
         if (! empty($sigSettings['signature_path']) && Storage::disk('public')->exists($sigSettings['signature_path'])) {
             $fullSigPath = Storage::disk('public')->path($sigSettings['signature_path']);
             if (is_readable($fullSigPath)) {
-                $sigW = 190;
-                $sigH = 65;
-                $overlays[] = $this->imageOverlay($fullSigPath, $sigCenterX - ($sigW / 2), $sigY + 65, $sigW, $sigH);
+                $sigW = 440;
+                $sigH = 150;
+                $overlays[] = $this->imageOverlay($fullSigPath, $sigCenterX - ($sigW / 2), $sigY + 150, $sigW, $sigH);
             }
         }
 
         // Signer name (without underline)
         $nameLine = $sigSettings['signer_name'];
-        $overlays[] = $this->centeredText($nameLine, $sigCenterX, $sigY + 150, 24, false, $dark);
+        $overlays[] = $this->centeredText($nameLine, $sigCenterX, $sigY + 350, 56, false, $dark);
 
         return $overlays;
     }
@@ -1183,10 +1186,21 @@ class EventDocumentGenerator
 
     private function templatePath(string $type, ?string $trackCode): string
     {
+        $code = strtoupper((string) $trackCode);
+
         if ($type === 'certificate') {
-            $cleanPath = resource_path('document-templates/'.self::TEMPLATE_DIR.'/sertifikat-background-universal.png');
-            if (is_readable($cleanPath)) {
-                return $cleanPath;
+            $trackTemplate = match ($code) {
+                'PD' => 'pd-certificate-background.png',
+                'PN' => 'pn-certificate-background.png',
+                'PED' => 'ped-certificate-background.png',
+                'PEN' => 'pen-certificate-background.png',
+                'WAD' => 'wad-certificate-background.png',
+                'WAN' => 'wan-certificate-background.png',
+                default => 'sertifikat-background-universal.png',
+            };
+            $path = resource_path('document-templates/'.self::TEMPLATE_DIR."/{$trackTemplate}");
+            if (is_readable($path)) {
+                return $path;
             }
         }
 
@@ -1197,7 +1211,7 @@ class EventDocumentGenerator
             }
         }
 
-        $template = self::TEMPLATES[$type][strtoupper((string) $trackCode)] ?? null;
+        $template = self::TEMPLATES[$type][$code] ?? null;
 
         if (! $template) {
             throw new InvalidArgumentException('Template dokumen tidak tersedia untuk jalur peserta ini.');
@@ -1815,18 +1829,43 @@ class EventDocumentGenerator
 
     private function textWidth(string $text, float $size, bool $bold = false): float
     {
-        $len = mb_strlen($text);
-        $upper = preg_match_all('/[A-Z]/', $text);
-        $lower = preg_match_all('/[a-z0-9]/', $text);
-        $punct = preg_match_all('/[ ,.:;\-_()\/]/', $text);
-        $other = max(0, $len - $upper - $lower - $punct);
+        static $romanMetrics = [
+            ' ' => 250, '!' => 333, '"' => 408, '#' => 500, '$' => 500, '%' => 833, '&' => 778, '\'' => 333,
+            '(' => 333, ')' => 333, '*' => 500, '+' => 564, ',' => 250, '-' => 333, '.' => 250, '/' => 278,
+            '0' => 500, '1' => 500, '2' => 500, '3' => 500, '4' => 500, '5' => 500, '6' => 500, '7' => 500, '8' => 500, '9' => 500,
+            ':' => 278, ';' => 278, '<' => 564, '=' => 564, '>' => 564, '?' => 444, '@' => 921,
+            'A' => 722, 'B' => 667, 'C' => 667, 'D' => 722, 'E' => 611, 'F' => 556, 'G' => 722, 'H' => 722, 'I' => 333, 'J' => 389,
+            'K' => 722, 'L' => 611, 'M' => 889, 'N' => 722, 'O' => 722, 'P' => 556, 'Q' => 722, 'R' => 667, 'S' => 556, 'T' => 611,
+            'U' => 722, 'V' => 667, 'W' => 944, 'X' => 667, 'Y' => 667, 'Z' => 611,
+            '[' => 333, '\\' => 278, ']' => 333, '^' => 469, '_' => 500, '`' => 333,
+            'a' => 444, 'b' => 500, 'c' => 444, 'd' => 500, 'e' => 444, 'f' => 278, 'g' => 500, 'h' => 500, 'i' => 278, 'j' => 278,
+            'k' => 444, 'l' => 278, 'm' => 778, 'n' => 500, 'o' => 500, 'p' => 500, 'q' => 500, 'r' => 333, 's' => 389, 't' => 278,
+            'u' => 500, 'v' => 500, 'w' => 722, 'x' => 500, 'y' => 500, 'z' => 444,
+        ];
+        static $boldMetrics = [
+            ' ' => 250, '!' => 333, '"' => 555, '#' => 500, '$' => 500, '%' => 1000, '&' => 833, '\'' => 333,
+            '(' => 333, ')' => 333, '*' => 500, '+' => 570, ',' => 250, '-' => 333, '.' => 250, '/' => 278,
+            '0' => 500, '1' => 500, '2' => 500, '3' => 500, '4' => 500, '5' => 500, '6' => 500, '7' => 500, '8' => 500, '9' => 500,
+            ':' => 333, ';' => 333, '<' => 570, '=' => 570, '>' => 570, '?' => 500, '@' => 930,
+            'A' => 722, 'B' => 667, 'C' => 722, 'D' => 722, 'E' => 667, 'F' => 611, 'G' => 778, 'H' => 778, 'I' => 389, 'J' => 500,
+            'K' => 778, 'L' => 667, 'M' => 944, 'N' => 722, 'O' => 778, 'P' => 611, 'Q' => 778, 'R' => 722, 'S' => 556, 'T' => 667,
+            'U' => 722, 'V' => 722, 'W' => 1000, 'X' => 722, 'Y' => 722, 'Z' => 667,
+            '[' => 333, '\\' => 278, ']' => 333, '^' => 570, '_' => 500, '`' => 333,
+            'a' => 500, 'b' => 556, 'c' => 444, 'd' => 556, 'e' => 444, 'f' => 333, 'g' => 500, 'h' => 556, 'i' => 278, 'j' => 333,
+            'k' => 556, 'l' => 278, 'm' => 833, 'n' => 556, 'o' => 500, 'p' => 556, 'q' => 556, 'r' => 444, 's' => 389, 't' => 333,
+            'u' => 556, 'v' => 500, 'w' => 722, 'x' => 500, 'y' => 500, 'z' => 444,
+        ];
 
-        $upperFactor = $bold ? 0.72 : 0.67;
-        $lowerFactor = $bold ? 0.52 : 0.45;
-        $punctFactor = $bold ? 0.28 : 0.25;
-        $otherFactor = $bold ? 0.55 : 0.50;
+        $metrics = $bold ? $boldMetrics : $romanMetrics;
+        $totalUnits = 0;
+        $len = strlen($text);
 
-        return ($upper * $upperFactor + $lower * $lowerFactor + $punct * $punctFactor + $other * $otherFactor) * $size;
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $text[$i];
+            $totalUnits += $metrics[$ch] ?? 500;
+        }
+
+        return ($totalUnits / 1000) * $size;
     }
 
     /** @param array<int, float> $color */

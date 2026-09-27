@@ -9,11 +9,13 @@ use App\Http\Requests\Admin\GenerateEventTranscriptRequest;
 use App\Http\Requests\Admin\UploadEventCertificateRequest;
 use App\Http\Requests\Admin\UploadEventTranscriptRequest;
 use App\Models\Event;
+use App\Models\EventIntegrityPact;
 use App\Models\EventParticipant;
 use App\Services\EventDocumentGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -90,6 +92,16 @@ class EventCertificateController extends Controller
                             $issuedAtField => $issuedAt,
                             $numberField => $number,
                         ]);
+
+                        if ($type === 'certificate') {
+                            EventIntegrityPact::where('event_id', $event->id)
+                                ->where('participant_id', $eventParticipant->participant_id)
+                                ->update([
+                                    'certificate_number' => $number,
+                                    'valid_start_date' => $issuedAt,
+                                    'valid_end_date' => Carbon::parse($issuedAt)->copy()->addYears(3)->endOfYear(),
+                                ]);
+                        }
                         $generated[$type]++;
                     } catch (Throwable $exception) {
                         Storage::disk('local')->delete($path);
@@ -155,6 +167,14 @@ class EventCertificateController extends Controller
                 $issuedAtField => $issuedAt,
                 $numberField => $certificateNumber,
             ]);
+
+            EventIntegrityPact::where('event_id', $event->id)
+                ->where('participant_id', $eventParticipant->participant_id)
+                ->update([
+                    'certificate_number' => $certificateNumber,
+                    'valid_start_date' => $issuedAt,
+                    'valid_end_date' => Carbon::parse($issuedAt)->copy()->addYears(3)->endOfYear(),
+                ]);
         } catch (Throwable $exception) {
             Storage::disk('local')->delete($path);
 
@@ -184,6 +204,17 @@ class EventCertificateController extends Controller
                 $issuedAtField => $eventParticipant->{$issuedAtField} ?? today(),
                 $numberField => ($validated['certificate_number'] ?? null) ?: $eventParticipant->{$numberField},
             ]);
+
+            $certNum = ($validated['certificate_number'] ?? null) ?: $eventParticipant->{$numberField};
+            $issuedDate = $eventParticipant->{$issuedAtField} ?? today();
+
+            EventIntegrityPact::where('event_id', $event->id)
+                ->where('participant_id', $eventParticipant->participant_id)
+                ->update([
+                    'certificate_number' => $certNum,
+                    'valid_start_date' => $issuedDate,
+                    'valid_end_date' => Carbon::parse($issuedDate)->copy()->addYears(3)->endOfYear(),
+                ]);
         } catch (Throwable $exception) {
             Storage::disk('local')->delete($path);
 

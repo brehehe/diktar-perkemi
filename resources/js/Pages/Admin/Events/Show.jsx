@@ -16,6 +16,7 @@ import AlertDialog from '../../../Components/ui/AlertDialog';
 import Tabs from '../../../Components/admin/Tabs';
 import StatGrid from '../../../Components/admin/StatGrid';
 import TableSurface from '../../../Components/admin/TableSurface';
+import IntegrityPactDocument from '../../../Components/IntegrityPactDocument';
 import {
     Calendar,
     Clock,
@@ -7530,130 +7531,8 @@ export default function Show({
                             </div>
                         )}
 
-                        {/* Lembar Format Resmi PB PERKEMI */}
-                        <div className="rounded-xl border border-[#DCE7F3] bg-white p-6 shadow-xs font-serif text-[11pt] leading-normal text-black">
-                            <div className="border-b-2 border-black pb-3 text-center">
-                                <div className="font-black text-sm tracking-wider uppercase">
-                                    PERSAUDARAAN SHORINJI KEMPO INDONESIA
-                                </div>
-                                <div className="font-bold text-xs tracking-widest uppercase">
-                                    PENGURUS BESAR (PB. PERKEMI)
-                                </div>
-                            </div>
-
-                            <div className="text-center my-4">
-                                <h3 className="font-bold text-base uppercase tracking-wider underline">
-                                    PAKTA INTEGRITAS {selectedPactForModal.pact_type?.toUpperCase()}
-                                </h3>
-                            </div>
-
-                            <p className="text-xs font-sans mb-2 font-medium">
-                                Yang bertanda tangan di bawah ini, saya Kenshi Persaudaraan Shorinji Kempo Indonesia:
-                            </p>
-
-                            {/* Data Kenshi Table */}
-                            <div className="space-y-1 font-sans text-xs bg-[#F8FBFF] p-3 rounded-lg border border-[#DCE7F3] mb-4">
-                                <div className="grid grid-cols-[140px_10px_1fr]">
-                                    <span className="text-[#6B7C93]">Nama Lengkap</span>
-                                    <span>:</span>
-                                    <span className="font-bold text-[#0E2747]">{selectedPactForModal.full_name || selectedPactForModal.participant_name}</span>
-                                </div>
-                                <div className="grid grid-cols-[140px_10px_1fr]">
-                                    <span className="text-[#6B7C93]">Tempat & Tanggal Lahir</span>
-                                    <span>:</span>
-                                    <span>{selectedPactForModal.birth_place || '-'}, {selectedPactForModal.birth_date || '-'}</span>
-                                </div>
-                                <div className="grid grid-cols-[140px_10px_1fr]">
-                                    <span className="text-[#6B7C93]">Nomor Induk Kenshi (NIK)</span>
-                                    <span>:</span>
-                                    <span className="font-mono font-semibold">{selectedPactForModal.kenshi_id_number}</span>
-                                </div>
-                                <div className="grid grid-cols-[140px_10px_1fr]">
-                                    <span className="text-[#6B7C93]">Tingkatan DAN / Dojo</span>
-                                    <span>:</span>
-                                    <span>{selectedPactForModal.dan_level} / {selectedPactForModal.origin_dojo}</span>
-                                </div>
-                                <div className="grid grid-cols-[140px_10px_1fr]">
-                                    <span className="text-[#6B7C93]">No. Sertifikat / Masa Berlaku</span>
-                                    <span>:</span>
-                                    <span>{selectedPactForModal.certificate_number || '-'} {selectedPactForModal.valid_start_date ? `(s.d ${selectedPactForModal.valid_end_date || '-'})` : ''}</span>
-                                </div>
-                                <div className="grid grid-cols-[140px_10px_1fr]">
-                                    <span className="text-[#6B7C93]">Alamat KTP</span>
-                                    <span>:</span>
-                                    <span>{selectedPactForModal.id_card_address || '-'}</span>
-                                </div>
-                            </div>
-
-                            {/* Pledges */}
-                            <div className="space-y-2 font-sans text-xs text-justify">
-                                <p className="font-semibold text-[#0E2747]">
-                                    Menyatakan dengan sesungguhnya dan berikrar untuk:
-                                </p>
-                                <ol className="list-decimal pl-5 space-y-1.5 text-[#112743]">
-                                    <li>
-                                        <strong>Kepatuhan & Loyalitas:</strong> Senantiasa taat dan patuh pada Janji Kenshi, Ikrar Kempo, serta Anggaran Dasar dan Anggaran Rumah Tangga (AD/ART) Persaudaraan Shorinji Kempo Indonesia (PERKEMI).
-                                    </li>
-                                    <li>
-                                        <strong>Integritas & Kehormatan:</strong> Menjunjung tinggi kehormatan, kejujuran, sportivitas, serta budi pekerti luhur dalam setiap pelaksanaan tugas dan pergaulan sesama Kenshi.
-                                    </li>
-                                    <li>
-                                        <strong>Profesionalisme Tugas:</strong> Melaksanakan kewajiban dan wewenang sebagai <span className="capitalize font-semibold">{selectedPactForModal.pact_type}</span> dengan penuh rasa tanggung jawab, dedikasi, keikhlasan, dan tanpa membeda-bedakan dojo maupun daerah.
-                                    </li>
-                                    <li>
-                                        <strong>Penyalahgunaan Wewenang:</strong> Tidak menyalahgunakan sertifikat keahlian, wewenang, jabatan, atau nama organisasi PB PERKEMI untuk kepentingan pribadi maupun pihak lain yang merugikan persaudaraan.
-                                    </li>
-                                    <li>
-                                        <strong>Kesiapan Sanksi:</strong> Bersedia menerima tindakan dan sanksi organisasi sesuai ketentuan dan disiplin PB PERKEMI apabila terbukti melanggar butir-butir pakta integritas ini.
-                                    </li>
-                                </ol>
-                            </div>
-
-                            {/* Signatures */}
-                            <div className="grid grid-cols-2 gap-4 mt-8 pt-4 font-sans text-xs border-t border-slate-200">
-                                <div className="text-center">
-                                    <div className="text-[#6B7C93]">Mengetahui / Memverifikasi,</div>
-                                    <div className="font-bold text-[#0E2747] mt-0.5">PB PERKEMI</div>
-                                    <div className="h-16 flex items-center justify-center my-1">
-                                        {selectedPactForModal.status === 'verified' ? (
-                                            <div className="rounded-lg border border-emerald-400 bg-emerald-50 px-2.5 py-1 text-center">
-                                                <div className="font-bold text-emerald-800 text-[10px]">TERVERIFIKASI PB PERKEMI</div>
-                                                <div className="text-[9px] text-emerald-700">{selectedPactForModal.verified_at}</div>
-                                            </div>
-                                        ) : (
-                                            <span className="text-slate-400 italic text-[11px]">(Menunggu Verifikasi)</span>
-                                        )}
-                                    </div>
-                                    <div className="font-bold text-[#0E2747]">
-                                        {selectedPactForModal.verified_by_name || 'Admin PB PERKEMI'}
-                                    </div>
-                                </div>
-
-                                <div className="text-center">
-                                    <div>{selectedPactForModal.sign_place || 'Mojokerto'}, {selectedPactForModal.sign_date || '-'}</div>
-                                    <div className="font-bold mt-0.5">Pembuat Pernyataan,</div>
-                                    <div className="h-16 flex items-center justify-center my-1">
-                                        {selectedPactForModal.signature_data ? (
-                                            <img
-                                                src={selectedPactForModal.signature_data}
-                                                alt="Tanda Tangan Digital"
-                                                className="max-h-14 object-contain"
-                                            />
-                                        ) : selectedPactForModal.submission_mode === 'upload' ? (
-                                            <span className="text-indigo-600 font-medium text-[11px]">(Berkas Fisik Terunggah)</span>
-                                        ) : (
-                                            <span className="text-slate-400 italic text-[11px]">(Belum Ditandatangani)</span>
-                                        )}
-                                    </div>
-                                    <div className="font-bold underline uppercase text-[#0E2747] whitespace-nowrap tracking-tight">
-                                        ({selectedPactForModal.full_name || selectedPactForModal.participant_name})
-                                    </div>
-                                    <div className="text-[10px] text-[#6B7C93] font-mono">
-                                        NIK: {selectedPactForModal.kenshi_id_number}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        {/* Lembar Format Resmi PB PERKEMI (Identik dengan Cetak) */}
+                        <IntegrityPactDocument pact={selectedPactForModal} />
                     </div>
                 </Modal>
             )}

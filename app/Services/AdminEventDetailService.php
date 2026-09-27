@@ -503,6 +503,33 @@ class AdminEventDetailService
             $pact = $integrityPactsByParticipant->get($ep->participant_id);
             $pactType = $pact?->pact_type ?? EventIntegrityPactController::resolvePactType($ep->track?->code);
 
+            $certificateNumber = $ep->certificate_number
+                ?: ($pact?->certificate_number ?: ($ep->participant?->last_certificate_number ?: '-'));
+
+            $validStartDateRaw = $ep->certificate_issued_at
+                ?? $pact?->valid_start_date
+                ?? $event->end_date
+                ?? now();
+
+            $validStartDate = $validStartDateRaw ? Carbon::parse($validStartDateRaw) : null;
+            $validEndDate = $validStartDate ? $validStartDate->copy()->addYears(3)->endOfYear() : null;
+
+            if ($pact) {
+                $pactUpdates = [];
+                if ($ep->certificate_number && $pact->certificate_number !== $ep->certificate_number) {
+                    $pactUpdates['certificate_number'] = $ep->certificate_number;
+                }
+                if ($validStartDate && (! $pact->valid_start_date || ! $pact->valid_start_date->isSameDay($validStartDate))) {
+                    $pactUpdates['valid_start_date'] = $validStartDate;
+                }
+                if ($validEndDate && (! $pact->valid_end_date || ! $pact->valid_end_date->isSameDay($validEndDate))) {
+                    $pactUpdates['valid_end_date'] = $validEndDate;
+                }
+                if (! empty($pactUpdates)) {
+                    $pact->update($pactUpdates);
+                }
+            }
+
             return [
                 'id' => $pact?->id,
                 'participant_id' => $ep->participant_id,
@@ -517,16 +544,16 @@ class AdminEventDetailService
                 'pact_type' => $pactType,
                 'full_name' => $pact?->full_name ?? $ep->participant?->name,
                 'birth_place' => $pact?->birth_place ?? $ep->participant?->origin_city,
-                'birth_date' => $pact?->birth_date?->format('d F Y'),
-                'certificate_number' => $pact?->certificate_number ?? $ep->certificate_number ?? '-',
-                'valid_start_date' => $pact?->valid_start_date?->format('d F Y') ?? $event->end_date?->format('d F Y'),
-                'valid_end_date' => $pact?->valid_end_date?->format('d F Y'),
+                'birth_date' => $pact?->birth_date ? Carbon::parse($pact->birth_date)->translatedFormat('d F Y') : ($ep->participant?->birth_date ? Carbon::parse($ep->participant->birth_date)->translatedFormat('d F Y') : '-'),
+                'certificate_number' => $certificateNumber,
+                'valid_start_date' => $validStartDate ? $validStartDate->translatedFormat('d F Y') : '-',
+                'valid_end_date' => $validEndDate ? $validEndDate->translatedFormat('d F Y') : '-',
                 'id_card_address' => $pact?->id_card_address ?? $ep->participant?->address,
                 'current_address' => $pact?->current_address ?? $ep->participant?->address,
                 'management_organization' => $pact?->management_organization ?? '-',
                 'management_position' => $pact?->management_position ?? '-',
                 'sign_place' => $pact?->sign_place ?? 'Mojokerto',
-                'sign_date' => $pact?->sign_date?->format('d F Y') ?? now()->format('d F Y'),
+                'sign_date' => $pact?->sign_date ? Carbon::parse($pact->sign_date)->translatedFormat('d F Y') : now()->translatedFormat('d F Y'),
                 'signature_data' => $pact?->signature_data,
                 'file_path' => $pact?->file_path,
                 'file_url' => $pact?->file_url,
@@ -534,8 +561,8 @@ class AdminEventDetailService
                 'file_size_formatted' => $pact?->file_size_formatted,
                 'submission_mode' => $pact?->submission_mode ?? ($pact?->file_path ? 'upload' : ($pact?->signature_data ? 'online' : null)),
                 'status' => $pact?->status ?? 'unfilled',
-                'signed_at' => $pact?->signed_at?->format('d M Y, H:i'),
-                'verified_at' => $pact?->verified_at?->format('d M Y, H:i'),
+                'signed_at' => $pact?->signed_at?->translatedFormat('d M Y, H:i'),
+                'verified_at' => $pact?->verified_at?->translatedFormat('d M Y, H:i'),
                 'verified_by_name' => $pact?->verifier?->name ?? ($pact?->status === 'verified' ? 'Budi Santoso' : null),
                 'print_url' => route('admin.event.integrity-pact.admin-print', [$event->id, $ep->participant_id]),
             ];

@@ -77,6 +77,29 @@ class EventIntegrityPactController extends Controller
         $trackCode = $enrollment?->track_code ?? 'PD';
         $defaultPactType = self::resolvePactType($trackCode);
 
+        $validStartDateRaw = $enrollment?->certificate_issued_at
+            ?? $existingPact?->valid_start_date
+            ?? $event->end_date
+            ?? now();
+        $validStartDate = $validStartDateRaw ? Carbon::parse($validStartDateRaw) : null;
+        $validEndDate = $validStartDate ? $validStartDate->copy()->addYears(3)->endOfYear() : null;
+
+        if ($existingPact) {
+            $pactUpdates = [];
+            if ($enrollment?->certificate_number && $existingPact->certificate_number !== $enrollment->certificate_number) {
+                $pactUpdates['certificate_number'] = $enrollment->certificate_number;
+            }
+            if ($validStartDate && (! $existingPact->valid_start_date || ! $existingPact->valid_start_date->isSameDay($validStartDate))) {
+                $pactUpdates['valid_start_date'] = $validStartDate;
+            }
+            if ($validEndDate && (! $existingPact->valid_end_date || ! $existingPact->valid_end_date->isSameDay($validEndDate))) {
+                $pactUpdates['valid_end_date'] = $validEndDate;
+            }
+            if (! empty($pactUpdates)) {
+                $existingPact->update($pactUpdates);
+            }
+        }
+
         $pactData = $existingPact ? [
             'id' => $existingPact->id,
             'pact_type' => $existingPact->pact_type,
@@ -90,16 +113,16 @@ class EventIntegrityPactController extends Controller
             'dojo' => $existingPact->dojo,
             'city' => $existingPact->city,
             'province' => $existingPact->province,
-            'certificate_number' => $existingPact->certificate_number,
-            'valid_start_date' => $existingPact->valid_start_date?->format('Y-m-d'),
-            'valid_end_date' => $existingPact->valid_end_date?->format('Y-m-d'),
+            'certificate_number' => $enrollment?->certificate_number ?: $existingPact->certificate_number,
+            'valid_start_date' => $validStartDate ? $validStartDate->translatedFormat('d F Y') : null,
+            'valid_end_date' => $validEndDate ? $validEndDate->translatedFormat('d F Y') : null,
             'id_card_address' => $existingPact->id_card_address,
             'current_address' => $existingPact->current_address,
             'management_organization' => $existingPact->management_organization ?? '-',
             'management_position' => $existingPact->management_position ?? '-',
             'sign_place' => $existingPact->sign_place ?? 'Mojokerto',
             'sign_date' => $existingPact->sign_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
-            'signature_data' => $existingPact->signature_data,
+            'signature_data' => $existingForm?->signature_data ?: $existingPact->signature_data,
             'file_path' => $existingPact->file_path,
             'file_url' => $existingPact->file_url,
             'original_file_name' => $existingPact->original_file_name,
@@ -121,8 +144,8 @@ class EventIntegrityPactController extends Controller
             'city' => $participant->origin_city ?? '',
             'province' => $participant->origin_province ?? 'Jawa Timur',
             'certificate_number' => $enrollment?->certificate_number ?? $participant->last_certificate_number ?? '',
-            'valid_start_date' => $event->end_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
-            'valid_end_date' => ($event->end_date ? $event->end_date->copy()->addYears(4)->format('Y-m-d') : now()->addYears(4)->format('Y-m-d')),
+            'valid_start_date' => $validStartDate ? $validStartDate->translatedFormat('d F Y') : ($event->end_date ? $event->end_date->translatedFormat('d F Y') : now()->translatedFormat('d F Y')),
+            'valid_end_date' => $validEndDate ? $validEndDate->translatedFormat('d F Y') : null,
             'id_card_address' => $participant->address ?? $existingForm?->home_address ?? '',
             'current_address' => $participant->address ?? $existingForm?->home_address ?? '',
             'management_organization' => '-',
@@ -238,7 +261,7 @@ class EventIntegrityPactController extends Controller
                 'province' => $validated['province'],
                 'certificate_number' => $validated['certificate_number'] ?: ($enrollment?->certificate_number ?? null),
                 'valid_start_date' => $validated['valid_start_date'] ?: ($event->end_date ?? now()),
-                'valid_end_date' => $validated['valid_end_date'] ?: ($event->end_date ? Carbon::parse($event->end_date)->addYears(4) : now()->addYears(4)),
+                'valid_end_date' => $validated['valid_end_date'] ?: ($event->end_date ? Carbon::parse($event->end_date)->addYears(3)->endOfYear() : now()->addYears(3)->endOfYear()),
                 'id_card_address' => $validated['id_card_address'],
                 'current_address' => $validated['current_address'] ?: $validated['id_card_address'],
                 'management_organization' => $validated['management_organization'] ?? '-',
@@ -344,7 +367,7 @@ class EventIntegrityPactController extends Controller
                 'province' => $participant->origin_province ?? 'Jawa Timur',
                 'certificate_number' => $enrollment?->certificate_number ?? $participant->last_certificate_number ?? null,
                 'valid_start_date' => $event->end_date ?? now(),
-                'valid_end_date' => $event->end_date ? Carbon::parse($event->end_date)->addYears(4) : now()->addYears(4),
+                'valid_end_date' => $event->end_date ? Carbon::parse($event->end_date)->addYears(3)->endOfYear() : now()->addYears(3)->endOfYear(),
                 'id_card_address' => $participant->address ?? '-',
                 'current_address' => $participant->address ?? '-',
                 'sign_place' => 'Mojokerto',
@@ -432,8 +455,33 @@ class EventIntegrityPactController extends Controller
         $trackCode = $enrollment?->track_code ?? 'PD';
         $pactType = $pact?->pact_type ?? self::resolvePactType($trackCode);
 
-        $validStartDate = $pact?->valid_start_date ?? $event->end_date ?? now();
-        $validEndDate = $pact?->valid_end_date ?? ($validStartDate ? Carbon::parse($validStartDate)->addYears(4) : now()->addYears(4));
+        // Ambil nomor sertifikat resmi event peserta terlebih dahulu
+        $certificateNumber = $enrollment?->certificate_number
+            ?: ($pact?->certificate_number ?: ($targetParticipant->last_certificate_number ?: '-'));
+
+        $validStartDateRaw = $enrollment?->certificate_issued_at
+            ?? $pact?->valid_start_date
+            ?? $event->end_date
+            ?? now();
+
+        $validStartDate = $validStartDateRaw ? Carbon::parse($validStartDateRaw) : null;
+        $validEndDate = $validStartDate ? $validStartDate->copy()->addYears(3)->endOfYear() : null;
+
+        if ($pact) {
+            $pactUpdates = [];
+            if ($enrollment?->certificate_number && $pact->certificate_number !== $enrollment->certificate_number) {
+                $pactUpdates['certificate_number'] = $enrollment->certificate_number;
+            }
+            if ($validStartDate && (! $pact->valid_start_date || ! $pact->valid_start_date->isSameDay($validStartDate))) {
+                $pactUpdates['valid_start_date'] = $validStartDate;
+            }
+            if ($validEndDate && (! $pact->valid_end_date || ! $pact->valid_end_date->isSameDay($validEndDate))) {
+                $pactUpdates['valid_end_date'] = $validEndDate;
+            }
+            if (! empty($pactUpdates)) {
+                $pact->update($pactUpdates);
+            }
+        }
 
         $pactInstance = $pact ?? new EventIntegrityPact([
             'pact_type' => $pactType,
@@ -441,7 +489,7 @@ class EventIntegrityPactController extends Controller
             'birth_place' => $targetParticipant->birth_place ?? $targetParticipant->origin_city,
             'birth_date' => $targetParticipant->birth_date,
             'kenshi_id_number' => $targetParticipant->kenshi_id_number,
-            'certificate_number' => $enrollment?->certificate_number ?? '-',
+            'certificate_number' => $certificateNumber,
             'valid_start_date' => $validStartDate,
             'valid_end_date' => $validEndDate,
             'id_card_address' => $targetParticipant->address ?? '-',
@@ -483,27 +531,30 @@ class EventIntegrityPactController extends Controller
                 'pact_title' => $pactInstance->pact_title,
                 'role_label' => $pactInstance->role_label,
                 'full_name' => $pactInstance->full_name,
+                'participant_name' => $targetParticipant->name,
                 'birth_place' => $pactInstance->birth_place,
-                'birth_date' => $pactInstance->birth_date?->format('d F Y') ?? ($pactInstance->birth_date ? Carbon::parse($pactInstance->birth_date)->locale('id')->isoFormat('D MMMM Y') : '-'),
+                'birth_date' => $pactInstance->birth_date ? Carbon::parse($pactInstance->birth_date)->translatedFormat('d F Y') : '-',
                 'kenshi_id_number' => $pactInstance->kenshi_id_number,
-                'certificate_number' => $pactInstance->certificate_number ?: ($enrollment?->certificate_number ?? '-'),
-                'valid_start_date' => $pactInstance->valid_start_date?->format('d F Y') ?? ($validStartDate ? Carbon::parse($validStartDate)->format('d F Y') : '-'),
-                'valid_end_date' => $pactInstance->valid_end_date?->format('d F Y') ?? ($validEndDate ? Carbon::parse($validEndDate)->format('d F Y') : '-'),
+                'certificate_number' => $certificateNumber,
+                'valid_start_date' => $validStartDate ? $validStartDate->translatedFormat('d F Y') : '-',
+                'valid_end_date' => $validEndDate ? $validEndDate->translatedFormat('d F Y') : '-',
                 'id_card_address' => $pactInstance->id_card_address,
                 'current_address' => $pactInstance->current_address,
                 'dan_level' => $pactInstance->dan_level,
                 'religion' => $pactInstance->religion ?? 'Islam',
-                'dojo' => $pactInstance->dojo,
+                'dojo' => $pactInstance->dojo ?: ($targetParticipant->origin_dojo ?? '-'),
+                'origin_dojo' => $targetParticipant->origin_dojo ?? $pactInstance->dojo ?? '-',
                 'city' => $pactInstance->city,
                 'province' => $pactInstance->province,
                 'management_organization' => $pactInstance->management_organization ?? '-',
                 'management_position' => $pactInstance->management_position ?? '-',
                 'sign_place' => $pactInstance->sign_place ?? 'Mojokerto',
-                'sign_date' => $pactInstance->sign_date ? Carbon::parse($pactInstance->sign_date)->locale('id')->isoFormat('D MMMM Y') : now()->locale('id')->isoFormat('D MMMM Y'),
+                'sign_date' => $pactInstance->sign_date ? Carbon::parse($pactInstance->sign_date)->translatedFormat('d F Y') : now()->translatedFormat('d F Y'),
                 'signature_data' => $pactInstance->signature_data,
-                'signed_at' => $pactInstance->signed_at?->format('d M Y H:i'),
+                'submission_mode' => $pactInstance->submission_mode,
+                'signed_at' => $pactInstance->signed_at?->translatedFormat('d M Y H:i'),
                 'status' => $pactInstance->status,
-                'verified_at' => $pactInstance->verified_at?->format('d M Y, H:i'),
+                'verified_at' => $pactInstance->verified_at?->translatedFormat('d M Y, H:i'),
                 'verified_by_name' => $pactInstance->verifier?->name ?? ($pactInstance->status === 'verified' ? 'PB PERKEMI' : null),
             ],
             'pledgePoints' => $pactInstance->getPledgePoints(),

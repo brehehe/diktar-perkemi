@@ -30,12 +30,12 @@ class EventDocumentGenerator
             'PN' => 'pn-certificate-background.png',
         ],
         'transcript' => [
-            'PD' => 'pn-transcript-background.png',
-            'WAD' => 'wad-transcript-background.png',
-            'WAN' => 'wan-transcript-background.png',
-            'PED' => 'ped-transcript-background.png',
-            'PEN' => 'pen-transcript-background.png',
-            'PN' => 'pn-transcript-background.png',
+            'PD' => 'transkrip-background-tanpa-garis.png',
+            'WAD' => 'transkrip-background-tanpa-garis.png',
+            'WAN' => 'transkrip-background-tanpa-garis.png',
+            'PED' => 'transkrip-background-tanpa-garis.png',
+            'PEN' => 'transkrip-background-tanpa-garis.png',
+            'PN' => 'transkrip-background-tanpa-garis.png',
         ],
     ];
 
@@ -1049,20 +1049,21 @@ class EventDocumentGenerator
         $participant = $eventParticipant->participant;
         $event = $eventParticipant->event;
 
-        // Background is clean/blank — write ALL content from code
         $overlays = [];
 
-        // === Header block ===
-        // Centered in the open space between PERKEMI badge and top-right ribbon (x = 745)
-        $headerCenterX = 745;
+        // Canvas: 1685 x 1192 px, landscape A4 PDF
+        $titleCenterX = 843;
         $dark = [0.05, 0.05, 0.05];
-        $overlays[] = $this->centeredText('PENGURUS BESAR', $headerCenterX, 82, 25, true, $dark);
-        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $headerCenterX, 118, 30, true, $dark);
-        $overlays[] = $this->centeredText('(INDONESIA SHORINJI KEMPO FEDERATION)', $headerCenterX, 148, 20, false, $dark);
-        $overlays[] = $this->centeredText('KOMISI PENDIDIKAN DAN PENATARAN', $headerCenterX, 178, 22, true, $dark);
 
-        // === Transcript titles ===
-        $titleCenterX = 845;
+        // === Header block (matching user screenshot) ===
+        // PERSAUDARAAN SHORINJI KEMPO INDONESIA
+        // (INDONESIA SHORINJI KEMPO FEDERATION)
+        // TRANSKRIP KOMPETENSI & REKAPITULASI PROGRAM
+        // [SUBTITLE]
+        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $titleCenterX, 125, 30, true, $dark);
+        $overlays[] = $this->centeredText('(INDONESIA SHORINJI KEMPO FEDERATION)', $titleCenterX, 162, 21, false, $dark);
+        $overlays[] = $this->centeredText('TRANSKRIP KOMPETENSI & REKAPITULASI PROGRAM', $titleCenterX, 208, 32, true, $dark);
+
         $trackData = self::STANDARD_TRACK_MODULES[$trackCode] ?? null;
 
         if ($trackData) {
@@ -1103,75 +1104,48 @@ class EventDocumentGenerator
             $footerLines = null;
         }
 
-        // Title 1: TRANSKRIP KOMPETENSI & REKAPITULASI PROGRAM
-        $overlays[] = $this->centeredText('TRANSKRIP KOMPETENSI & REKAPITULASI PROGRAM', $titleCenterX, 208, 32, true, $dark);
+        $overlays[] = $this->centeredText($transcriptSubtitle, $titleCenterX, 252, 28, true, $dark);
 
-        // Title 2: Subtitle flanked by single gold rule on left and right
-        $subW = $this->textWidth($transcriptSubtitle, 26, true);
-        $subLeft = $titleCenterX - ($subW / 2);
-        $subRight = $titleCenterX + ($subW / 2);
-        $goldColor = [0.85, 0.70, 0.20];
+        // Gold divider line (spanning width of the table)
+        $tableLeft = 160;
+        $tableW = 1365;
+        $goldColor = [0.82, 0.65, 0.15];
+        $overlays[] = $this->coloredRectangle($tableLeft, 282, $tableW, 2.5, $goldColor);
 
-        $overlays[] = $this->coloredRectangle(241, 239, max(10, $subLeft - 18 - 241), 2.2, $goldColor);
-        $overlays[] = $this->coloredRectangle($subRight + 18, 239, max(10, 1445 - ($subRight + 18)), 2.2, $goldColor);
-        $overlays[] = $this->centeredText($transcriptSubtitle, $titleCenterX, 245, 26, true, $dark);
+        // NOTE: No "Nomor :" printed on transcript as requested ("kosongan saja tanpa ada nomor")
 
-        // Nomor
-        $nomorLabel = 'Nomor :';
-        $nomorNum = (string) $transcriptNumber;
-        $nomorGap = 12;
-        $labelWidth = $this->textWidth($nomorLabel, 21, true);
-        $numWidth = $this->textWidth($nomorNum, 21, false);
-        $totalNomorWidth = $labelWidth + $nomorGap + $numWidth;
-        $nomorStartX = $titleCenterX - ($totalNomorWidth / 2);
-        $overlays[] = $this->text($nomorLabel, $nomorStartX, 278, 21, true, $dark);
-        $overlays[] = $this->text($nomorNum, $nomorStartX + $labelWidth + $nomorGap, 278, 21, false, $dark);
+        // === Module table (spanning from x=160 to x=1525, width=1365) ===
+        $tableTop = 320;
+        $headerH = 48;
+        $borderColor = [0.15, 0.15, 0.15];
 
-        // === Module table (wide: 1204px spanning from x=241 to x=1445) ===
-        $tableTop = 308;
-        $tableLeft = 241;
-        $tableW = 1204;
-        $headerH = 46;
-        $darkNavy = [0.17, 0.23, 0.31];
-        $borderColor = [0.85, 0.88, 0.93];
-
-        // Column widths & boundaries: KODE (129), MODUL (441), JP (100), FOKUS (534)
-        $colX = [241, 370, 811, 911, 1445];
+        // Column boundaries: KODE (145), MODUL (490), JP (110), FOKUS (620)
+        $colX = [160, 305, 795, 905, 1525];
         $colCenters = [
-            241 + (129 / 2),  // 305.5
-            370 + (441 / 2),  // 590.5
-            811 + (100 / 2),  // 861.0
-            911 + (534 / 2),  // 1178.0
+            160 + (145 / 2), // 232.5
+            305 + (490 / 2), // 550.0
+            795 + (110 / 2), // 850.0
+            905 + (620 / 2), // 1215.0
         ];
 
-        // Header row background
-        $overlays[] = $this->coloredRectangle($tableLeft, $tableTop, $tableW, $headerH, $darkNavy);
-
         // Header titles (centered in each column)
-        $overlays[] = $this->centeredText('KODE', $colCenters[0], $tableTop + 31, 19, true, [1, 1, 1]);
-        $overlays[] = $this->centeredText('KOMPETENSI / MODUL', $colCenters[1], $tableTop + 31, 19, true, [1, 1, 1]);
-        $overlays[] = $this->centeredText('JP', $colCenters[2], $tableTop + 31, 19, true, [1, 1, 1]);
-        $overlays[] = $this->centeredText('FOKUS KOMPETENSI', $colCenters[3], $tableTop + 31, 19, true, [1, 1, 1]);
+        $overlays[] = $this->centeredText('KODE', $colCenters[0], $tableTop + 32, 20, true, $dark);
+        $overlays[] = $this->centeredText('KOMPETENSI / MODUL', $colCenters[1], $tableTop + 32, 20, true, $dark);
+        $overlays[] = $this->centeredText('JP', $colCenters[2], $tableTop + 32, 20, true, $dark);
+        $overlays[] = $this->centeredText('FOKUS KOMPETENSI', $colCenters[3], $tableTop + 32, 20, true, $dark);
+
+        // Header bottom border
+        $overlays[] = $this->coloredRectangle($tableLeft, $tableTop + $headerH, $tableW, 1.5, $borderColor);
 
         $count = $modules->count();
-        $availableH = 448;
-        $rowH = min(74, max(46, (int) ($availableH / max($count, 1))));
+        $availableH = 530;
+        $rowH = min(88, max(58, (int) ($availableH / max($count, 1))));
 
         foreach ($modules as $idx => $module) {
             $rowTop = $tableTop + $headerH + ($idx * $rowH);
 
-            // Alternating row background
-            if ($idx % 2 === 1) {
-                $overlays[] = $this->coloredRectangle($tableLeft, $rowTop, $tableW, $rowH, [0.965, 0.98, 1.0]);
-            }
-
             // Row bottom border
-            $overlays[] = $this->coloredRectangle($tableLeft, $rowTop + $rowH - 1, $tableW, 1.2, $borderColor);
-
-            // Column dividers within the row
-            foreach ($colX as $cx) {
-                $overlays[] = $this->coloredRectangle($cx, $rowTop, 1, $rowH, $borderColor);
-            }
+            $overlays[] = $this->coloredRectangle($tableLeft, $rowTop + $rowH, $tableW, 1.2, $borderColor);
 
             // Vertical center text baseline
             $centerTextY = $rowTop + (int) ($rowH * 0.58);
@@ -1180,60 +1154,56 @@ class EventDocumentGenerator
             $overlays[] = $this->centeredText((string) $module->code, $colCenters[0], $centerTextY, 18, false, $dark);
 
             // Col 1: Modul title (left-aligned with padding)
-            $titleLines = $this->wrapText((string) $module->title, 42, 2);
+            $titleLines = $this->wrapText((string) $module->title, 46, 2);
             if (count($titleLines) <= 1) {
-                $overlays[] = $this->text($titleLines[0] ?? '', $colX[1] + 16, $centerTextY, 17.5, false, $dark);
+                $overlays[] = $this->text($titleLines[0] ?? '', $colX[1] + 18, $centerTextY, 17, false, $dark);
             } else {
                 $tY0 = $rowTop + (int) ($rowH * 0.38);
-                $overlays[] = $this->text($titleLines[0], $colX[1] + 16, $tY0, 16.5, false, $dark);
-                $overlays[] = $this->text($titleLines[1], $colX[1] + 16, $tY0 + 22, 16.5, false, $dark);
+                $overlays[] = $this->text($titleLines[0], $colX[1] + 18, $tY0, 16.5, false, $dark);
+                $overlays[] = $this->text($titleLines[1], $colX[1] + 18, $tY0 + 23, 16.5, false, $dark);
             }
 
             // Col 2: JP (centered)
             $overlays[] = $this->centeredText((string) $module->jp, $colCenters[2], $centerTextY, 19, false, $dark);
 
             // Col 3: Fokus kompetensi (left-aligned with padding)
-            $fokusLines = $this->wrapText((string) $module->fokus, 65, 3);
+            $fokusLines = $this->wrapText((string) $module->fokus, 70, 3);
             if (count($fokusLines) <= 1) {
-                $overlays[] = $this->text($fokusLines[0] ?? '', $colX[3] + 16, $centerTextY, 16, false, $dark);
+                $overlays[] = $this->text($fokusLines[0] ?? '', $colX[3] + 18, $centerTextY, 15.5, false, $dark);
             } elseif (count($fokusLines) === 2) {
                 $fY0 = $rowTop + (int) ($rowH * 0.38);
-                $overlays[] = $this->text($fokusLines[0], $colX[3] + 16, $fY0, 15.5, false, $dark);
-                $overlays[] = $this->text($fokusLines[1], $colX[3] + 16, $fY0 + 21, 15.5, false, $dark);
+                $overlays[] = $this->text($fokusLines[0], $colX[3] + 18, $fY0, 15, false, $dark);
+                $overlays[] = $this->text($fokusLines[1], $colX[3] + 18, $fY0 + 22, 15, false, $dark);
             } else {
                 $fY0 = $rowTop + (int) ($rowH * 0.28);
-                $overlays[] = $this->text($fokusLines[0], $colX[3] + 16, $fY0, 14.5, false, $dark);
-                $overlays[] = $this->text($fokusLines[1], $colX[3] + 16, $fY0 + 20, 14.5, false, $dark);
-                $overlays[] = $this->text($fokusLines[2], $colX[3] + 16, $fY0 + 40, 14.5, false, $dark);
+                $overlays[] = $this->text($fokusLines[0], $colX[3] + 18, $fY0, 14, false, $dark);
+                $overlays[] = $this->text($fokusLines[1], $colX[3] + 18, $fY0 + 20, 14, false, $dark);
+                $overlays[] = $this->text($fokusLines[2], $colX[3] + 18, $fY0 + 40, 14, false, $dark);
             }
-        }
-
-        // Header column dividers (drawn on top of header)
-        foreach ($colX as $cx) {
-            $overlays[] = $this->coloredRectangle($cx, $tableTop, 1, $headerH, [0.35, 0.42, 0.52]);
         }
 
         // Total row
         $totalRowTop = $tableTop + $headerH + ($count * $rowH);
-        $totalRowH = 46;
+        $totalRowH = 48;
 
-        // Total row background fill across the entire table
-        $totalBg = [1.0, 0.97, 0.82];
-        $overlays[] = $this->coloredRectangle($tableLeft, $totalRowTop, $tableW, $totalRowH, $totalBg);
-        $overlays[] = $this->coloredRectangle($tableLeft, $totalRowTop + $totalRowH - 1, $tableW, 1.2, $borderColor);
+        // Total row bottom border
+        $overlays[] = $this->coloredRectangle($tableLeft, $totalRowTop + $totalRowH, $tableW, 1.5, $borderColor);
 
-        // Dividers for total row
-        $overlays[] = $this->coloredRectangle($colX[0], $totalRowTop, 1, $totalRowH, $borderColor);
-        $overlays[] = $this->coloredRectangle($colX[2], $totalRowTop, 1, $totalRowH, $borderColor);
-        $overlays[] = $this->coloredRectangle($colX[3], $totalRowTop, 1, $totalRowH, $borderColor);
-        $overlays[] = $this->coloredRectangle($colX[4], $totalRowTop, 1, $totalRowH, $borderColor);
+        // Total text: Centered across Col 0 & Col 1 (x: 160 to 795 -> center = 477.5)
+        $overlays[] = $this->centeredText('TOTAL BEBAN PENATARAN', 477.5, $totalRowTop + 32, 20, true, $dark);
+        $overlays[] = $this->centeredText((string) $totalJP, $colCenters[2], $totalRowTop + 32, 20, true, $dark);
 
-        // Total text
-        $overlays[] = $this->centeredText('TOTAL BEBAN PENATARAN', 526, $totalRowTop + 30, 20, true, $dark);
-        $overlays[] = $this->centeredText((string) $totalJP, $colCenters[2], $totalRowTop + 30, 20, true, $dark);
+        // Table outer top border
+        $overlays[] = $this->coloredRectangle($tableLeft, $tableTop, $tableW, 1.5, $borderColor);
 
-        // Footer note (centered across the canvas, elegant italic matching wan-transcript.jpeg)
-        $footerY = $totalRowTop + 55;
+        // Vertical divider lines for all columns across the whole table
+        $totalTableH = $headerH + ($count * $rowH) + $totalRowH;
+        foreach ($colX as $cx) {
+            $overlays[] = $this->coloredRectangle($cx, $tableTop, 1.5, $totalTableH, $borderColor);
+        }
+
+        // Footer note (centered across the canvas, elegant italic matching sample)
+        $footerY = $totalRowTop + $totalRowH + 36;
         if ($footerLines && count($footerLines) >= 2) {
             $line1 = $footerLines[0];
             $line2 = $footerLines[1];
@@ -1244,14 +1214,21 @@ class EventDocumentGenerator
             $line2 = "Basis: Modul {$shortSubtitle} PERKEMI {$year} dan kerangka kompetensi tenaga keolahragaan yang berlaku.";
         }
 
-        $overlays[] = $this->centeredText($line1, $titleCenterX, $footerY, 14.5, false, [0.25, 0.25, 0.25], true);
-        $overlays[] = $this->centeredText($line2, $titleCenterX, $footerY + 22, 14.5, false, [0.25, 0.25, 0.25], true);
+        $overlays[] = $this->centeredText($line1, $titleCenterX, $footerY, 15, false, [0.25, 0.25, 0.25], true);
+        $overlays[] = $this->centeredText($line2, $titleCenterX, $footerY + 23, 15, false, [0.25, 0.25, 0.25], true);
 
         return $overlays;
     }
 
     private function templatePath(string $type, ?string $trackCode): string
     {
+        if ($type === 'transcript') {
+            $cleanPath = resource_path('document-templates/'.self::TEMPLATE_DIR.'/transkrip-background-tanpa-garis.png');
+            if (is_readable($cleanPath)) {
+                return $cleanPath;
+            }
+        }
+
         $template = self::TEMPLATES[$type][strtoupper((string) $trackCode)] ?? null;
 
         if (! $template) {

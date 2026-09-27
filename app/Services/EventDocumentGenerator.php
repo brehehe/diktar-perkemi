@@ -1514,11 +1514,58 @@ class EventDocumentGenerator
                             $sh = $cropH;
                         }
 
-                        $rgb = '';
-                        $alpha = '';
-                        $hasAlpha = false;
+                        if ($preserveColors) {
+                            $maxW = max(360, (int) round($overlay['width'] * 3));
+                            $maxH = max(480, (int) round($overlay['height'] * 3));
+                            if ($sw > $maxW || $sh > $maxH) {
+                                $scale = min($maxW / $sw, $maxH / $sh);
+                                $scaledW = (int) max(1, round($sw * $scale));
+                                $scaledH = (int) max(1, round($sh * $scale));
+                                $scaled = imagecreatetruecolor($scaledW, $scaledH);
+                                $white = imagecolorallocate($scaled, 255, 255, 255);
+                                imagefilledrectangle($scaled, 0, 0, $scaledW, $scaledH, $white);
+                                imagecopyresampled($scaled, $gd, 0, 0, 0, 0, $scaledW, $scaledH, $sw, $sh);
+                                imagedestroy($gd);
+                                $gd = $scaled;
+                                $sw = $scaledW;
+                                $sh = $scaledH;
+                            } else {
+                                $flattened = imagecreatetruecolor($sw, $sh);
+                                $white = imagecolorallocate($flattened, 255, 255, 255);
+                                imagefilledrectangle($flattened, 0, 0, $sw, $sh, $white);
+                                imagecopy($flattened, $gd, 0, 0, 0, 0, $sw, $sh);
+                                imagedestroy($gd);
+                                $gd = $flattened;
+                            }
 
-                        if (! $preserveColors) {
+                            ob_start();
+                            imagejpeg($gd, null, 90);
+                            $jpegData = (string) ob_get_clean();
+                            imagedestroy($gd);
+
+                            $imgObjNum = $nextObjNum++;
+                            $objects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ".strlen($jpegData)." >>\nstream\n{$jpegData}\nendstream";
+                        } else {
+                            $maxSigW = max(600, (int) round($overlay['width'] * 3));
+                            $maxSigH = max(300, (int) round($overlay['height'] * 3));
+                            if ($sw > $maxSigW || $sh > $maxSigH) {
+                                $scale = min($maxSigW / $sw, $maxSigH / $sh);
+                                $scaledW = (int) max(1, round($sw * $scale));
+                                $scaledH = (int) max(1, round($sh * $scale));
+                                $scaled = imagecreatetruecolor($scaledW, $scaledH);
+                                imagealphablending($scaled, false);
+                                imagesavealpha($scaled, true);
+                                imagecopyresampled($scaled, $gd, 0, 0, 0, 0, $scaledW, $scaledH, $sw, $sh);
+                                imagedestroy($gd);
+                                $gd = $scaled;
+                                $sw = $scaledW;
+                                $sh = $scaledH;
+                            }
+
+                            $rgb = '';
+                            $alpha = '';
+                            $hasAlpha = false;
+
                             for ($y = 0; $y < $sh; $y++) {
                                 for ($x = 0; $x < $sw; $x++) {
                                     $rgba = imagecolorat($gd, $x, $y);
@@ -1529,56 +1576,47 @@ class EventDocumentGenerator
                                     }
                                 }
                             }
-                        }
 
-                        for ($y = 0; $y < $sh; $y++) {
-                            for ($x = 0; $x < $sw; $x++) {
-                                $rgba = imagecolorat($gd, $x, $y);
-                                $r = ($rgba >> 16) & 0xFF;
-                                $g = ($rgba >> 8) & 0xFF;
-                                $b = $rgba & 0xFF;
-                                $a = ($rgba >> 24) & 0x7F;
+                            for ($y = 0; $y < $sh; $y++) {
+                                for ($x = 0; $x < $sw; $x++) {
+                                    $rgba = imagecolorat($gd, $x, $y);
+                                    $r = ($rgba >> 16) & 0xFF;
+                                    $g = ($rgba >> 8) & 0xFF;
+                                    $b = $rgba & 0xFF;
+                                    $a = ($rgba >> 24) & 0x7F;
 
-                                if ($preserveColors) {
-                                    $pixelAlpha = (int) round((127 - $a) * 255 / 127);
-                                    if ($pixelAlpha < 255) {
-                                        $hasAlpha = true;
-                                    }
-                                    $rgb .= chr($r).chr($g).chr($b);
-                                    $alpha .= chr($pixelAlpha);
-                                } elseif ($hasAlpha) {
-                                    $pixelAlpha = (int) round((127 - $a) * 255 / 127);
-                                    $rgb .= chr(0).chr(0).chr(0);
-                                    $alpha .= chr($pixelAlpha);
-                                } else {
-                                    $brightness = ($r * 299 + $g * 587 + $b * 114) / 1000;
-                                    if ($brightness < 235) {
-                                        $hasAlpha = true;
-                                        $pixelAlpha = (int) round(min(255, (235 - $brightness) * (255 / 180)));
+                                    if ($hasAlpha) {
+                                        $pixelAlpha = (int) round((127 - $a) * 255 / 127);
                                         $rgb .= chr(0).chr(0).chr(0);
                                         $alpha .= chr($pixelAlpha);
                                     } else {
-                                        $rgb .= chr(0).chr(0).chr(0);
-                                        $alpha .= chr(0);
+                                        $brightness = ($r * 299 + $g * 587 + $b * 114) / 1000;
+                                        if ($brightness < 235) {
+                                            $hasAlpha = true;
+                                            $pixelAlpha = (int) round(min(255, (235 - $brightness) * (255 / 180)));
+                                            $rgb .= chr(0).chr(0).chr(0);
+                                            $alpha .= chr($pixelAlpha);
+                                        } else {
+                                            $rgb .= chr(0).chr(0).chr(0);
+                                            $alpha .= chr(0);
+                                        }
                                     }
                                 }
                             }
-                        }
-                        imagedestroy($gd);
+                            imagedestroy($gd);
 
-                        $rgbData = gzcompress($rgb);
-                        $imgObjNum = $nextObjNum++;
+                            $rgbData = gzcompress($rgb);
+                            $imgObjNum = $nextObjNum++;
 
-                        if ($hasAlpha) {
-                            $smaskData = gzcompress($alpha);
-                            $smaskObjNum = $nextObjNum++;
-                            $objects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask {$smaskObjNum} 0 R /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
-                            $objects[$smaskObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($smaskData)." >>\nstream\n{$smaskData}\nendstream";
-                        } else {
-                            $objects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
-                        }
+                            if ($hasAlpha) {
+                                $smaskData = gzcompress($alpha);
+                                $smaskObjNum = $nextObjNum++;
+                                $objects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask {$smaskObjNum} 0 R /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
+                                $objects[$smaskObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($smaskData)." >>\nstream\n{$smaskData}\nendstream";
+                            } else {
+                                $objects[$imgObjNum] = "<< /Type /XObject /Subtype /Image /Width {$sw} /Height {$sh} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length ".strlen($rgbData)." >>\nstream\n{$rgbData}\nendstream";
+                            }
 
-                        if (! $preserveColors) {
                             $cachedSignatures[$path] = ['objNum' => $imgObjNum];
                         }
 

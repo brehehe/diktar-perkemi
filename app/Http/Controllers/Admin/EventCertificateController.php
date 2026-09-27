@@ -390,6 +390,9 @@ class EventCertificateController extends Controller
     {
         Gate::authorize('view', $event);
 
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(300);
+
         $type = $request->query('type') === 'transcript' ? 'transcript' : 'certificate';
         $trackFilter = strtoupper(trim((string) $request->query('track', '')));
 
@@ -419,6 +422,9 @@ class EventCertificateController extends Controller
     public function downloadAllZip(Request $request, Event $event, EventDocumentGenerator $generator): StreamedResponse
     {
         Gate::authorize('view', $event);
+
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(300);
 
         $event->load(['eventParticipants' => fn ($q) => $q->with('participant')->orderBy('id')]);
         $tempZipPath = tempnam(sys_get_temp_dir(), 'diktar_docs_');

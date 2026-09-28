@@ -351,9 +351,23 @@ class EventRegistrationFormController extends Controller
             $formValues
         );
 
-        // Synchronize telephone and email to participant record if updated
+        // Synchronize birth data and telephone from form to participant record
+        $participantSyncFields = [];
+
+        if (! empty($validated['birth_date'])) {
+            $participantSyncFields['birth_date'] = $validated['birth_date'];
+        }
+
+        if (! empty($validated['birth_place'])) {
+            $participantSyncFields['birth_place'] = $validated['birth_place'];
+        }
+
         if (! empty($validated['phone_number']) && empty($participant->phone)) {
-            $participant->update(['phone' => $validated['phone_number']]);
+            $participantSyncFields['phone'] = $validated['phone_number'];
+        }
+
+        if (! empty($participantSyncFields)) {
+            $participant->update($participantSyncFields);
         }
 
         if ($user->isAdmin() && $request->filled('participant_id')) {

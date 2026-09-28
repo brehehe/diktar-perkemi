@@ -17,6 +17,9 @@ import Tabs from '../../../Components/admin/Tabs';
 import StatGrid from '../../../Components/admin/StatGrid';
 import TableSurface from '../../../Components/admin/TableSurface';
 import IntegrityPactDocument from '../../../Components/IntegrityPactDocument';
+import EventAssessmentTab from './Partials/EventAssessmentTab';
+import EventPracticalExamTab from './Partials/EventPracticalExamTab';
+import CbtCompletionRekapTab from './Partials/CbtCompletionRekapTab';
 import {
     Calendar,
     Clock,
@@ -103,13 +106,17 @@ export default function Show({
     registrationForms = [],
     integrityPacts = [],
     examAttempts = [],
+    cbtCompletionMatrix = [],
+    cbtCompletionStats = {},
+    assessmentData = null,
+    practicalExamData = null,
 }) {
     const isPortalAdmin = usePage().props.auth?.user?.is_admin;
     // Active tab state (Exact 10 Tabs)
     const [activeTab, setActiveTab] = useState(() => {
         if (typeof window === 'undefined') return 'ringkasan';
         const requested = new URLSearchParams(window.location.search).get('tab');
-        return ['ringkasan', 'rundown', 'peserta', 'formulir', 'pakta', 'hasil-ujian', 'absensi', 'pemateri', 'sertifikat', 'revisi', 'pengawasan', 'legenda', 'dokumen', 'pengaturan', 'ruang', 'modul_cbt', 'materi', 'cbt'].includes(requested) ? requested : 'ringkasan';
+        return ['ringkasan', 'rundown', 'peserta', 'formulir', 'pakta', 'hasil-ujian', 'penilaian', 'ujian-praktik', 'absensi', 'pemateri', 'sertifikat', 'revisi', 'pengawasan', 'legenda', 'dokumen', 'pengaturan', 'ruang', 'modul_cbt', 'materi', 'cbt'].includes(requested) ? requested : 'ringkasan';
     });
     useEffect(() => {
         const url = new URL(window.location.href);
@@ -123,6 +130,7 @@ export default function Show({
     const [participantSearch, setParticipantSearch] = useState('');
     const [participantTrackFilter, setParticipantTrackFilter] = useState('all');
     const [participantCheckinFilter, setParticipantCheckinFilter] = useState('all');
+    const [batchPrintTrack, setBatchPrintTrack] = useState('all');
     const [participantPerPage, setParticipantPerPage] = useState(25);
     const [participantPage, setParticipantPage] = useState(() => {
         if (typeof window === 'undefined') return 1;
@@ -161,7 +169,7 @@ export default function Show({
         if (adminUploadAutoVerify) formData.append('verified', '1');
         if (adminUploadNotes) formData.append('notes', adminUploadNotes);
 
-        router.post(route('event.registration-form.admin-upload', event.id), formData, {
+        router.post(`/admin/event/${event.id}/formulir/upload`, formData, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsAdminUploading(false);
@@ -297,9 +305,13 @@ export default function Show({
         });
     };
 
+    // CBT Exam Sub-tab ('rekap' | 'riwayat')
+    const [cbtSubTab, setCbtSubTab] = useState('rekap');
+
     // CBT Exam Attempts states
     const [examSearch, setExamSearch] = useState('');
     const [examPackageFilter, setExamPackageFilter] = useState('all');
+    const [examTrackFilter, setExamTrackFilter] = useState('all');
     const [examStatusFilter, setExamStatusFilter] = useState('all');
     const [examPage, setExamPage] = useState(1);
     const [examPerPage, setExamPerPage] = useState(25);
@@ -319,14 +331,18 @@ export default function Show({
             const matchesPackage = examPackageFilter === 'all' ||
                 String(att.package_id) === String(examPackageFilter);
 
+            const matchesTrack = examTrackFilter === 'all' ||
+                att.track_code === examTrackFilter ||
+                att.track_name?.toLowerCase() === examTrackFilter.toLowerCase();
+
             const matchesStatus = examStatusFilter === 'all' ||
                 (examStatusFilter === 'passed' && att.is_passed) ||
                 (examStatusFilter === 'failed' && !att.is_passed && att.status === 'submitted') ||
                 (examStatusFilter === 'in_progress' && att.status !== 'submitted');
 
-            return matchesSearch && matchesPackage && matchesStatus;
+            return matchesSearch && matchesPackage && matchesTrack && matchesStatus;
         });
-    }, [examAttempts, examSearch, examPackageFilter, examStatusFilter]);
+    }, [examAttempts, examSearch, examPackageFilter, examTrackFilter, examStatusFilter]);
 
     const totalExamPages = Math.max(1, Math.ceil(filteredExamAttempts.length / examPerPage));
     const paginatedExamAttempts = useMemo(() => {
@@ -343,6 +359,26 @@ export default function Show({
         });
         return Array.from(map.entries()).map(([id, title]) => ({ id, title }));
     }, [examAttempts]);
+
+    const uniqueExamTracks = useMemo(() => {
+        const map = new Map();
+        (examAttempts || []).forEach((att) => {
+            if (att.track_code && att.track_code !== '-' && !map.has(att.track_code)) {
+                map.set(att.track_code, att.track_name && att.track_name !== '-' ? att.track_name : att.track_code);
+            }
+        });
+        (cbtCompletionMatrix || []).forEach((item) => {
+            if (item.track_code && item.track_code !== '-' && !map.has(item.track_code)) {
+                map.set(item.track_code, item.track_name && item.track_name !== '-' ? item.track_name : item.track_code);
+            }
+        });
+        (tracks || []).forEach((t) => {
+            if (t.code && !map.has(t.code)) {
+                map.set(t.code, t.name || t.code);
+            }
+        });
+        return Array.from(map.entries()).map(([code, name]) => ({ code, name }));
+    }, [examAttempts, cbtCompletionMatrix, tracks]);
 
     const handleOpenAttemptDetail = async (attempt) => {
         setSelectedAttemptForDetail(attempt);
@@ -596,9 +632,11 @@ export default function Show({
     const [attendancePerPage, setAttendancePerPage] = useState(25);
     const [attendancePage, setAttendancePage] = useState(1);
 
-    // CBT Attempt Restart & Delete State
+    // CBT Attempt Restart, Complete & Delete State
     const [restartExamTarget, setRestartExamTarget] = useState(null);
     const [isRestartingExam, setIsRestartingExam] = useState(false);
+    const [completeExamTarget, setCompleteExamTarget] = useState(null);
+    const [isCompletingExam, setIsCompletingExam] = useState(false);
     const [deleteExamTarget, setDeleteExamTarget] = useState(null);
     const [isDeletingExam, setIsDeletingExam] = useState(false);
 
@@ -1168,6 +1206,8 @@ export default function Show({
         { id: 'formulir', label: 'Formulir Pendaftaran', count: stats.total_registration_forms ?? registrationForms.length },
         { id: 'pakta', label: 'Pakta Integritas', count: stats.total_integrity_pacts ?? (integrityPacts?.length || 0) },
         { id: 'hasil-ujian', label: 'Hasil Ujian CBT', count: stats.total_exam_attempts ?? (examAttempts?.length || 0) },
+        { id: 'penilaian', label: 'Penilaian Form Praktik', count: stats.total_assessments ?? (assessmentData?.stats?.total_assessed || 0) },
+        { id: 'ujian-praktik', label: 'Ujian Praktik (1 Lembar)', count: stats.total_practical_exams ?? (practicalExamData?.stats?.total_assessed || 0) },
         { id: 'absensi', label: 'Absensi', count: stats.total_attendances || attendances.length },
         { id: 'pemateri', label: 'Pemateri', count: stats.total_speakers },
         { id: 'sertifikat', label: 'E-Sertifikat & Transkrip', count: (stats.certificate_files_count || 0) + (stats.transcript_files_count || 0) },
@@ -1322,6 +1362,19 @@ export default function Show({
         return Array.from(set).sort();
     }, [tracks, participants]);
 
+    const batchPrintTrackOptions = useMemo(() => {
+        return availableTrackOptions
+            .map((code) => {
+                const count = (participants || []).filter((p) => p.track_code === code).length;
+                const name =
+                    (tracks || []).find((t) => t.code === code)?.name ||
+                    (participants || []).find((p) => p.track_code === code)?.track_name ||
+                    code;
+                return { code, name, count };
+            })
+            .filter((item) => item.count > 0);
+    }, [availableTrackOptions, tracks, participants]);
+
     const filteredParticipants = useMemo(() => {
         return (participants || []).filter((p) => {
             if (participantTrackFilter !== 'all' && p.track_code !== participantTrackFilter) {
@@ -1412,6 +1465,26 @@ export default function Show({
                 onStart: () => setIsRestartingExam(true),
                 onSuccess: () => setRestartExamTarget(null),
                 onFinish: () => setIsRestartingExam(false),
+            }
+        );
+    };
+
+    const handleCompleteExam = () => {
+        if (!completeExamTarget) return;
+
+        const isAll = completeExamTarget === 'all';
+        const url = isAll
+            ? `/admin/event/${event.id}/cbt-attempts/selesaikan-semua`
+            : `/admin/event/${event.id}/cbt-attempts/${completeExamTarget.id}/selesaikan`;
+
+        router.post(
+            url,
+            isAll && examPackageFilter !== 'all' ? { package_id: examPackageFilter } : {},
+            {
+                preserveScroll: true,
+                onStart: () => setIsCompletingExam(true),
+                onSuccess: () => setCompleteExamTarget(null),
+                onFinish: () => setIsCompletingExam(false),
             }
         );
     };
@@ -3501,8 +3574,71 @@ export default function Show({
                 {/* TAB: HASIL UJIAN CBT & RINCIAN JAWABAN */}
                 {activeTab === 'hasil-ujian' && (
                     <div className="space-y-6">
-                        {/* Summary / Stats Cards */}
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        {/* Sub-tab view switcher */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#DCE7F3] pb-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setCbtSubTab('rekap')}
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                                        cbtSubTab === 'rekap'
+                                            ? 'bg-[#0B63CE] text-white shadow-xs'
+                                            : 'bg-white text-[#4A617C] hover:bg-[#F0F5FA] border border-[#DCE7F3]'
+                                    }`}
+                                >
+                                    <Users className="h-4 w-4" />
+                                    <span>Rekap Kelengkapan Peserta</span>
+                                    <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                                        cbtSubTab === 'rekap' ? 'bg-white/20 text-white' : 'bg-slate-100 text-[#4A617C]'
+                                    }`}>
+                                        {cbtCompletionStats?.total_participants ?? (cbtCompletionMatrix?.length || 0)}
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCbtSubTab('riwayat')}
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                                        cbtSubTab === 'riwayat'
+                                            ? 'bg-[#0B63CE] text-white shadow-xs'
+                                            : 'bg-white text-[#4A617C] hover:bg-[#F0F5FA] border border-[#DCE7F3]'
+                                    }`}
+                                >
+                                    <FileCheck className="h-4 w-4" />
+                                    <span>Riwayat Percobaan CBT</span>
+                                    <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                                        cbtSubTab === 'riwayat' ? 'bg-white/20 text-white' : 'bg-slate-100 text-[#4A617C]'
+                                    }`}>
+                                        {stats.total_exam_attempts ?? (examAttempts?.length || 0)}
+                                    </span>
+                                </button>
+                            </div>
+                            <div className="text-xs text-[#6B7C93]">
+                                {cbtSubTab === 'rekap' ? (
+                                    <span>Status pengerjaan Pre-Test, Kuis, & Post-Test seluruh {cbtCompletionStats?.total_participants ?? 0} peserta</span>
+                                ) : (
+                                    <span>Log pengerjaan CBT ({stats.total_exam_attempts ?? 0} percobaan tersimpan)</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {cbtSubTab === 'rekap' ? (
+                            <CbtCompletionRekapTab
+                                cbtCompletionMatrix={cbtCompletionMatrix}
+                                cbtCompletionStats={cbtCompletionStats}
+                                tracks={tracks}
+                                onViewParticipantAttempts={(participantName) => {
+                                    setCbtSubTab('riwayat');
+                                    setExamSearch(participantName);
+                                    setExamTrackFilter('all');
+                                    setExamPackageFilter('all');
+                                    setExamStatusFilter('all');
+                                    setExamPage(1);
+                                }}
+                            />
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Summary / Stats Cards */}
+                                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                             <div className="rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
                                 <p className="text-xs font-medium text-[#6B7C93]">Total Percobaan Ujian</p>
                                 <p className="mt-1 font-display text-2xl font-bold text-[#0E2747]">
@@ -3536,29 +3672,86 @@ export default function Show({
                         </div>
 
                         {/* Filter and Search Bar */}
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
-                            <div className="relative flex-1 max-w-md">
-                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6B7C93]" />
-                                <input
-                                    type="text"
-                                    value={examSearch}
-                                    onChange={(e) => {
-                                        setExamSearch(e.target.value);
-                                        setExamPage(1);
-                                    }}
-                                    placeholder="Cari nama kenshi, NIK, dojo, atau paket ujian..."
-                                    className="w-full rounded-lg border border-[#DCE7F3] py-2 pl-9 pr-3 text-xs text-[#112743] focus:border-[#0B63CE] focus:outline-none"
-                                />
+                        <div className="rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs space-y-3">
+                            {/* Baris 1: Pencarian & Tombol Aksi */}
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="relative w-full lg:max-w-md">
+                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6B7C93]" />
+                                    <input
+                                        type="text"
+                                        value={examSearch}
+                                        onChange={(e) => {
+                                            setExamSearch(e.target.value);
+                                            setExamPage(1);
+                                        }}
+                                        placeholder="Cari nama kenshi, NIK, dojo, atau paket ujian..."
+                                        className="w-full rounded-lg border border-[#DCE7F3] py-2 pl-9 pr-8 text-xs text-[#112743] placeholder:text-[#8898AA] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE] focus:outline-none"
+                                    />
+                                    {examSearch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setExamSearch('');
+                                                setExamPage(1);
+                                            }}
+                                            className="absolute right-2.5 top-2.5 text-[#6B7C93] hover:text-[#112743]"
+                                            title="Hapus pencarian"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        variant="danger"
+                                        size="sm"
+                                        icon={<Trash2 className="h-3.5 w-3.5" />}
+                                        disabled={filteredExamAttempts.length === 0}
+                                        onClick={() => setDeleteExamTarget('all')}
+                                        title="Kosongkan/hapus seluruh hasil ujian CBT (daftar hasil ujian kembali kosong)"
+                                    >
+                                        Kosongkan Semua Ujian
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        icon={<RotateCcw className="h-3.5 w-3.5 text-amber-700" />}
+                                        disabled={filteredExamAttempts.length === 0}
+                                        className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 hover:border-amber-400"
+                                        onClick={() => setRestartExamTarget('all')}
+                                        title="Mulai ulang sesi ujian untuk semua peserta pada daftar/filter ini (jawaban tetap tersimpan)"
+                                    >
+                                        Mulai Ulang (Simpan Jawaban)
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" />}
+                                        disabled={filteredExamAttempts.length === 0}
+                                        className="border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 hover:border-emerald-400"
+                                        onClick={() => setCompleteExamTarget('all')}
+                                        title="Selesaikan dan nilai otomatis seluruh ujian peserta yang masih berlangsung / belum disubmit"
+                                    >
+                                        Selesaikan Semua Ujian
+                                    </Button>
+                                </div>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2">
+                            {/* Baris 2: Filter Dropdowns */}
+                            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[#EEF4FB]">
+                                <div className="flex items-center gap-1.5 text-xs font-semibold text-[#4A617C] mr-1">
+                                    <Filter className="h-3.5 w-3.5 text-[#6B7C93]" />
+                                    <span>Filter:</span>
+                                </div>
+
                                 <select
                                     value={examPackageFilter}
                                     onChange={(e) => {
                                         setExamPackageFilter(e.target.value);
                                         setExamPage(1);
                                     }}
-                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-1.5 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
                                 >
                                     <option value="all">Semua Paket Ujian CBT</option>
                                     {uniqueExamPackages.map((pkg) => (
@@ -3569,12 +3762,28 @@ export default function Show({
                                 </select>
 
                                 <select
+                                    value={examTrackFilter}
+                                    onChange={(e) => {
+                                        setExamTrackFilter(e.target.value);
+                                        setExamPage(1);
+                                    }}
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-1.5 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                >
+                                    <option value="all">Semua Jalur Peserta</option>
+                                    {uniqueExamTracks.map((tr) => (
+                                        <option key={tr.code} value={tr.code}>
+                                            {tr.name} ({tr.code})
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <select
                                     value={examStatusFilter}
                                     onChange={(e) => {
                                         setExamStatusFilter(e.target.value);
                                         setExamPage(1);
                                     }}
-                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-1.5 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
                                 >
                                     <option value="all">Semua Status Kelulusan</option>
                                     <option value="passed">Lulus (Memenuhi Batas)</option>
@@ -3588,7 +3797,7 @@ export default function Show({
                                         setExamPerPage(Number(e.target.value));
                                         setExamPage(1);
                                     }}
-                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                                    className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-1.5 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none ml-auto"
                                 >
                                     <option value={10}>10 per hal</option>
                                     <option value={25}>25 per hal</option>
@@ -3596,25 +3805,21 @@ export default function Show({
                                     <option value={100}>100 per hal</option>
                                 </select>
 
-                                <Button
-                                    variant="danger"
-                                    icon={<Trash2 className="h-3.5 w-3.5" />}
-                                    disabled={filteredExamAttempts.length === 0}
-                                    onClick={() => setDeleteExamTarget('all')}
-                                    title="Kosongkan/hapus seluruh hasil ujian CBT (daftar hasil ujian kembali kosong)"
-                                >
-                                    Kosongkan Semua Ujian
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    icon={<RotateCcw className="h-3.5 w-3.5 text-amber-700" />}
-                                    disabled={filteredExamAttempts.length === 0}
-                                    className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 hover:border-amber-400"
-                                    onClick={() => setRestartExamTarget('all')}
-                                    title="Mulai ulang sesi ujian untuk semua peserta pada daftar/filter ini (jawaban tetap tersimpan)"
-                                >
-                                    Mulai Ulang (Simpan Jawaban)
-                                </Button>
+                                {(examSearch || examPackageFilter !== 'all' || examTrackFilter !== 'all' || examStatusFilter !== 'all') && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setExamSearch('');
+                                            setExamPackageFilter('all');
+                                            setExamTrackFilter('all');
+                                            setExamStatusFilter('all');
+                                            setExamPage(1);
+                                        }}
+                                        className="text-xs font-medium text-rose-600 hover:text-rose-700 underline px-1"
+                                    >
+                                        Reset Filter
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -3649,11 +3854,24 @@ export default function Show({
                                                     <tr key={att.id} className="hover:bg-[#F8FBFF] transition-colors">
                                                         <td className="py-3 px-4 text-center font-mono text-[#6B7C93]">{globalIdx}</td>
                                                         <td className="py-3 px-4">
-                                                            <div className="font-semibold text-[#0E2747]">{att.participant_name}</div>
+                                                            <div className="font-semibold text-[#0E2747] flex items-center gap-1.5 flex-wrap">
+                                                                <span>{att.participant_name}</span>
+                                                                {att.track_code && att.track_code !== '-' && (
+                                                                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
+                                                                        {att.track_code}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <div className="flex items-center gap-2 font-mono text-[11px] text-[#6B7C93] mt-0.5">
                                                                 <span>{att.kenshi_id_number}</span>
                                                                 <span>•</span>
                                                                 <span>{att.origin_dojo}</span>
+                                                                {att.track_name && att.track_name !== '-' && (
+                                                                    <>
+                                                                        <span>•</span>
+                                                                        <span className="text-blue-600 font-sans font-medium">{att.track_name}</span>
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="py-3 px-4">
@@ -3721,6 +3939,17 @@ export default function Show({
                                                                     <Eye className="h-3.5 w-3.5" />
                                                                     Lihat Jawaban
                                                                 </button>
+                                                                {att.status !== 'submitted' && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setCompleteExamTarget(att)}
+                                                                        className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors shadow-xs"
+                                                                        title="Selesaikan ujian peserta ini dan hitung nilai berdasarkan jawaban yang sudah diisi"
+                                                                    >
+                                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" />
+                                                                        Selesaikan
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setRestartExamTarget(att)}
@@ -3779,7 +4008,19 @@ export default function Show({
                                 </div>
                             )}
                         </div>
+                            </div>
+                        )}
                     </div>
+                )}
+
+                {/* TAB: PENILAIAN PRAKTIK & TEORI (WASIT, PENGUJI, PELATIH) */}
+                {activeTab === 'penilaian' && (
+                    <EventAssessmentTab event={event} assessmentData={assessmentData} />
+                )}
+
+                {/* TAB: UJIAN PRAKTIK (1 LEMBAR SELURUH PESERTA - 6 JALUR) */}
+                {activeTab === 'ujian-praktik' && (
+                    <EventPracticalExamTab event={event} practicalExamData={practicalExamData} />
                 )}
 
                 {/* TAB 4: ABSENSI (DEDICATED ATTENDANCE MANAGEMENT) */}
@@ -5025,37 +5266,78 @@ export default function Show({
                         )}
 
                         {participants.length > 0 && (
-                            <div className="flex flex-wrap items-center justify-between gap-4 border border-[#DCE7F3] bg-white p-4 sm:p-5">
-                                <div>
-                                    <h3 className="text-sm font-semibold text-[#0E2747] flex items-center gap-2">
-                                        <Printer className="size-4 text-[#0B63CE]" />
-                                        <span>Cetak & Unduh Dokumen Sekaligus</span>
-                                    </h3>
-                                    <p className="mt-1 max-w-2xl text-xs leading-5 text-[#6B7C93]">Preview dan cetak semua sertifikat atau transkrip peserta dalam satu dokumen PDF multi-halaman sekaligus, atau unduh seluruh berkas PDF dalam satu file ZIP.</p>
+                            <div className="border border-[#DCE7F3] bg-white p-4 sm:p-5">
+                                <div className="flex flex-wrap items-start justify-between gap-4">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-[#0E2747] flex items-center gap-2">
+                                            <Printer className="size-4 text-[#0B63CE]" />
+                                            <span>Cetak & Unduh Dokumen Sekaligus</span>
+                                        </h3>
+                                        <p className="mt-1 max-w-2xl text-xs leading-5 text-[#6B7C93]">Preview dan cetak semua sertifikat atau transkrip peserta dalam satu dokumen PDF multi-halaman sekaligus, atau unduh seluruh berkas PDF dalam satu file ZIP.</p>
+                                    </div>
+                                    {/* Filter jalur */}
+                                    {batchPrintTrackOptions.length > 1 && (
+                                        <div className="flex items-center gap-2">
+                                            <label htmlFor="batch-print-track-filter" className="text-xs font-medium text-[#6B7C93] whitespace-nowrap">
+                                                Filter Jalur:
+                                            </label>
+                                            <select
+                                                id="batch-print-track-filter"
+                                                value={batchPrintTrack}
+                                                onChange={(e) => setBatchPrintTrack(e.target.value)}
+                                                className="rounded-lg border border-[#DCE7F3] bg-white px-3 py-1.5 text-xs font-medium text-[#0E2747] shadow-2xs focus:border-[#0B63CE] focus:outline-none focus:ring-1 focus:ring-[#0B63CE]"
+                                            >
+                                                <option value="all">Semua Jalur ({participants.length} peserta)</option>
+                                                {batchPrintTrackOptions.map((opt) => (
+                                                    <option key={opt.code} value={opt.code}>
+                                                        {opt.name} ({opt.count} peserta)
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="flex flex-wrap items-center gap-2">
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
                                     <Button
                                         type="button"
                                         variant="secondary"
                                         icon={Printer}
-                                        onClick={() => window.open(`/admin/event/${event.id}/dokumen/cetak-semua?type=certificate`, '_blank')}
+                                        onClick={() => {
+                                            const track = batchPrintTrack !== 'all' ? `&track=${encodeURIComponent(batchPrintTrack)}` : '';
+                                            window.open(`/admin/event/${event.id}/dokumen/cetak-semua?type=certificate${track}`, '_blank');
+                                        }}
                                     >
-                                        Cetak Semua Sertifikat
+                                        {batchPrintTrack === 'all'
+                                            ? 'Cetak Semua Sertifikat'
+                                            : `Cetak Sertifikat ${batchPrintTrackOptions.find((o) => o.code === batchPrintTrack)?.name ?? batchPrintTrack} (${batchPrintTrackOptions.find((o) => o.code === batchPrintTrack)?.count ?? 0})`}
                                     </Button>
                                     <Button
                                         type="button"
                                         variant="secondary"
                                         icon={FileText}
-                                        onClick={() => window.open(`/admin/event/${event.id}/dokumen/cetak-semua?type=transcript`, '_blank')}
+                                        onClick={() => {
+                                            const track = batchPrintTrack !== 'all' ? `&track=${encodeURIComponent(batchPrintTrack)}` : '';
+                                            window.open(`/admin/event/${event.id}/dokumen/cetak-semua?type=transcript${track}`, '_blank');
+                                        }}
                                     >
-                                        Cetak Semua Transkrip
+                                        {batchPrintTrack === 'all'
+                                            ? 'Cetak Semua Transkrip'
+                                            : `Cetak Transkrip ${batchPrintTrackOptions.find((o) => o.code === batchPrintTrack)?.name ?? batchPrintTrack} (${batchPrintTrackOptions.find((o) => o.code === batchPrintTrack)?.count ?? 0})`}
                                     </Button>
                                     <a
-                                        href={`/admin/event/${event.id}/dokumen/unduh-zip`}
+                                        href={
+                                            batchPrintTrack === 'all'
+                                                ? `/admin/event/${event.id}/dokumen/unduh-zip`
+                                                : `/admin/event/${event.id}/dokumen/unduh-zip?track=${encodeURIComponent(batchPrintTrack)}`
+                                        }
                                         className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#0B63CE] px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-[#0A3F82] transition-colors"
                                     >
                                         <Download className="size-4" />
-                                        <span>Unduh Semua (.ZIP)</span>
+                                        <span>
+                                            {batchPrintTrack === 'all'
+                                                ? 'Unduh Semua (.ZIP)'
+                                                : `Unduh ${batchPrintTrackOptions.find((o) => o.code === batchPrintTrack)?.name ?? batchPrintTrack} (.ZIP)`}
+                                        </span>
                                     </a>
                                 </div>
                             </div>
@@ -7864,6 +8146,20 @@ export default function Show({
                 variant="warning"
                 loading={isRestartingExam}
                 onConfirm={handleRestartExam}
+            />
+
+            <AlertDialog
+                isOpen={Boolean(completeExamTarget)}
+                onClose={() => setCompleteExamTarget(null)}
+                title={completeExamTarget === 'all' ? 'Selesaikan Semua Ujian yang Sedang Berlangsung?' : 'Selesaikan Ujian Peserta Ini?'}
+                description={completeExamTarget === 'all'
+                    ? `Seluruh sesi ujian peserta yang masih berlangsung (status sedang ujian / belum submit) ${examPackageFilter !== 'all' ? 'pada paket terpilih' : 'pada event ini'} akan otomatis diselesaikan dan dinilai berdasarkan jawaban yang telah mereka isi.`
+                    : `Sesi ujian untuk ${completeExamTarget?.participant_name || 'peserta ini'} (${completeExamTarget?.package_title || 'Ujian CBT'}) akan diselesaikan dan skor kelulusan akan dihitung berdasarkan jawaban yang sudah tersimpan.`}
+                confirmText={isCompletingExam ? 'Memproses...' : 'Selesaikan Sekarang'}
+                cancelText="Batal"
+                variant="primary"
+                loading={isCompletingExam}
+                onConfirm={handleCompleteExam}
             />
 
             <AlertDialog

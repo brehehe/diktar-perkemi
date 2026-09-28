@@ -15,9 +15,8 @@ class ParticipantPhotoService
     public static function storePhoto(UploadedFile $file, int $participantId): string
     {
         $path = $file->store("participants/{$participantId}", 'public');
-        $fullPath = Storage::disk('public')->path($path);
 
-        self::normalizeImageFile($fullPath);
+        self::normalizeRelativePath($path);
 
         return $path;
     }
@@ -42,14 +41,15 @@ class ParticipantPhotoService
     }
 
     /**
-     * Normalize an image file on disk so its raw pixels are upright and EXIF is cleanly updated.
-     * Returns true if the file was modified, false otherwise.
+     * Normalize an image file stored in public disk by its relative path.
      */
-    public static function normalizeImageFile(string $fullPath): bool
+    public static function normalizeRelativePath(string $relativePath): bool
     {
-        if (! file_exists($fullPath) || ! is_readable($fullPath)) {
+        if (! Storage::disk('public')->exists($relativePath)) {
             return false;
         }
+
+        $fullPath = Storage::disk('public')->path($relativePath);
 
         $orientation = 1;
         if (function_exists('exif_read_data')) {
@@ -76,24 +76,80 @@ class ParticipantPhotoService
         $oriented = self::applyOrientation($gd, $orientation);
 
         $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
-        $saved = match ($ext) {
-            'png' => imagepng($oriented, $fullPath, 8),
-            'webp' => imagewebp($oriented, $fullPath, 92),
-            default => imagejpeg($oriented, $fullPath, 95),
+        ob_start();
+        match ($ext) {
+            'png' => imagepng($oriented, null, 8),
+            'webp' => imagewebp($oriented, null, 92),
+            default => imagejpeg($oriented, null, 95),
         };
+        $bytes = (string) ob_get_clean();
 
         if ($oriented !== $gd) {
             imagedestroy($oriented);
         }
         imagedestroy($gd);
 
-        return $saved;
+        if ($bytes !== '') {
+            return Storage::disk('public')->put($relativePath, $bytes);
+        }
+
+        return false;
+    }
+
+    /**
+     * Normalize an image file on disk so its raw pixels are upright and EXIF is cleanly updated.
+     */
+    public static function normalizeImageFile(string $fullPath): bool
+    {
+        $orientation = 1;
+        if (function_exists('exif_read_data')) {
+            $exif = @exif_read_data($fullPath);
+            if (is_array($exif) && ! empty($exif['Orientation'])) {
+                $orientation = (int) $exif['Orientation'];
+            }
+        }
+
+        if ($orientation <= 1) {
+            return false;
+        }
+
+        $raw = @file_get_contents($fullPath);
+        if (! $raw) {
+            return false;
+        }
+
+        $gd = @imagecreatefromstring($raw);
+        if (! $gd) {
+            return false;
+        }
+
+        $oriented = self::applyOrientation($gd, $orientation);
+
+        $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+        ob_start();
+        match ($ext) {
+            'png' => imagepng($oriented, null, 8),
+            'webp' => imagewebp($oriented, null, 92),
+            default => imagejpeg($oriented, null, 95),
+        };
+        $bytes = (string) ob_get_clean();
+
+        if ($oriented !== $gd) {
+            imagedestroy($oriented);
+        }
+        imagedestroy($gd);
+
+        if ($bytes !== '') {
+            return (bool) @file_put_contents($fullPath, $bytes);
+        }
+
+        return false;
     }
 
     /**
      * Apply rotation/flip for a given EXIF orientation tag.
      */
-    protected static function applyOrientation(GdImage $gd, int $orientation): GdImage
+    public static function applyOrientation(GdImage $gd, int $orientation): GdImage
     {
         return match ($orientation) {
             2 => (imageflip($gd, IMG_FLIP_HORIZONTAL) ? $gd : $gd),
@@ -128,8 +184,7 @@ class ParticipantPhotoService
         $updated = [];
 
         foreach ($participants as $participant) {
-            $fullPath = Storage::disk('public')->path($participant->photo_path);
-            if (self::normalizeImageFile($fullPath)) {
+            if (self::normalizeRelativePath($participant->photo_path)) {
                 $updated[] = [
                     'id' => $participant->id,
                     'name' => $participant->name,

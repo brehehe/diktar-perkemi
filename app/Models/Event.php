@@ -42,6 +42,7 @@ class Event extends Model
         'responsible_user_id',
         'document_number_settings',
         'certificate_signature_settings',
+        'assessment_settings',
     ];
 
     protected $appends = [
@@ -72,6 +73,7 @@ class Event extends Model
             'requirements_checklist' => 'array',
             'document_number_settings' => 'array',
             'certificate_signature_settings' => 'array',
+            'assessment_settings' => 'array',
         ];
     }
 
@@ -108,6 +110,11 @@ class Event extends Model
     public function eventParticipants(): HasMany
     {
         return $this->hasMany(EventParticipant::class);
+    }
+
+    public function assessments(): HasMany
+    {
+        return $this->hasMany(EventAssessment::class);
     }
 
     public function attendances(): HasMany

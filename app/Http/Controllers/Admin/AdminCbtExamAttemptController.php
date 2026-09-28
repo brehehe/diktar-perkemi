@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Events\SubmitCbtExam;
 use App\Http\Controllers\Controller;
 use App\Models\CbtExamAttempt;
 use App\Models\Event;
+use App\Models\EventParticipant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -264,6 +266,126 @@ class AdminCbtExamAttemptController extends Controller
         return back()->with(
             'success',
             "Sebanyak {$count} percobaan ujian berhasil dimulai ulang. Sesi ujian dibuka kembali dengan waktu baru dan seluruh jawaban yang telah dipilih kenshi tetap tersimpan."
+        );
+    }
+
+    /**
+     * Selesaikan satu percobaan ujian peserta yang masih in_progress / timed_out.
+     */
+    public function completeAttempt(Request $request, Event $event, CbtExamAttempt $attempt): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || ! in_array($user->role, ['Admin', 'Penyelenggara', 'Super Admin'], true)) {
+            abort(403, 'Akses ditolak.');
+        }
+
+        abort_unless($attempt->event_id === $event->id, 404, 'Ujian tidak sesuai event.');
+
+        $attempt->loadMissing(['participant', 'package.questions', 'package.bankQuestions']);
+        $pkg = $attempt->package;
+
+        if ($pkg) {
+            $questions = $pkg->questions()->where('is_active', true)->orderBy('sort_order')->get();
+            if ($questions->isEmpty()) {
+                $questions = $pkg->bankQuestions()->where('status', 'active')->get();
+            }
+
+            $scorer = app(SubmitCbtExam::class);
+            $reflection = new \ReflectionClass($scorer);
+            $scoreMethod = $reflection->getMethod('score');
+            $scoreMethod->setAccessible(true);
+
+            $answers = is_array($attempt->answers) ? $attempt->answers : [];
+            [$score, $isPassed, $finalAnswers] = $scoreMethod->invoke($scorer, $questions, $answers, (float) $pkg->passing_score);
+
+            $attempt->update([
+                'status' => 'submitted',
+                'submitted_at' => $attempt->submitted_at ?? now(),
+                'total_score' => $score,
+                'is_passed' => $isPassed,
+                'answers' => $finalAnswers,
+                'feedback' => $attempt->feedback ?? 'Ujian diselesaikan oleh administrator.',
+            ]);
+
+            $ep = EventParticipant::where('event_id', $event->id)->where('participant_id', $attempt->participant_id)->first();
+            if ($ep && in_array($pkg->exam_type, ['post_test', 'theory'], true)) {
+                if ($ep->score_theory === null || $score > (float) $ep->score_theory) {
+                    $ep->update(['score_theory' => $score]);
+                }
+            }
+        }
+
+        return back()->with(
+            'success',
+            "Ujian {$attempt->participant?->name} ({$pkg?->title}) berhasil diselesaikan dan dinilai dengan skor: ".($attempt->total_score ?? 0).'.'
+        );
+    }
+
+    /**
+     * Selesaikan semua CBT exam attempts yang masih in_progress / timed_out untuk event ini.
+     */
+    public function completeAllAttempts(Request $request, Event $event): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || ! in_array($user->role, ['Admin', 'Penyelenggara', 'Super Admin'], true)) {
+            abort(403, 'Akses ditolak.');
+        }
+
+        $query = CbtExamAttempt::with(['package.questions', 'package.bankQuestions', 'participant'])
+            ->where('event_id', $event->id)
+            ->where('status', '!=', 'submitted');
+
+        if ($request->filled('package_id') && $request->input('package_id') !== 'all') {
+            $query->where('cbt_exam_package_id', $request->input('package_id'));
+        }
+
+        $attempts = $query->get();
+        if ($attempts->isEmpty()) {
+            return back()->with('info', 'Tidak ada peserta yang berstatus sedang ujian.');
+        }
+
+        $scorer = app(SubmitCbtExam::class);
+        $reflection = new \ReflectionClass($scorer);
+        $scoreMethod = $reflection->getMethod('score');
+        $scoreMethod->setAccessible(true);
+
+        $count = 0;
+        foreach ($attempts as $attempt) {
+            $pkg = $attempt->package;
+            if (! $pkg) {
+                continue;
+            }
+
+            $questions = $pkg->questions()->where('is_active', true)->orderBy('sort_order')->get();
+            if ($questions->isEmpty()) {
+                $questions = $pkg->bankQuestions()->where('status', 'active')->get();
+            }
+
+            $answers = is_array($attempt->answers) ? $attempt->answers : [];
+            [$score, $isPassed, $finalAnswers] = $scoreMethod->invoke($scorer, $questions, $answers, (float) $pkg->passing_score);
+
+            $attempt->update([
+                'status' => 'submitted',
+                'submitted_at' => $attempt->submitted_at ?? now(),
+                'total_score' => $score,
+                'is_passed' => $isPassed,
+                'answers' => $finalAnswers,
+                'feedback' => $attempt->feedback ?? 'Ujian diselesaikan oleh administrator.',
+            ]);
+
+            $ep = EventParticipant::where('event_id', $event->id)->where('participant_id', $attempt->participant_id)->first();
+            if ($ep && in_array($pkg->exam_type, ['post_test', 'theory'], true)) {
+                if ($ep->score_theory === null || $score > (float) $ep->score_theory) {
+                    $ep->update(['score_theory' => $score]);
+                }
+            }
+
+            $count++;
+        }
+
+        return back()->with(
+            'success',
+            "Sebanyak {$count} ujian yang sedang berlangsung berhasil diselesaikan dan dinilai secara otomatis."
         );
     }
 

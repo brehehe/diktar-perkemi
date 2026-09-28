@@ -431,18 +431,22 @@ class EventCertificateController extends Controller
             ->with(['participant', 'event'])
             ->orderBy('id');
 
-        if ($trackFilter !== '' && isset(EventDocumentGenerator::NUMBER_LABELS[$trackFilter])) {
+        if ($trackFilter !== '' && $trackFilter !== 'ALL') {
             $query->where('track_code', $trackFilter);
         }
 
         $participants = $query->get();
 
-        abort_if($participants->isEmpty(), 404, 'Tidak ada peserta yang terdaftar pada event ini.');
+        abort_if($participants->isEmpty(), 404, 'Tidak ada peserta yang terdaftar pada event atau jalur ini.');
 
-        $title = ($type === 'certificate' ? 'Semua Sertifikat - ' : 'Semua Transkrip - ').$event->title;
+        $trackLabel = ($trackFilter !== '' && $trackFilter !== 'ALL')
+            ? (EventDocumentGenerator::NUMBER_LABELS[$trackFilter] ?? $trackFilter)
+            : 'Semua';
+        $title = ($type === 'certificate' ? 'Sertifikat ' : 'Transkrip ').$trackLabel.' - '.$event->title;
         $pdf = $generator->generateCombinedPdf($participants, $type, $title);
         $slug = Str::slug($event->title);
-        $filename = ($type === 'certificate' ? 'sertifikat-semua-' : 'transkrip-semua-')."{$slug}.pdf";
+        $trackSlug = ($trackFilter !== '' && $trackFilter !== 'ALL') ? strtolower($trackFilter).'-' : 'semua-';
+        $filename = ($type === 'certificate' ? 'sertifikat-' : 'transkrip-')."{$trackSlug}{$slug}.pdf";
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
@@ -457,7 +461,16 @@ class EventCertificateController extends Controller
         @ini_set('memory_limit', '512M');
         @set_time_limit(300);
 
-        $event->load(['eventParticipants' => fn ($q) => $q->with('participant')->orderBy('id')]);
+        $trackFilter = strtoupper(trim((string) $request->query('track', '')));
+
+        $epQuery = fn ($q) => $q->with('participant')
+            ->when($trackFilter !== '' && $trackFilter !== 'ALL', fn ($q) => $q->where('track_code', $trackFilter))
+            ->orderBy('id');
+
+        $event->load(['eventParticipants' => $epQuery]);
+
+        abort_if($event->eventParticipants->isEmpty(), 404, 'Tidak ada peserta pada jalur yang dipilih.');
+
         $tempZipPath = tempnam(sys_get_temp_dir(), 'diktar_docs_');
         $zip = new ZipArchive;
 

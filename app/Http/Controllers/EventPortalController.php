@@ -19,6 +19,7 @@ use App\Models\QuestionBank;
 use App\Services\EventAttendanceService;
 use App\Services\EventDocumentGenerator;
 use App\Services\EventLearningRoomService;
+use App\Services\ParticipantPhotoService;
 use App\Services\QrCodeService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -1151,7 +1152,7 @@ class EventPortalController extends Controller
             if ($participant->photo_path) {
                 Storage::disk('public')->delete($participant->photo_path);
             }
-            $path = $request->file('photo')->store("participants/{$participant->id}", 'public');
+            $path = ParticipantPhotoService::storePhoto($request->file('photo'), $participant->id);
             $participant->photo_path = $path;
             $user->update(['avatar_path' => $path]);
         }

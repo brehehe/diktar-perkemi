@@ -7,10 +7,12 @@ use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\CbtController;
 use App\Http\Controllers\Admin\CbtPackageController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\EventAssessmentController;
 use App\Http\Controllers\Admin\EventCertificateController;
 use App\Http\Controllers\Admin\EventCertificateSignatureSettingController;
 use App\Http\Controllers\Admin\EventController;
 use App\Http\Controllers\Admin\EventDocumentNumberSettingController;
+use App\Http\Controllers\Admin\EventPracticalExamController;
 use App\Http\Controllers\Admin\EventReferenceController;
 use App\Http\Controllers\Admin\ExamRevisionController;
 use App\Http\Controllers\Admin\HelpController;
@@ -195,6 +197,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/event/{event}/cbt-attempts/{attempt}/detail', [AdminCbtExamAttemptController::class, 'showDetail'])->name('event.cbt-attempt.detail');
         Route::post('/event/{event}/cbt-attempts/{attempt}/mulai-ulang', [AdminCbtExamAttemptController::class, 'restartAttempt'])->name('event.cbt-attempt.restart');
         Route::post('/event/{event}/cbt-attempts/mulai-ulang-semua', [AdminCbtExamAttemptController::class, 'restartAllAttempts'])->name('event.cbt-attempt.restart-all');
+        Route::post('/event/{event}/cbt-attempts/{attempt}/selesaikan', [AdminCbtExamAttemptController::class, 'completeAttempt'])->name('event.cbt-attempt.complete');
+        Route::post('/event/{event}/cbt-attempts/selesaikan-semua', [AdminCbtExamAttemptController::class, 'completeAllAttempts'])->name('event.cbt-attempt.complete-all');
         Route::delete('/event/{event}/cbt-attempts/{attempt}', [AdminCbtExamAttemptController::class, 'destroyAttempt'])->name('event.cbt-attempt.destroy');
         Route::delete('/event/{event}/cbt-attempts', [AdminCbtExamAttemptController::class, 'destroyAllAttempts'])->name('event.cbt-attempt.destroy-all');
         Route::post('/event/{event}/peserta/{eventParticipant}/sertifikat/generate', [EventCertificateController::class, 'generateCertificate'])->name('event.certificate.generate');
@@ -214,6 +218,16 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/event/{event}/revisi/{attempt}/baca', [ExamRevisionController::class, 'reader'])->name('event.revision.reader');
         Route::get('/event/{event}/revisi/{attempt}/pratinjau', [ExamRevisionController::class, 'preview'])->name('event.revision.preview');
         Route::patch('/event/{event}/revisi/{attempt}', [ExamRevisionController::class, 'review'])->name('event.revision.review');
+
+        // Event Practical Assessment (Pelatih, Penguji, Wasit)
+        Route::post('/event/{event}/penilaian', [EventAssessmentController::class, 'save'])->name('event.assessment.save');
+        Route::post('/event/{event}/penilaian/bulk', [EventAssessmentController::class, 'saveBulk'])->name('event.assessment.bulk-save');
+        Route::get('/event/{event}/penilaian/export-excel', [EventAssessmentController::class, 'exportExcel'])->name('event.assessment.export-excel');
+
+        // Event Practical Exam (6 Sheets - 1 Lembar Seluruh Peserta Per Kategori)
+        Route::post('/event/{event}/ujian-praktik', [EventPracticalExamController::class, 'save'])->name('event.practical-exam.save');
+        Route::post('/event/{event}/ujian-praktik/bulk', [EventPracticalExamController::class, 'saveBulk'])->name('event.practical-exam.bulk-save');
+        Route::get('/event/{event}/ujian-praktik/export-excel', [EventPracticalExamController::class, 'exportExcel'])->name('event.practical-exam.export-excel');
 
         // Event Modul & CBT Linking
         Route::post('/event/{event}/modul-pembelajaran', [EventController::class, 'attachLearningModule'])->name('event.learning-module.attach');

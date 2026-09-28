@@ -28,7 +28,11 @@ use Illuminate\Support\Carbon;
 
 class AdminEventDetailService
 {
-    public function __construct(private readonly EventDocumentGenerator $documentGenerator) {}
+    public function __construct(
+        private readonly EventDocumentGenerator $documentGenerator,
+        private readonly EventAssessmentService $assessmentService,
+        private readonly EventPracticalExamService $practicalExamService,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -569,37 +573,153 @@ class AdminEventDetailService
         });
 
         // All CBT Exam attempts for this event
-        $examAttemptsPayload = CbtExamAttempt::with(['participant.eventParticipants.track', 'package', 'session'])
+        $rawExamAttempts = CbtExamAttempt::with(['participant.eventParticipants.track', 'package', 'session'])
             ->where('event_id', $event->id)
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
-            ->get()
-            ->map(function (CbtExamAttempt $attempt) use ($event) {
-                $ep = $attempt->participant?->eventParticipants->firstWhere('event_id', $event->id);
+            ->get();
 
+        $examAttemptsPayload = $rawExamAttempts->map(function (CbtExamAttempt $attempt) use ($event) {
+            $ep = $attempt->participant?->eventParticipants->firstWhere('event_id', $event->id);
+
+            return [
+                'id' => $attempt->id,
+                'participant_id' => $attempt->participant_id,
+                'participant_name' => $attempt->participant?->name ?? 'Peserta dihapus',
+                'kenshi_id_number' => $attempt->participant?->kenshi_id_number ?? '-',
+                'origin_dojo' => $attempt->participant?->origin_dojo ?? '-',
+                'track_code' => $ep?->track_code ?? ($ep?->track?->code ?? '-'),
+                'track_name' => $ep?->track?->name ?? '-',
+                'package_id' => $attempt->cbt_exam_package_id,
+                'package_title' => $attempt->package?->title ?? 'Paket Ujian',
+                'package_code' => $attempt->package?->code ?? '-',
+                'exam_type' => $attempt->package?->exam_type ?? 'exam',
+                'exam_type_label' => $attempt->package?->exam_type_label ?? 'Ujian',
+                'attempt_number' => $attempt->attempt_number,
+                'score' => $attempt->total_score !== null ? (float) $attempt->total_score : 0.0,
+                'passing_score' => (float) ($attempt->package?->passing_score ?? 70),
+                'is_passed' => (bool) $attempt->is_passed,
+                'status' => $attempt->status,
+                'started_at' => $attempt->started_at?->format('d M Y, H:i'),
+                'submitted_at' => $attempt->submitted_at?->format('d M Y, H:i'),
+                'duration_minutes' => ($attempt->started_at && $attempt->submitted_at) ? $attempt->started_at->diffInMinutes($attempt->submitted_at) : null,
+                'total_answered' => is_array($attempt->answers) ? count($attempt->answers) : 0,
+            ];
+        });
+
+        // CBT Completion Matrix per participant
+        $attemptsByParticipant = $rawExamAttempts->groupBy('participant_id');
+
+        $formatTestStatus = function ($attempts) {
+            if ($attempts->isEmpty()) {
                 return [
-                    'id' => $attempt->id,
-                    'participant_id' => $attempt->participant_id,
-                    'participant_name' => $attempt->participant?->name ?? 'Peserta dihapus',
-                    'kenshi_id_number' => $attempt->participant?->kenshi_id_number ?? '-',
-                    'origin_dojo' => $attempt->participant?->origin_dojo ?? '-',
-                    'track_name' => $ep?->track?->name ?? '-',
-                    'package_id' => $attempt->cbt_exam_package_id,
-                    'package_title' => $attempt->package?->title ?? 'Paket Ujian',
-                    'package_code' => $attempt->package?->code ?? '-',
-                    'exam_type' => $attempt->package?->exam_type ?? 'exam',
-                    'exam_type_label' => $attempt->package?->exam_type_label ?? 'Ujian',
-                    'attempt_number' => $attempt->attempt_number,
-                    'score' => $attempt->total_score !== null ? (float) $attempt->total_score : 0.0,
-                    'passing_score' => (float) ($attempt->package?->passing_score ?? 70),
-                    'is_passed' => (bool) $attempt->is_passed,
-                    'status' => $attempt->status,
-                    'started_at' => $attempt->started_at?->format('d M Y, H:i'),
-                    'submitted_at' => $attempt->submitted_at?->format('d M Y, H:i'),
-                    'duration_minutes' => ($attempt->started_at && $attempt->submitted_at) ? $attempt->started_at->diffInMinutes($attempt->submitted_at) : null,
-                    'total_answered' => is_array($attempt->answers) ? count($attempt->answers) : 0,
+                    'has_attempted' => false,
+                    'status' => 'unattempted',
+                    'status_label' => 'Belum',
+                    'score' => null,
+                    'passing_score' => null,
+                    'is_passed' => false,
+                    'attempt_count' => 0,
+                    'latest_submitted_at' => null,
+                    'attempt_id' => null,
+                    'package_title' => null,
                 ];
+            }
+
+            $best = $attempts->sortByDesc('total_score')->first();
+            $latest = $attempts->sortByDesc('id')->first();
+
+            return [
+                'has_attempted' => true,
+                'status' => $latest->status,
+                'status_label' => $latest->status === 'submitted' ? 'Selesai' : 'Sedang Ujian',
+                'score' => $best->total_score !== null ? (float) $best->total_score : 0.0,
+                'passing_score' => (float) ($latest->package?->passing_score ?? 70),
+                'is_passed' => $attempts->contains('is_passed', true),
+                'attempt_count' => $attempts->count(),
+                'latest_submitted_at' => $latest->submitted_at?->format('d M Y, H:i') ?? $latest->created_at?->format('d M Y, H:i'),
+                'attempt_id' => $latest->id,
+                'package_title' => $latest->package?->title,
+            ];
+        };
+
+        $cbtCompletionMatrix = $event->eventParticipants->map(function (EventParticipant $ep) use ($attemptsByParticipant, $formatTestStatus) {
+            $pAttempts = $attemptsByParticipant->get($ep->participant_id, collect());
+
+            $preAttempts = $pAttempts->filter(function ($a) {
+                $type = $a->package?->exam_type;
+                $code = $a->package?->code ?? '';
+                $title = strtolower($a->package?->title ?? '');
+
+                return $type === 'pre_test' || str_contains($code, 'PRE') || str_contains($title, 'pre-test');
             });
+
+            $quizAttempts = $pAttempts->filter(function ($a) {
+                $type = $a->package?->exam_type;
+                $code = $a->package?->code ?? '';
+                $title = strtolower($a->package?->title ?? '');
+
+                return $type === 'module_eval' || str_contains($code, 'QUIZ') || str_contains($title, 'kuis');
+            });
+
+            $postAttempts = $pAttempts->filter(function ($a) {
+                $type = $a->package?->exam_type;
+                $code = $a->package?->code ?? '';
+                $title = strtolower($a->package?->title ?? '');
+
+                return $type === 'post_test' || str_contains($code, 'POST') || str_contains($title, 'post-test');
+            });
+
+            $pre = $formatTestStatus($preAttempts);
+            $quiz = $formatTestStatus($quizAttempts);
+            $post = $formatTestStatus($postAttempts);
+
+            $completedCount = ($pre['has_attempted'] ? 1 : 0)
+                + ($quiz['has_attempted'] ? 1 : 0)
+                + ($post['has_attempted'] ? 1 : 0);
+
+            $missingList = [];
+            if (! $pre['has_attempted']) {
+                $missingList[] = 'Pre-Test';
+            }
+            if (! $quiz['has_attempted']) {
+                $missingList[] = 'Kuis Formatif';
+            }
+            if (! $post['has_attempted']) {
+                $missingList[] = 'Post-Test';
+            }
+
+            $overallStatus = $completedCount === 3 ? 'complete' : ($completedCount === 0 ? 'none' : 'incomplete');
+
+            return [
+                'participant_id' => $ep->participant_id,
+                'participant_name' => $ep->participant?->name ?? 'Peserta',
+                'kenshi_id_number' => $ep->participant?->kenshi_id_number ?? '-',
+                'origin_dojo' => $ep->participant?->origin_dojo ?? '-',
+                'track_code' => $ep->track_code ?? ($ep->track?->code ?? '-'),
+                'track_name' => $ep->track?->name ?? '-',
+                'tingkat' => $ep->participant?->tingkat ?? '-',
+                'pre_test' => $pre,
+                'quiz' => $quiz,
+                'post_test' => $post,
+                'completed_count' => $completedCount,
+                'missing_list' => $missingList,
+                'status' => $overallStatus,
+            ];
+        });
+
+        $cbtCompletionStats = [
+            'total_participants' => $cbtCompletionMatrix->count(),
+            'all_completed' => $cbtCompletionMatrix->where('status', 'complete')->count(),
+            'incomplete' => $cbtCompletionMatrix->where('status', 'incomplete')->count(),
+            'none_completed' => $cbtCompletionMatrix->where('status', 'none')->count(),
+            'pre_test_completed' => $cbtCompletionMatrix->where('pre_test.has_attempted', true)->count(),
+            'pre_test_missing' => $cbtCompletionMatrix->where('pre_test.has_attempted', false)->count(),
+            'quiz_completed' => $cbtCompletionMatrix->where('quiz.has_attempted', true)->count(),
+            'quiz_missing' => $cbtCompletionMatrix->where('quiz.has_attempted', false)->count(),
+            'post_test_completed' => $cbtCompletionMatrix->where('post_test.has_attempted', true)->count(),
+            'post_test_missing' => $cbtCompletionMatrix->where('post_test.has_attempted', false)->count(),
+        ];
 
         // Calculate stats
         $stats = [
@@ -645,6 +765,12 @@ class AdminEventDetailService
                     ->count(),
             'proctoring_events_count' => CbtProctoringEvent::where('event_id', $event->id)->count(),
         ];
+
+        $assessmentData = $this->assessmentService->getEventAssessmentData($event);
+        $stats['total_assessments'] = $assessmentData['stats']['total_assessed'];
+
+        $practicalExamData = $this->practicalExamService->getEventPracticalExamData($event);
+        $stats['total_practical_exams'] = $practicalExamData['stats']['total_assessed'];
 
         return [
             'documentNumberLabels' => EventDocumentGenerator::NUMBER_LABELS,
@@ -738,6 +864,8 @@ class AdminEventDetailService
             'registrationForms' => $registrationFormsPayload,
             'integrityPacts' => $integrityPactsPayload,
             'examAttempts' => $examAttemptsPayload,
+            'cbtCompletionMatrix' => $cbtCompletionMatrix,
+            'cbtCompletionStats' => $cbtCompletionStats,
             'availableParticipants' => Participant::query()
                 ->whereDoesntHave('eventParticipants', fn ($query) => $query->where('event_id', $event->id))
                 ->orderBy('name')
@@ -749,6 +877,8 @@ class AdminEventDetailService
             'sessionTypes' => $sessionTypes,
             'legends' => $legends,
             'publishedMaterials' => $publishedMaterials,
+            'assessmentData' => $assessmentData,
+            'practicalExamData' => $practicalExamData,
             'stats' => $stats,
         ];
 

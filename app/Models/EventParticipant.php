@@ -90,6 +90,16 @@ class EventParticipant extends Model
             ->where('event_id', $this->event_id);
     }
 
+    public function assessments(): HasMany
+    {
+        return $this->hasMany(EventAssessment::class, 'event_participant_id');
+    }
+
+    public function assessment(): HasOne
+    {
+        return $this->hasOne(EventAssessment::class, 'event_participant_id');
+    }
+
     public function getTheoryScoreAttribute(): ?float
     {
         return $this->score_theory ? (float) $this->score_theory : null;

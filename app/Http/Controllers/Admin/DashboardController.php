@@ -36,10 +36,10 @@ class DashboardController extends Controller
         }
 
         if (! auth()->user()->isAdmin()) {
-            $events = Event::query()->when(
-                auth()->user()->role === 'Penyelenggara',
-                fn ($query) => $query->where('responsible_user_id', auth()->id())
-            );
+            $staffRoles = ['Bendahara', 'Sie Acara', 'Dokumentasi'];
+            $events = Event::query()
+                ->when(auth()->user()->role === 'Penyelenggara', fn ($query) => $query->where('responsible_user_id', auth()->id()))
+                ->when(in_array(auth()->user()->role, $staffRoles, true), fn ($query) => $query->whereHas('staff', fn ($staffQuery) => $staffQuery->where('user_id', auth()->id())));
 
             $eventStats = (clone $events)->selectRaw(
                 "COUNT(*) as total_events,
@@ -66,6 +66,8 @@ class DashboardController extends Controller
                         'status_label' => $event->status_label,
                         'sessions_count' => $event->sessions_count,
                         'participants_count' => $event->event_participants_count,
+                        'report_url' => route('admin.event.show', ['event' => $event->id, 'tab' => 'rekap-laporan']),
+                        'can_update' => auth()->user()->can('update', $event),
                     ]),
             ]);
         }

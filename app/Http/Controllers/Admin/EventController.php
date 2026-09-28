@@ -57,10 +57,10 @@ class EventController extends Controller
      */
     public function index(Request $request): Response
     {
-        $scope = Event::query()->when(
-            $request->user()->role === 'Penyelenggara',
-            fn ($query) => $query->where('responsible_user_id', $request->user()->id)
-        );
+        $staffRoles = ['Bendahara', 'Sie Acara', 'Dokumentasi'];
+        $scope = Event::query()
+            ->when($request->user()->role === 'Penyelenggara', fn ($query) => $query->where('responsible_user_id', $request->user()->id))
+            ->when(in_array($request->user()->role, $staffRoles, true), fn ($query) => $query->whereHas('staff', fn ($staffQuery) => $staffQuery->where('user_id', $request->user()->id)));
         $query = (clone $scope)->withCount('participants')->latest('start_date');
 
         if ($request->filled('q')) {
@@ -104,6 +104,8 @@ class EventController extends Controller
             'status_label' => $event->status_label,
             'status_color' => $event->status_color,
             'cover_image' => $event->cover_image,
+            'can_update' => $request->user()->can('update', $event),
+            'report_url' => route('admin.event.show', ['event' => $event->id, 'tab' => 'rekap-laporan']),
         ]);
 
         $eventStats = (clone $scope)->selectRaw(

@@ -23,7 +23,7 @@ class UpdateUserRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'role' => ['required', 'string', 'in:Peserta,Pelatih,Penguji,Wasit,Pemateri,Penyelenggara,Diktar,Admin,Koordinator Acara'],
+            'role' => ['required', 'string', 'in:Peserta,Pelatih,Penguji,Wasit,Pemateri,Penyelenggara,Bendahara,Sie Acara,Dokumentasi,Diktar,Admin,Koordinator Acara'],
             'is_supervisor' => ['nullable', 'boolean'],
         ];
     }

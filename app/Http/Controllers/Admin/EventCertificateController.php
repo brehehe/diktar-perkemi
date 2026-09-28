@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\GenerateEventCertificateRequest;
 use App\Http\Requests\Admin\GenerateEventTranscriptRequest;
 use App\Http\Requests\Admin\UploadEventCertificateRequest;
 use App\Http\Requests\Admin\UploadEventTranscriptRequest;
+use App\Jobs\GenerateEventDocuments;
 use App\Models\Event;
 use App\Models\EventIntegrityPact;
 use App\Models\EventParticipant;
@@ -33,8 +34,7 @@ class EventCertificateController extends Controller
 
         $regenerate = $request->boolean('regenerate') || $request->boolean('force');
         $event->load(['modules', 'eventParticipants' => fn ($query) => $query->with('participant')->orderBy('id')]);
-        $generated = ['certificate' => 0, 'transcript' => 0];
-        $failed = 0;
+        $queued = ['certificate' => 0, 'transcript' => 0];
         $unavailable = 0;
 
         foreach ($event->eventParticipants as $eventParticipant) {
@@ -56,72 +56,27 @@ class EventCertificateController extends Controller
                     }
 
                     $numberField = EventDocumentGenerator::documentField($type, 'number', $eventParticipant->track_code, $documentTrack);
-                    $issuedAtField = EventDocumentGenerator::documentField($type, 'issued_at', $eventParticipant->track_code, $documentTrack);
                     $syncNumbers = $request->boolean('sync_numbers', $regenerate);
                     $number = ($syncNumbers || ! $eventParticipant->{$numberField})
                         ? ($generator->configuredNumber($event, $eventParticipant, $type, $documentTrack) ?? $generator->suggestedNumber($event, $eventParticipant, $type, $documentTrack))
                         : $eventParticipant->{$numberField};
 
                     if (! $number) {
-                        $failed++;
-
                         continue;
                     }
 
-                    $directory = $type === 'certificate' ? 'event-certificates' : 'event-transcripts';
-                    $path = "{$directory}/{$event->id}/{$eventParticipant->id}/{$documentTrack}/".Str::uuid().'.pdf';
-
-                    $sigSettings = $generator->effectiveSignatureSettings($event);
-                    $issuedAt = $sigSettings['parsed_date'] ?? $event->end_date ?? today();
-
-                    try {
-                        $pdf = $type === 'certificate'
-                            ? $generator->generateCertificate($eventParticipant, $number, $documentTrack)
-                            : $generator->generateTranscript($eventParticipant, $number, $documentTrack);
-
-                        if (! Storage::disk('local')->put($path, $pdf)) {
-                            throw new RuntimeException('Dokumen hasil generate tidak dapat disimpan.');
-                        }
-
-                        if ($oldPath && $oldPath !== $path) {
-                            Storage::disk('local')->delete($oldPath);
-                        }
-
-                        $eventParticipant->update([
-                            $pathField => $path,
-                            $issuedAtField => $issuedAt,
-                            $numberField => $number,
-                        ]);
-
-                        if ($type === 'certificate') {
-                            EventIntegrityPact::where('event_id', $event->id)
-                                ->where('participant_id', $eventParticipant->participant_id)
-                                ->update([
-                                    'certificate_number' => $number,
-                                    'valid_start_date' => $issuedAt,
-                                    'valid_end_date' => Carbon::parse($issuedAt)->copy()->addYears(3)->endOfYear(),
-                                ]);
-                        }
-                        $generated[$type]++;
-                    } catch (Throwable $exception) {
-                        Storage::disk('local')->delete($path);
-                        report($exception);
-                        $failed++;
-                    }
+                    GenerateEventDocuments::dispatch($eventParticipant->id, $type, $documentTrack, $number, $regenerate, $syncNumbers);
+                    $queued[$type]++;
                 }
             }
         }
 
         $message = $regenerate
-            ? "Generate ulang selesai: {$generated['certificate']} sertifikat dan {$generated['transcript']} e-transkrip diperbarui dengan data \u{0026} TTD terbaru."
-            : "Generate selesai: {$generated['certificate']} sertifikat dan {$generated['transcript']} e-transkrip dibuat.";
+            ? "Antrean generate ulang dibuat: {$queued['certificate']} sertifikat dan {$queued['transcript']} e-transkrip akan diproses di latar belakang."
+            : "Antrean dokumen dibuat: {$queued['certificate']} sertifikat dan {$queued['transcript']} e-transkrip akan diproses di latar belakang.";
 
         if ($unavailable > 0) {
             $message .= " {$unavailable} dokumen dilewati karena template tidak tersedia.";
-        }
-
-        if ($failed > 0) {
-            $message .= " {$failed} dokumen gagal dibuat; periksa template atau penyimpanan lalu coba lagi.";
         }
 
         return back()->with('success', $message);
@@ -137,18 +92,10 @@ class EventCertificateController extends Controller
         $eventParticipant->loadMissing('participant');
         $documentTrack = $this->documentTrack($eventParticipant, $validated['document_track'] ?? null);
         $numberField = EventDocumentGenerator::documentField('certificate', 'number', $eventParticipant->track_code, $documentTrack);
-        $pathField = EventDocumentGenerator::documentField('certificate', 'file_path', $eventParticipant->track_code, $documentTrack);
-        $issuedAtField = EventDocumentGenerator::documentField('certificate', 'issued_at', $eventParticipant->track_code, $documentTrack);
         $certificateNumber = trim((string) ($validated['certificate_number'] ?? ''))
             ?: $generator->suggestedNumber($event, $eventParticipant, 'certificate', $documentTrack);
-        $path = "event-certificates/{$event->id}/{$eventParticipant->id}/{$documentTrack}/".Str::uuid().'.pdf';
-
         try {
-            $pdf = $generator->generateCertificate($eventParticipant, $certificateNumber, $documentTrack);
-
-            if (! Storage::disk('local')->put($path, $pdf)) {
-                throw new RuntimeException('Sertifikat hasil generate tidak dapat disimpan.');
-            }
+            GenerateEventDocuments::dispatch($eventParticipant->id, 'certificate', $documentTrack, $certificateNumber, true);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -157,35 +104,7 @@ class EventCertificateController extends Controller
             ]);
         }
 
-        $oldPath = $eventParticipant->{$pathField};
-        $sigSettings = $generator->effectiveSignatureSettings($event);
-        $issuedAt = $sigSettings['parsed_date'] ?? $event->end_date ?? today();
-
-        try {
-            $eventParticipant->update([
-                $pathField => $path,
-                $issuedAtField => $issuedAt,
-                $numberField => $certificateNumber,
-            ]);
-
-            EventIntegrityPact::where('event_id', $event->id)
-                ->where('participant_id', $eventParticipant->participant_id)
-                ->update([
-                    'certificate_number' => $certificateNumber,
-                    'valid_start_date' => $issuedAt,
-                    'valid_end_date' => Carbon::parse($issuedAt)->copy()->addYears(3)->endOfYear(),
-                ]);
-        } catch (Throwable $exception) {
-            Storage::disk('local')->delete($path);
-
-            throw $exception;
-        }
-
-        if ($oldPath) {
-            Storage::disk('local')->delete($oldPath);
-        }
-
-        return back()->with('success', 'Sertifikat peserta berhasil dibuat dari template jalur.');
+        return back()->with('success', 'Sertifikat masuk antrean dan akan diproses di latar belakang.');
     }
 
     public function store(UploadEventCertificateRequest $request, Event $event, EventParticipant $eventParticipant): RedirectResponse
@@ -296,18 +215,10 @@ class EventCertificateController extends Controller
         $eventParticipant->loadMissing('participant');
         $documentTrack = $this->documentTrack($eventParticipant, $validated['document_track'] ?? null);
         $numberField = EventDocumentGenerator::documentField('transcript', 'number', $eventParticipant->track_code, $documentTrack);
-        $pathField = EventDocumentGenerator::documentField('transcript', 'file_path', $eventParticipant->track_code, $documentTrack);
-        $issuedAtField = EventDocumentGenerator::documentField('transcript', 'issued_at', $eventParticipant->track_code, $documentTrack);
         $transcriptNumber = trim((string) ($validated['transcript_number'] ?? ''))
             ?: $generator->suggestedNumber($event, $eventParticipant, 'transcript', $documentTrack);
-        $path = "event-transcripts/{$event->id}/{$eventParticipant->id}/{$documentTrack}/".Str::uuid().'.pdf';
-
         try {
-            $pdf = $generator->generateTranscript($eventParticipant, $transcriptNumber, $documentTrack);
-
-            if (! Storage::disk('local')->put($path, $pdf)) {
-                throw new RuntimeException('Transkrip hasil generate tidak dapat disimpan.');
-            }
+            GenerateEventDocuments::dispatch($eventParticipant->id, 'transcript', $documentTrack, $transcriptNumber, true);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -316,25 +227,7 @@ class EventCertificateController extends Controller
             ]);
         }
 
-        $oldPath = $eventParticipant->{$pathField};
-
-        try {
-            $eventParticipant->update([
-                $pathField => $path,
-                $issuedAtField => $event->end_date,
-                $numberField => $transcriptNumber,
-            ]);
-        } catch (Throwable $exception) {
-            Storage::disk('local')->delete($path);
-
-            throw $exception;
-        }
-
-        if ($oldPath) {
-            Storage::disk('local')->delete($oldPath);
-        }
-
-        return back()->with('success', 'Transkrip peserta berhasil dibuat dari template jalur.');
+        return back()->with('success', 'Transkrip masuk antrean dan akan diproses di latar belakang.');
     }
 
     public function downloadTranscript(Request $request, Event $event, EventParticipant $eventParticipant): StreamedResponse

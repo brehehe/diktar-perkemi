@@ -147,14 +147,14 @@ export default function Index({ events, filters = {}, stats = {}, availableYears
                     <div className="flex flex-col text-xs min-w-[110px]">
                         <div className="flex items-center justify-between text-[11px] mb-1">
                             <span className="font-semibold text-[#0E2747] flex items-center gap-1">
-                                <Users className="w-3 h-3 text-[#0B63CE]" />
+                                <Users className="w-3 h-3 text-[#0B63CE]" aria-hidden="true" />
                                 {row.participants_count}
                             </span>
                             <span className="text-[#6B7C93]">{row.participant_quota ? `/ ${row.participant_quota} Kenshi` : 'Kuota belum ditetapkan'}</span>
                         </div>
-                        <div className="w-full h-1.5 bg-[#DCE7F3] rounded-full overflow-hidden">
+                        <div className="w-full h-1.5 bg-[#DCE7F3] rounded-full overflow-hidden" role="progressbar" aria-label={`Kapasitas peserta ${row.name}`} aria-valuenow={Math.round(percentage)} aria-valuemin="0" aria-valuemax="100">
                             <div
-                                className="h-full bg-[#0B63CE] rounded-full transition-all duration-300"
+                                className="h-full bg-[#0B63CE] rounded-full transition-[width] duration-300 motion-reduce:transition-none"
                                 style={{ width: `${percentage}%` }}
                             />
                         </div>
@@ -176,28 +176,28 @@ export default function Index({ events, filters = {}, stats = {}, availableYears
             cell: (row) => (
                 <div className="flex items-center justify-end gap-1.5">
                     <Link
-                        href={`/admin/event/${row.id}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[#0B63CE] text-white hover:bg-[#0A3F82] transition-colors shadow-2xs"
+                        href={row.can_update ? `/admin/event/${row.id}` : row.report_url}
+                        className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-[#0B63CE] px-3 py-2 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
                     >
-                        <span>Buka Detail</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        <span>{row.can_update ? 'Buka Detail' : 'Buka Laporan'}</span>
+                        <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                     </Link>
-                    <Link
+                    {row.can_update && <Link
                         href={`/admin/event/${row.id}/edit`}
-                        className="p-1.5 text-[#6B7C93] hover:text-[#0B63CE] hover:bg-[#EAF5FF] rounded-lg transition-colors"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-[#6B7C93] transition-colors hover:bg-[#EAF5FF] hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
                         title="Edit Informasi Event"
                         aria-label="Edit Informasi Event"
                     >
-                        <Edit3 className="w-4 h-4" />
-                    </Link>
+                        <Edit3 className="w-4 h-4" aria-hidden="true" />
+                    </Link>}
                     {canDeleteEvent && <button
                         type="button"
                         onClick={() => setDeletingEvent(row)}
-                        className="p-1.5 text-[#6B7C93] hover:text-[#DD4D7C] hover:bg-rose-50 rounded-lg transition-colors"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-[#6B7C93] transition-colors hover:bg-rose-50 hover:text-[#DD4D7C] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#DD4D7C] motion-reduce:transition-none"
                         title="Hapus Event"
                         aria-label="Hapus Event"
                     >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                     </button>}
                 </div>
             ),
@@ -287,7 +287,7 @@ export default function Index({ events, filters = {}, stats = {}, availableYears
                 onClose={() => setDeletingEvent(null)}
                 title="Hapus Event Penataran?"
                 description={`Apakah Anda yakin ingin menghapus event "${deletingEvent?.name}"? Seluruh data rundown sesi, modul, dan pendaftaran peserta di dalamnya akan ikut dihapus.`}
-                confirmText={isDeleting ? 'Menghapus...' : 'Ya, Hapus Event'}
+                confirmText={isDeleting ? 'Menghapus…' : 'Ya, Hapus Event'}
                 cancelText="Batal"
                 variant="danger"
                 onConfirm={handleDeleteConfirm}

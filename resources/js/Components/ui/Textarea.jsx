@@ -57,7 +57,7 @@ const Textarea = forwardRef(function Textarea(
                 {...props}
             />
             {error && (
-                <p id={`${inputId}-error`} className="mt-1.5 text-xs text-[#FA5252] font-medium flex items-center gap-1">
+                <p id={`${inputId}-error`} role="alert" className="mt-1.5 text-xs text-[#FA5252] font-medium flex items-center gap-1">
                     <span>{error}</span>
                 </p>
             )}

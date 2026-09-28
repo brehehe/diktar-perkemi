@@ -753,7 +753,7 @@ test('bulk generation uses event numbering and preserves issued documents', func
 
     $this->actingAs($admin)->post("/admin/event/{$event->id}/dokumen/generate")
         ->assertSessionHasNoErrors()
-        ->assertSessionHas('success', 'Generate selesai: 1 sertifikat dan 2 e-transkrip dibuat.');
+        ->assertSessionHas('success', 'Antrean dokumen dibuat: 1 sertifikat dan 2 e-transkrip akan diproses di latar belakang.');
 
     $first->refresh();
     $second->refresh();
@@ -776,7 +776,7 @@ test('bulk generation uses event numbering and preserves issued documents', func
                 && str_contains($participant['document_variants'][0]['transcript_preview_url'], '/transkrip/preview')
         )));
     $this->post("/admin/event/{$event->id}/dokumen/generate")
-        ->assertSessionHas('success', 'Generate selesai: 0 sertifikat dan 0 e-transkrip dibuat.');
+        ->assertSessionHas('success', 'Antrean dokumen dibuat: 0 sertifikat dan 0 e-transkrip akan diproses di latar belakang.');
     expect($second->fresh()->certificate_file_path)->toBe($second->certificate_file_path);
 
     $this->actingAs($this->participantUser)->post("/admin/event/{$event->id}/dokumen/generate")->assertForbidden();
@@ -796,7 +796,7 @@ test('bulk generation reports unavailable templates without creating documents',
     $enrollment = EventParticipant::create(['event_id' => $event->id, 'participant_id' => $participant->id, 'track_code' => 'KHUSUS']);
 
     $this->actingAs($admin)->post("/admin/event/{$event->id}/dokumen/generate")
-        ->assertSessionHas('success', 'Generate selesai: 0 sertifikat dan 0 e-transkrip dibuat. 2 dokumen dilewati karena template tidak tersedia.');
+        ->assertSessionHas('success', 'Antrean dokumen dibuat: 0 sertifikat dan 0 e-transkrip akan diproses di latar belakang. 2 dokumen dilewati karena template tidak tersedia.');
 
     expect($enrollment->fresh()->certificate_file_path)->toBeNull()
         ->and($enrollment->transcript_file_path)->toBeNull();

@@ -8,7 +8,9 @@ use App\Models\CbtExamAttempt;
 use App\Models\CbtExamPackage;
 use App\Models\CbtProctoringEvent;
 use App\Models\Event;
+use App\Models\EventActivityRecord;
 use App\Models\EventAttendance;
+use App\Models\EventFinance;
 use App\Models\EventIntegrityPact;
 use App\Models\EventLegend;
 use App\Models\EventModule;
@@ -17,6 +19,7 @@ use App\Models\EventRegistrationForm;
 use App\Models\EventRoom;
 use App\Models\EventSession;
 use App\Models\EventSessionType;
+use App\Models\EventStaff;
 use App\Models\LearningModule;
 use App\Models\Material;
 use App\Models\Participant;
@@ -32,6 +35,8 @@ class AdminEventDetailService
         private readonly EventDocumentGenerator $documentGenerator,
         private readonly EventAssessmentService $assessmentService,
         private readonly EventPracticalExamService $practicalExamService,
+        private readonly EventFinanceAnalysisService $financeAnalysis,
+        private readonly EventFinanceNarrativeService $financeNarrative,
     ) {}
 
     /**
@@ -767,10 +772,62 @@ class AdminEventDetailService
         ];
 
         $assessmentData = $this->assessmentService->getEventAssessmentData($event);
-        $stats['total_assessments'] = $assessmentData['stats']['total_assessed'];
-
         $practicalExamData = $this->practicalExamService->getEventPracticalExamData($event);
-        $stats['total_practical_exams'] = $practicalExamData['stats']['total_assessed'];
+        $stats['total_finances'] = $event->finances()->count();
+        $stats['total_realisations'] = $event->activityRecords()->where('kind', 'realisation')->count();
+        $stats['total_documentations'] = $event->activityRecords()->where('kind', 'documentation')->count();
+        $stats['total_staff'] = $event->staff()->count();
+
+        $user = request()->user();
+        $canManageStaff = $user ? $user->can('manageStaff', $event) : false;
+        $canViewFinance = $user ? $user->can('viewFinance', $event) : false;
+        $canManageFinance = $user ? $user->can('manageFinance', $event) : false;
+        $canManageRealisation = $user ? $user->can('manageActivity', [$event, 'realisation']) : false;
+        $canManageDocumentation = $user ? $user->can('manageActivity', [$event, 'documentation']) : false;
+
+        $finances = $canViewFinance ? $event->finances()->with('creator:id,name')->latest('occurred_on')->latest('id')->get()->map(fn (EventFinance $entry) => [
+            'id' => $entry->id,
+            'type' => $entry->type,
+            'category' => $entry->category,
+            'description' => $entry->description,
+            'sponsor_name' => $entry->sponsor_name,
+            'amount' => $entry->amount,
+            'occurred_on' => $entry->occurred_on->format('Y-m-d'),
+            'evidence_url' => $entry->evidence_path ? route('admin.event.reports.finance.evidence', [$event, $entry]) : null,
+            'creator_name' => $entry->creator?->name,
+        ]) : [];
+
+        $financeAnalysis = $canViewFinance ? $this->financeNarrative->annotate($this->financeAnalysis->forEvent($event)) : null;
+
+        $activities = $event->activityRecords()->with(['creator:id,name', 'session:id,topic'])->latest('occurred_on')->latest('id')->get()->map(fn (EventActivityRecord $record) => [
+            'id' => $record->id,
+            'kind' => $record->kind,
+            'title' => $record->title,
+            'activity_type' => $record->activity_type,
+            'occurred_on' => $record->occurred_on->format('Y-m-d'),
+            'notes' => $record->notes,
+            'session_id' => $record->event_session_id,
+            'session_title' => $record->session?->topic,
+            'media_url' => $record->file_path ? route('admin.event.reports.activity.media', [$event, $record]) : null,
+            'media_type' => $record->file_mime,
+            'creator_name' => $record->creator?->name,
+        ]);
+
+        $staff = $event->staff()->with('user:id,name,email,role')->orderBy('duty')->get()->map(fn (EventStaff $st) => [
+            'id' => $st->id,
+            'duty' => $st->duty,
+            'user' => $st->user,
+        ]);
+
+        $staffCandidates = $canManageStaff ? User::query()->whereIn('role', ['Bendahara', 'Sie Acara', 'Dokumentasi', 'Penyelenggara', 'Admin'])->orderBy('name')->get(['id', 'name', 'email', 'role']) : [];
+
+        $outcomesSummary = [
+            'total_participants' => $event->eventParticipants()->count(),
+            'passed_count' => $event->eventParticipants()->where('graduation_status', 'Lulus')->count(),
+            'total_sessions' => $event->sessions()->count(),
+            'total_attendances' => $event->attendances()->whereIn('status', ['present', 'late', 'manual_override'])->count(),
+            'late_count' => $event->attendances()->where('status', 'late')->count(),
+        ];
 
         return [
             'documentNumberLabels' => EventDocumentGenerator::NUMBER_LABELS,
@@ -879,6 +936,23 @@ class AdminEventDetailService
             'publishedMaterials' => $publishedMaterials,
             'assessmentData' => $assessmentData,
             'practicalExamData' => $practicalExamData,
+            'finances' => $finances,
+            'financeAnalysis' => $financeAnalysis,
+            'activities' => $activities,
+            'staff' => $staff,
+            'staffCandidates' => $staffCandidates,
+            'reportPermissions' => [
+                'manage_staff' => $canManageStaff,
+                'view_finance' => $canViewFinance,
+                'manage_finance' => $canManageFinance,
+                'manage_realisation' => $canManageRealisation,
+                'manage_documentation' => $canManageDocumentation,
+            ],
+            'reportSessions' => $event->sessions()->get(['id', 'topic', 'date', 'session_type_code'])->map(fn ($session) => [
+                'id' => $session->id,
+                'label' => $session->topic.' · '.($session->date?->format('d M Y') ?? 'Tanggal belum diatur'),
+            ]),
+            'outcomesSummary' => $outcomesSummary,
             'stats' => $stats,
         ];
 

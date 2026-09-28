@@ -22,6 +22,10 @@ import {
     FileQuestion,
     CheckSquare,
     Clock,
+    Wallet,
+    ClipboardList,
+    Camera,
+    ClipboardCheck,
 } from 'lucide-react';
 
 export default function AdminSidebar({ isMobile = false, onClose }) {
@@ -31,6 +35,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
     const isDiktar = role === 'Diktar';
     const isPenyelenggara = role === 'Penyelenggara';
     const isCoordinator = role === 'Koordinator Acara' || role === 'Koordinator Jadwal';
+    const isReportingStaff = ['Bendahara', 'Sie Acara', 'Dokumentasi'].includes(role);
 
     const masterItems = [
         {
@@ -120,6 +125,10 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                         icon: Clock,
                     },
                     { name: 'Referensi Event', href: '/admin/referensi-event', icon: Layers },
+                    { name: 'Keuangan', href: '/admin/keuangan', icon: Wallet },
+                    { name: 'Event Dokumentasi', href: '/admin/dokumentasi', icon: Camera },
+                    { name: 'Realisasi Acara Penataran', href: '/admin/realisasi-acara', icon: ClipboardCheck },
+                    { name: 'Penugasan Kluster Petugas', href: '/admin/kluster-petugas', icon: UserCheck },
                 ],
             },
             {
@@ -164,6 +173,10 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                         icon: Clock,
                     },
                     { name: 'Referensi Event', href: '/admin/referensi-event', icon: Layers },
+                    { name: 'Keuangan', href: '/admin/keuangan', icon: Wallet },
+                    { name: 'Event Dokumentasi', href: '/admin/dokumentasi', icon: Camera },
+                    { name: 'Realisasi Acara Penataran', href: '/admin/realisasi-acara', icon: ClipboardCheck },
+                    { name: 'Penugasan Kluster Petugas', href: '/admin/kluster-petugas', icon: UserCheck },
                 ],
             },
             {
@@ -197,6 +210,10 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                         href: '/admin/rundown',
                         icon: Clock,
                     },
+                    { name: 'Keuangan', href: '/admin/keuangan', icon: Wallet },
+                    { name: 'Event Dokumentasi', href: '/admin/dokumentasi', icon: Camera },
+                    { name: 'Realisasi Acara Penataran', href: '/admin/realisasi-acara', icon: ClipboardCheck },
+                    { name: 'Penugasan Kluster Petugas', href: '/admin/kluster-petugas', icon: UserCheck },
                 ],
             },
             {
@@ -245,6 +262,19 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 ],
             },
         ];
+    } else if (isReportingStaff) {
+        menuGroups = [
+            {
+                title: 'Menu Utama',
+                items: [
+                    { name: 'Ringkasan', href: '/admin', icon: LayoutDashboard, exact: true },
+                    { name: 'Event Penataran', href: '/admin/event', icon: Calendar },
+                    ...(role === 'Bendahara' ? [{ name: 'Keuangan', href: '/admin/keuangan', icon: Wallet }] : []),
+                    ...(role === 'Sie Acara' ? [{ name: 'Realisasi Acara Penataran', href: '/admin/realisasi-acara', icon: ClipboardCheck }, { name: 'Rundown Acara', href: '/admin/rundown', icon: Clock }] : []),
+                    ...(role === 'Dokumentasi' ? [{ name: 'Event Dokumentasi', href: '/admin/dokumentasi', icon: Camera }] : []),
+                ],
+            },
+        ];
     } else {
         menuGroups = [
             {
@@ -290,6 +320,29 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
 
         if (currentPath === '/admin/master/jalur' && itemPath === '/admin/master/jalur') {
             return ! new URLSearchParams(currentQuery).has('tab');
+        }
+
+        const currentTab = new URLSearchParams(currentQuery).get('tab');
+
+        if (currentPath.startsWith('/admin/event')) {
+            if (itemPath === '/admin/dokumentasi') {
+                return currentTab === 'dokumentasi';
+            }
+            if (itemPath === '/admin/realisasi-acara') {
+                return currentTab === 'realisasi';
+            }
+            if (itemPath === '/admin/kluster-petugas') {
+                return currentTab === 'petugas';
+            }
+            if (itemPath === '/admin/keuangan') {
+                return currentTab === 'keuangan';
+            }
+            if (itemPath === '/admin/rundown') {
+                return currentTab === 'rundown';
+            }
+            if (itemPath === '/admin/event') {
+                return !['dokumentasi', 'realisasi', 'petugas', 'keuangan', 'rundown'].includes(currentTab);
+            }
         }
 
         return currentPath.startsWith(itemPath);

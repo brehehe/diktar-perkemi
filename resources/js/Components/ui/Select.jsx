@@ -9,7 +9,7 @@ const Select = forwardRef(function Select(
         value,
         onChange,
         options = [],
-        placeholder = 'Pilih opsi...',
+        placeholder = 'Pilih opsi…',
         children,
         error,
         helperText,
@@ -76,11 +76,11 @@ const Select = forwardRef(function Select(
                     )}
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#6B7C93]">
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="w-4 h-4" aria-hidden="true" />
                 </div>
             </div>
             {error && (
-                <p id={`${inputId}-error`} className="mt-1.5 text-xs text-[#FA5252] font-medium flex items-center gap-1">
+                <p id={`${inputId}-error`} role="alert" className="mt-1.5 text-xs text-[#FA5252] font-medium flex items-center gap-1">
                     <span>{error}</span>
                 </p>
             )}

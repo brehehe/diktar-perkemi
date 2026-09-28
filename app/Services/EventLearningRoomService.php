@@ -170,7 +170,9 @@ class EventLearningRoomService
         $todayDailySession = $dailySessions->first(fn (EventSession $session) => $session->date?->isToday() && $session->isAttendanceActive());
         $hasArrivalAttendance = $isAdminOrOrganizer || $this->attendanceService->hasArrivalAttendance($event, $eventParticipant)
             || ! $sessions->where('session_type_code', 'KEHADIRAN_AWAL')->contains(fn ($s) => $s->isAttendanceActive());
-        $canAccessLearning = true;
+        $hasTodayAttendance = $isAdminOrOrganizer || ! $todayDailySession
+            || $this->attendanceService->hasDayAttendance($event, $eventParticipant, $todayDailySession->day_number);
+        $canAccessLearning = $hasArrivalAttendance && $hasTodayAttendance;
         $canAccessSessionContent = function (EventSession $session) use ($attendedSessionIds, $eventParticipant, $isAdminOrOrganizer): bool {
             if ($isAdminOrOrganizer) {
                 return true;

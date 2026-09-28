@@ -126,7 +126,7 @@ class EventAttendanceService
         abort_unless(
             $this->hasDayAttendance($event, $enrollment, $dayNumber),
             403,
-            "Absensi awal hari ke-{$dayNumber} wajib dicatat sebelum memasuki sesi.",
+            "Catat kehadiran hari ke-{$dayNumber} sebelum melakukan absensi sesi ini.",
         );
     }
 

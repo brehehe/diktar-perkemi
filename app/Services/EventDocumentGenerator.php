@@ -31,7 +31,7 @@ class EventDocumentGenerator
         ],
         'transcript' => [
             'PD' => 'transkrip-background-tanpa-garis.png',
-            'WAD' => 'transkrip-background-tanpwa-garis.png',
+            'WAD' => 'transkrip-background-tanpa-garis.png',
             'WAN' => 'transkrip-background-tanpa-garis.png',
             'PED' => 'transkrip-background-tanpa-garis.png',
             'PEN' => 'transkrip-background-tanpa-garis.png',

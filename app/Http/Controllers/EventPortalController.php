@@ -539,6 +539,15 @@ class EventPortalController extends Controller
             return back()->with('error', "Anda berada di jalur {$eventParticipant->track_code}, sesi ini dikhususkan untuk jalur: ".implode(', ', $session->track_codes));
         }
 
+        if (! $isAdminOrOrganizer && ! in_array($session->session_type_code, ['KEHADIRAN_AWAL', 'KEHADIRAN_HARIAN'], true)) {
+            try {
+                $this->attendanceService->ensureArrivalAttendance($event, $eventParticipant);
+                $this->attendanceService->ensureDayAttendance($event, $eventParticipant, $session->day_number);
+            } catch (HttpException $exception) {
+                return back()->with('error', $exception->getMessage());
+            }
+        }
+
         $validated = $request->validate([
             'attendance_type' => ['required', 'in:check_in,check_out'],
         ]);

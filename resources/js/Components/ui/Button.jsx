@@ -29,7 +29,7 @@ export default function Button({
 
     const sizes = {
         sm: 'min-h-11 gap-1.5 px-3 py-2 text-xs sm:min-h-9',
-        md: 'text-sm px-4 py-2 gap-2 min-h-[38px]',
+        md: 'min-h-11 gap-2 px-4 py-2 text-sm',
         lg: 'text-base px-5 py-2.5 gap-2.5 min-h-[44px]',
     };
 

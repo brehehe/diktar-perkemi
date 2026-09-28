@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'sumopod' => [
+        'key' => env('SUMOPOD_API_KEY'),
+        'finance_model' => env('SUMOPOD_FINANCE_MODEL', 'deepseek-v4-flash'),
+    ],
+
 ];

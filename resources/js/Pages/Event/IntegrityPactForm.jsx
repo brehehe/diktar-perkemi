@@ -21,6 +21,13 @@ import {
     FileCheck,
 } from 'lucide-react';
 
+import { IntegrityPactContext } from './Partials/IntegrityPactContext';
+import PactRoleSection from './Partials/PactRoleSection';
+import PactIdentitySection from './Partials/PactIdentitySection';
+import PactAddressSection from './Partials/PactAddressSection';
+import PactPledgesSection from './Partials/PactPledgesSection';
+import PactSignatureSection from './Partials/PactSignatureSection';
+
 export default function IntegrityPactForm({
     event,
     participant,
@@ -200,7 +207,25 @@ export default function IntegrityPactForm({
             ? 'Wasit Daerah / Nasional'
             : 'Pelatih Daerah / Nasional';
 
+    const pactContext = {
+        participant,
+        pledgePoints,
+        data,
+        setData,
+        errors,
+        canvasRef,
+        hasDrawn,
+        sameAddress,
+        startDrawing,
+        draw,
+        stopDrawing,
+        clearSignature,
+        autoGenerateSignature,
+        handleSameAddressChange,
+    };
+
     return (
+        <IntegrityPactContext.Provider value={pactContext}>
         <div className="min-h-screen bg-[#F8FBFF] text-[#112743]">
             <Head title={`Pakta Integritas ${pactRoleLabel} - ${event.name}`} />
 
@@ -488,457 +513,15 @@ export default function IntegrityPactForm({
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="mt-8 space-y-8">
-                        {/* 1. Kategori & Peran Lisensi */}
-                        <section aria-labelledby="section-role">
-                            <h2 id="section-role" className="flex items-center gap-2 text-sm font-bold text-[#0E2747]">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0B63CE] text-[10px] text-white">
-                                    1
-                                </span>
-                                Kategori Penataran & Lisensi
-                            </h2>
-                            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                                {[
-                                    { id: 'pelatih', label: 'Pelatih', desc: 'Pelatih Daerah / Nasional (PD / PN)' },
-                                    { id: 'penguji', label: 'Penguji', desc: 'Penguji Daerah / Nasional (PED / PEN)' },
-                                    { id: 'wasit', label: 'Wasit', desc: 'Wasit Daerah / Nasional (WAD / WAN)' },
-                                ].map((item) => (
-                                    <label
-                                        key={item.id}
-                                        className={`flex cursor-pointer flex-col rounded-xl border p-3.5 transition ${
-                                            data.pact_type === item.id
-                                                ? 'border-[#0B63CE] bg-[#F0F7FF] ring-2 ring-[#0B63CE]/20'
-                                                : 'border-[#DCE7F3] bg-white hover:border-[#6B7C93]'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm font-bold text-[#0E2747]">{item.label}</span>
-                                            <input
-                                                type="radio"
-                                                name="pact_type"
-                                                value={item.id}
-                                                checked={data.pact_type === item.id}
-                                                onChange={(e) => setData('pact_type', e.target.value)}
-                                                className="h-4 w-4 text-[#0B63CE] focus:ring-[#0B63CE]"
-                                            />
-                                        </div>
-                                        <span className="mt-1 text-[11px] text-[#6B7C93]">{item.desc}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </section>
+                        <PactRoleSection />
 
-                        {/* 2. Identitas Lengkap Kenshi */}
-                        <section aria-labelledby="section-identity">
-                            <h2 id="section-identity" className="flex items-center gap-2 text-sm font-bold text-[#0E2747]">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0B63CE] text-[10px] text-white">
-                                    2
-                                </span>
-                                Identitas Kenshi
-                            </h2>
+                        <PactIdentitySection />
 
-                            <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#0E2747]">
-                                        Nama Lengkap Sesuai KTP / SIM PERKEMI <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={data.full_name}
-                                        onChange={(e) => setData('full_name', e.target.value)}
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        required
-                                    />
-                                </div>
+                        <PactAddressSection />
 
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#0E2747]">
-                                        Nomor Induk Kenshi (NIK) <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={data.kenshi_id_number}
-                                        onChange={(e) => setData('kenshi_id_number', e.target.value)}
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs font-mono text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        required
-                                    />
-                                </div>
+                        <PactPledgesSection />
 
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#0E2747]">
-                                        Tempat Lahir <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={data.birth_place}
-                                        onChange={(e) => setData('birth_place', e.target.value)}
-                                        placeholder="Contoh: Surabaya"
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#0E2747]">
-                                        Tanggal Lahir <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={data.birth_date}
-                                        onChange={(e) => setData('birth_date', e.target.value)}
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#0E2747]">
-                                        Tingkatan DAN <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={data.dan_level}
-                                        onChange={(e) => setData('dan_level', e.target.value)}
-                                        placeholder="Contoh: III (Tiga) DAN"
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#0E2747]">
-                                        Agama <span className="text-rose-500">*</span>
-                                    </label>
-                                    <select
-                                        value={data.religion}
-                                        onChange={(e) => setData('religion', e.target.value)}
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        required
-                                    >
-                                        <option value="Islam">Islam</option>
-                                        <option value="Kristen Protestan">Kristen Protestan</option>
-                                        <option value="Katolik">Katolik</option>
-                                        <option value="Hindu">Hindu</option>
-                                        <option value="Buddha">Buddha</option>
-                                        <option value="Khonghucu">Khonghucu</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#0E2747]">
-                                        Asal Dojo <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={data.dojo}
-                                        onChange={(e) => setData('dojo', e.target.value)}
-                                        placeholder="Contoh: Perak Surabaya"
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        required
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Kota / Kab <span className="text-rose-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={data.city}
-                                            onChange={(e) => setData('city', e.target.value)}
-                                            placeholder="Surabaya"
-                                            className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Provinsi <span className="text-rose-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={data.province}
-                                            onChange={(e) => setData('province', e.target.value)}
-                                            placeholder="Jawa Timur"
-                                            className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* 3. Lisensi & Alamat Lengkap */}
-                        <section aria-labelledby="section-cert">
-                            <h2 id="section-cert" className="flex items-center gap-2 text-sm font-bold text-[#0E2747]">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0B63CE] text-[10px] text-white">
-                                    3
-                                </span>
-                                Data Sertifikat Lisensi & Alamat
-                            </h2>
-
-                            <div className="mt-3 space-y-4">
-                                <div className="grid gap-4 sm:grid-cols-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Nomor Sertifikat {data.pact_type.toUpperCase()}
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={data.certificate_number}
-                                            onChange={(e) => setData('certificate_number', e.target.value)}
-                                            placeholder="Contoh: 073/PLT-DRH/XII/2026"
-                                            className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs font-mono text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        />
-                                        <span className="text-[10px] text-[#6B7C93]">Otomatis diisi panitia saat kelulusan</span>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Tanggal Mulai Berlaku
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={data.valid_start_date}
-                                            onChange={(e) => setData('valid_start_date', e.target.value)}
-                                            className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Tanggal Selesai Berlaku
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={data.valid_end_date}
-                                            onChange={(e) => setData('valid_end_date', e.target.value)}
-                                            className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#0E2747]">
-                                        Alamat Lengkap Sesuai KTP <span className="text-rose-500">*</span>
-                                    </label>
-                                    <textarea
-                                        rows={2}
-                                        value={data.id_card_address}
-                                        onChange={(e) => {
-                                            setData('id_card_address', e.target.value);
-                                            if (sameAddress) setData('current_address', e.target.value);
-                                        }}
-                                        placeholder="Jl. Teluk Aru Utara No.61 B Surabaya"
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white p-3 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <div className="flex items-center justify-between">
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Alamat Lengkap Saat Ini / Domisili
-                                        </label>
-                                        <label className="flex items-center gap-1.5 text-xs text-[#6B7C93] cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={sameAddress}
-                                                onChange={(e) => handleSameAddressChange(e.target.checked)}
-                                                className="rounded border-[#DCE7F3] text-[#0B63CE] focus:ring-[#0B63CE]"
-                                            />
-                                            <span>Sama dengan alamat KTP</span>
-                                        </label>
-                                    </div>
-                                    <textarea
-                                        rows={2}
-                                        value={data.current_address}
-                                        onChange={(e) => setData('current_address', e.target.value)}
-                                        disabled={sameAddress}
-                                        className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white p-3 text-xs text-[#0E2747] disabled:bg-slate-50 disabled:text-slate-500 focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                    />
-                                </div>
-
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Menjadi Pengurus pada
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={data.management_organization}
-                                            onChange={(e) => setData('management_organization', e.target.value)}
-                                            placeholder="Contoh: Pengkot Surabaya / Pengprov Jatim / -"
-                                            className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Sebagai (Jabatan)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={data.management_position}
-                                            onChange={(e) => setData('management_position', e.target.value)}
-                                            placeholder="Contoh: Ketua Bidang Kepelatihan / Anggota / -"
-                                            className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* 4. Butir Ikrar & Pernyataan Integritas Resmi PB PERKEMI */}
-                        <section aria-labelledby="section-pledges" className="rounded-xl border border-[#0B63CE]/20 bg-[#F0F7FF] p-5 sm:p-6">
-                            <h2 id="section-pledges" className="flex items-center gap-2 text-sm font-bold text-[#0E2747]">
-                                <Shield className="h-4 w-4 text-[#0B63CE]" />
-                                Pernyataan & Komitmen Integritas PB PERKEMI
-                            </h2>
-                            <p className="mt-1 text-xs text-[#6B7C93]">
-                                Dengan ini menyatakan secara sadar dan sungguh-sungguh atas hal-hal sebagai berikut:
-                            </p>
-
-                            <ol className="mt-4 space-y-3">
-                                {pledgePoints.map((point, index) => (
-                                    <li key={index} className="flex items-start gap-3 text-xs leading-relaxed text-[#112743]">
-                                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0B63CE] text-[10px] font-bold text-white">
-                                            {index + 1}
-                                        </span>
-                                        <span>{point}</span>
-                                    </li>
-                                ))}
-                            </ol>
-
-                            <div className="mt-5 rounded-lg border border-[#DCE7F3] bg-white p-3.5 text-xs text-[#6B7C93] leading-relaxed italic">
-                                &ldquo;Demikian Pakta Integritas ini saya tanda tangani dengan kesadaran penuh tanpa desakan atau paksaan didalam bentuk yang bagaimanapun dan dari pihak manapun. Apabila saya melakukan pelanggaran dengan sengaja ataupun tanpa sengaja, atas ketentuan dan/atau persyaratan Pakta Integritas ini, tertulis atau tersirat, maka Saya bersedia untuk bertanggung jawab sepenuhnya termasuk untuk mendapatkan sanksi Organisasi sesuai dengan ketentuan yang berlaku.&rdquo;
-                            </div>
-                        </section>
-
-                        {/* 5. Tanda Tangan Digital & Materai */}
-                        <section aria-labelledby="section-signature">
-                            <h2 id="section-signature" className="flex items-center gap-2 text-sm font-bold text-[#0E2747]">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0B63CE] text-[10px] text-white">
-                                    5
-                                </span>
-                                Tanda Tangan Digital & Legalisasi
-                            </h2>
-
-                            <div className="mt-3 grid gap-6 sm:grid-cols-2">
-                                <div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="block text-xs font-semibold text-[#0E2747]">
-                                                Tempat Penandatanganan <span className="text-rose-500">*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={data.sign_place}
-                                                onChange={(e) => setData('sign_place', e.target.value)}
-                                                className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-semibold text-[#0E2747]">
-                                                Tanggal <span className="text-rose-500">*</span>
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={data.sign_date}
-                                                onChange={(e) => setData('sign_date', e.target.value)}
-                                                className="mt-1 block w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-2 text-xs text-[#0E2747] focus:border-[#0B63CE] focus:ring-1 focus:ring-[#0B63CE]"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Preview Kotak Materai Resmi */}
-                                    <div className="mt-4 flex items-center gap-4 rounded-xl border border-dashed border-[#DCE7F3] bg-[#F8FBFF] p-4">
-                                        <div className="flex h-16 w-24 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-emerald-600 bg-emerald-50 text-center">
-                                            <span className="text-[9px] font-black tracking-widest text-emerald-800 uppercase">MATERAI</span>
-                                            <span className="text-xs font-black text-emerald-700">Rp 10.000</span>
-                                        </div>
-                                        <p className="text-[11px] text-[#6B7C93] leading-snug">
-                                            Sesuai ketentuan PB PERKEMI, tanda tangan digital Anda akan ditempatkan di atas stempel Materai Rp 10.000 pada salinan cetak resmi.
-                                        </p>
-                                    </div>
-
-                                    <div className="mt-4">
-                                        <label className="flex items-start gap-2.5 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={data.agree_pledge}
-                                                onChange={(e) => setData('agree_pledge', e.target.checked)}
-                                                className="mt-0.5 rounded border-[#DCE7F3] text-[#0B63CE] focus:ring-[#0B63CE]"
-                                                required
-                                            />
-                                            <span className="text-xs text-[#0E2747] leading-relaxed">
-                                                Saya menyatakan telah membaca dan menyetujui seluruh butir Pakta Integritas PB PERKEMI di atas dengan penuh kesadaran dan tanggung jawab.
-                                            </span>
-                                        </label>
-                                        {errors.agree_pledge && (
-                                            <p className="mt-1 text-xs text-rose-600">{errors.agree_pledge}</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Canvas Pad */}
-                                <div>
-                                    <div className="flex items-center justify-between">
-                                        <label className="block text-xs font-semibold text-[#0E2747]">
-                                            Goreskan Tanda Tangan Digital <span className="text-rose-500">*</span>
-                                        </label>
-                                        <div className="flex items-center gap-1.5">
-                                            <button
-                                                type="button"
-                                                onClick={autoGenerateSignature}
-                                                className="inline-flex items-center gap-1 text-[11px] text-[#0B63CE] hover:underline"
-                                                title="Buat tanda tangan otomatis dari nama"
-                                            >
-                                                <Sparkles className="h-3 w-3" />
-                                                <span>Buat Rapi</span>
-                                            </button>
-                                            <span className="text-slate-300">•</span>
-                                            <button
-                                                type="button"
-                                                onClick={clearSignature}
-                                                className="inline-flex items-center gap-1 text-[11px] text-rose-600 hover:underline"
-                                            >
-                                                <RotateCcw className="h-3 w-3" />
-                                                <span>Hapus</span>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="relative mt-1 overflow-hidden rounded-xl border border-[#DCE7F3] bg-white shadow-xs touch-none">
-                                        <canvas
-                                            ref={canvasRef}
-                                            width={360}
-                                            height={160}
-                                            className="h-40 w-full cursor-crosshair bg-white"
-                                            onMouseDown={startDrawing}
-                                            onMouseMove={draw}
-                                            onMouseUp={stopDrawing}
-                                            onMouseLeave={stopDrawing}
-                                            onTouchStart={startDrawing}
-                                            onTouchMove={draw}
-                                            onTouchEnd={stopDrawing}
-                                        />
-                                        {!hasDrawn && (
-                                            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-300">
-                                                Tanda tangani di sini dengan jari / kursor
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="mt-2 text-center text-xs font-bold text-[#0E2747] uppercase tracking-wide">
-                                        ({data.full_name || participant.name})
-                                    </div>
-
-                                    {errors.signature_data && (
-                                        <p className="mt-1 text-xs text-rose-600">{errors.signature_data}</p>
-                                    )}
-                                </div>
-                            </div>
-                        </section>
+                        <PactSignatureSection />
 
                         {/* Submit Button Bar */}
                         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#DCE7F3] pt-6">
@@ -963,5 +546,6 @@ export default function IntegrityPactForm({
                 </div>
             </main>
         </div>
+        </IntegrityPactContext.Provider>
     );
 }

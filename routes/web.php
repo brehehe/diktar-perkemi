@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\EventController;
 use App\Http\Controllers\Admin\EventDocumentNumberSettingController;
 use App\Http\Controllers\Admin\EventPracticalExamController;
 use App\Http\Controllers\Admin\EventReferenceController;
+use App\Http\Controllers\Admin\EventReportController;
 use App\Http\Controllers\Admin\ExamRevisionController;
 use App\Http\Controllers\Admin\HelpController;
 use App\Http\Controllers\Admin\LearningModuleController;
@@ -75,6 +76,31 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->middleware(EnsureEventAccess::class)->name('dashboard');
     Route::get('/referensi-event', [EventReferenceController::class, 'index'])->name('event.references');
+
+    Route::get('/keuangan', [EventReportController::class, 'masterFinance'])->name('finance.index');
+    Route::post('/keuangan/analisis-ai', [EventReportController::class, 'generateFinanceNarrative'])->name('finance.ai.generate');
+    Route::get('/keuangan/export', [EventReportController::class, 'exportMasterFinance'])->name('finance.export');
+    Route::get('/keuangan/cetak', [EventReportController::class, 'printMasterFinance'])->name('finance.print');
+    Route::post('/keuangan/transaksi', [EventReportController::class, 'storeMasterFinance'])->name('finance.store');
+    Route::delete('/keuangan/transaksi/{finance}', [EventReportController::class, 'destroyMasterFinance'])->name('finance.destroy');
+    Route::get('/dokumentasi', [EventReportController::class, 'documentationRedirect'])->name('reports.documentation');
+    Route::get('/realisasi-acara', [EventReportController::class, 'realisationRedirect'])->name('reports.realisation');
+    Route::get('/kluster-petugas', [EventReportController::class, 'staffRedirect'])->name('reports.staff');
+    Route::get('/event/{event}/laporan', [EventReportController::class, 'index'])->name('event.reports.index');
+    Route::post('/event/{event}/laporan/keuangan', [EventReportController::class, 'storeFinance'])->name('event.reports.finance.store');
+    Route::post('/event/{event}/laporan/keuangan/{finance}', [EventReportController::class, 'updateFinance'])->name('event.reports.finance.update');
+    Route::delete('/event/{event}/laporan/keuangan/{finance}', [EventReportController::class, 'destroyFinance'])->name('event.reports.finance.destroy');
+    Route::get('/event/{event}/laporan/keuangan/{finance}/bukti', [EventReportController::class, 'financeEvidence'])->name('event.reports.finance.evidence');
+    Route::post('/event/{event}/laporan/kegiatan', [EventReportController::class, 'storeActivity'])->name('event.reports.activity.store');
+    Route::post('/event/{event}/laporan/kegiatan/{eventActivity}', [EventReportController::class, 'updateActivity'])->name('event.reports.activity.update');
+    Route::delete('/event/{event}/laporan/kegiatan/{eventActivity}', [EventReportController::class, 'destroyActivity'])->name('event.reports.activity.destroy');
+    Route::get('/event/{event}/laporan/kegiatan/{eventActivity}/media', [EventReportController::class, 'activityMedia'])->name('event.reports.activity.media');
+    Route::post('/event/{event}/laporan/petugas', [EventReportController::class, 'storeStaff'])->name('event.reports.staff.store');
+    Route::delete('/event/{event}/laporan/petugas/{staff}', [EventReportController::class, 'destroyStaff'])->name('event.reports.staff.destroy');
+    Route::get('/event/{event}/laporan/export/absensi', [EventReportController::class, 'exportAttendance'])->name('event.reports.attendance.export');
+    Route::get('/event/{event}/laporan/export/capaian', [EventReportController::class, 'exportOutcomes'])->name('event.reports.outcomes.export');
+    Route::get('/event/{event}/laporan/export/kelengkapan-cbt', [EventReportController::class, 'exportCompleteness'])->name('event.reports.completeness.export');
+    Route::get('/event/{event}/laporan/export/keuangan', [EventReportController::class, 'exportFinance'])->name('event.reports.finance.export');
 
     Route::middleware(EnsureUserIsAdmin::class)->group(function () {
 

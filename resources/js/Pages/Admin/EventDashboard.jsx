@@ -53,7 +53,7 @@ export default function EventDashboard({ role, stats, events = [] }) {
                             { header: 'Tanggal & Tempat', cell: (event) => <span className="whitespace-nowrap">{event.date_formatted}<br /><span className="text-[#6B7C93]">{event.place}</span></span> },
                             { header: 'Sesi', cell: (event) => event.sessions_count },
                             { header: 'Peserta', cell: (event) => event.participants_count },
-                            { header: 'Aksi', headerClassName: 'text-right', className: 'text-right', cell: (event) => <Button as={Link} href={`/admin/event/${event.id}`} variant="outline" size="sm">Buka detail</Button> },
+                            { header: 'Aksi', headerClassName: 'text-right', className: 'text-right', cell: (event) => <Button as={Link} href={event.can_update ? `/admin/event/${event.id}` : event.report_url} variant="outline" size="sm">{event.can_update ? 'Buka detail' : 'Buka laporan'}</Button> },
                         ]}
                     />
                 </section>

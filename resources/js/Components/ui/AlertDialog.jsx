@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Info, AlertOctagon } from 'lucide-react';
 import Button from './Button';
 
@@ -71,9 +72,9 @@ export default function AlertDialog({
         info: 'bg-[#EAF5FF]',
     };
 
-    return (
+    const dialog = (
         <div
-            className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 sm:p-6"
+            className="fixed inset-0 z-[200] overflow-y-auto flex items-center justify-center p-4 sm:p-6"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="alert-dialog-title"
@@ -128,4 +129,6 @@ export default function AlertDialog({
             </div>
         </div>
     );
+
+    return typeof document !== 'undefined' ? createPortal(dialog, document.body) : dialog;
 }

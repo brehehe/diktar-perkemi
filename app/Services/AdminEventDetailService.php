@@ -20,6 +20,7 @@ use App\Models\EventRoom;
 use App\Models\EventSession;
 use App\Models\EventSessionType;
 use App\Models\EventStaff;
+use App\Models\FinanceCategory;
 use App\Models\LearningModule;
 use App\Models\Material;
 use App\Models\Participant;
@@ -785,10 +786,11 @@ class AdminEventDetailService
         $canManageRealisation = $user ? $user->can('manageActivity', [$event, 'realisation']) : false;
         $canManageDocumentation = $user ? $user->can('manageActivity', [$event, 'documentation']) : false;
 
-        $finances = $canViewFinance ? $event->finances()->with('creator:id,name')->latest('occurred_on')->latest('id')->get()->map(fn (EventFinance $entry) => [
+        $finances = $canViewFinance ? $event->finances()->with(['creator:id,name', 'categoryMaster:id,code,name'])->latest('occurred_on')->latest('id')->get()->map(fn (EventFinance $entry) => [
             'id' => $entry->id,
             'type' => $entry->type,
             'category' => $entry->category,
+            'category_name' => $entry->categoryMaster?->name ?? $entry->category,
             'description' => $entry->description,
             'sponsor_name' => $entry->sponsor_name,
             'amount' => $entry->amount,
@@ -938,6 +940,18 @@ class AdminEventDetailService
             'practicalExamData' => $practicalExamData,
             'finances' => $finances,
             'financeAnalysis' => $financeAnalysis,
+            'financeCategories' => FinanceCategory::query()
+                ->withCount('finances')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get(['id', 'code', 'name', 'transaction_type', 'sort_order'])
+                ->map(fn (FinanceCategory $category) => [
+                    'id' => $category->id,
+                    'code' => $category->code,
+                    'name' => $category->name,
+                    'transaction_type' => $category->transaction_type,
+                    'transactions_count' => $category->finances_count,
+                ]),
             'activities' => $activities,
             'staff' => $staff,
             'staffCandidates' => $staffCandidates,

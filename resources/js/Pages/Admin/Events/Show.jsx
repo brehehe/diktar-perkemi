@@ -38,6 +38,7 @@ export default function Show(props) {
         practicalExamData = null,
         finances = [],
         financeAnalysis = null,
+        financeCategories = [],
         activities = [],
         staff = [],
         staffCandidates = [],
@@ -197,6 +198,7 @@ export default function Show(props) {
                             event={event}
                             finances={finances}
                             financeAnalysis={financeAnalysis}
+                            financeCategories={financeCategories}
                             activities={activities}
                             staff={staff}
                             staffCandidates={staffCandidates}

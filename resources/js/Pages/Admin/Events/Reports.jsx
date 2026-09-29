@@ -38,6 +38,7 @@ export default function Reports({
     event,
     finances = [],
     financeAnalysis,
+    financeCategories = [],
     activities = [],
     staff = [],
     staffCandidates = [],
@@ -71,6 +72,13 @@ export default function Reports({
         occurred_on: '',
         evidence: null,
     });
+
+    useEffect(() => {
+        const compatibleCategories = financeCategories.filter((category) => ['both', financeForm.data.type].includes(category.transaction_type));
+        if (compatibleCategories.length > 0 && !compatibleCategories.some((category) => category.code === financeForm.data.category)) {
+            financeForm.setData('category', compatibleCategories[0].code);
+        }
+    }, [financeCategories, financeForm.data.category, financeForm.data.type]);
 
     const activityForm = useForm({
         kind: 'realisation',
@@ -201,6 +209,7 @@ export default function Reports({
         event,
         finances,
         financeAnalysis,
+        financeCategories,
         staff,
         staffCandidates,
         sessions,

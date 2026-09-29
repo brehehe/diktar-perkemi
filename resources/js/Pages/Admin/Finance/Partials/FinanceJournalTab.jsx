@@ -2,7 +2,7 @@ import { Link } from '@inertiajs/react';
 import Button from '../../../../Components/ui/Button';
 import Pagination from '../../../../Components/ui/Pagination';
 import { FileSpreadsheet, Plus, Receipt, Trash2, Search, RefreshCw, Filter } from 'lucide-react';
-import { rupiah, dateLabel, CATEGORY_LABELS, INCOME_CATEGORIES, EXPENSE_CATEGORIES } from './financeShared';
+import { rupiah, dateLabel, CATEGORY_LABELS } from './financeShared';
 import { useFinancePage } from './FinancePageContext';
 
 export default function FinanceJournalTab() {
@@ -19,7 +19,12 @@ export default function FinanceJournalTab() {
         resetFilters,
         totals,
         hasActiveFilters,
+        financeCategories,
     } = useFinancePage();
+
+    const filteredCategories = financeCategories.filter((category) => (
+        !filterForm.type || category.transaction_type === 'both' || category.transaction_type === filterForm.type
+    ));
 
     return (
         <div className="space-y-4">
@@ -104,19 +109,9 @@ export default function FinanceJournalTab() {
                             className="min-h-9 w-full rounded-lg border border-[#DCE7F3] bg-white px-3 py-1.5 text-xs text-[#112743] focus:border-[#0B63CE] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]/20"
                         >
                             <option value="">Semua Kategori</option>
-                            {filterForm.type === 'income' ? (
-                                INCOME_CATEGORIES.map((c) => (
-                                    <option key={c.value} value={c.value}>{c.label}</option>
-                                ))
-                            ) : filterForm.type === 'expense' ? (
-                                EXPENSE_CATEGORIES.map((c) => (
-                                    <option key={c.value} value={c.value}>{c.label}</option>
-                                ))
-                            ) : (
-                                Object.entries(CATEGORY_LABELS).map(([k, label]) => (
-                                    <option key={k} value={k}>{label}</option>
-                                ))
-                            )}
+                            {filteredCategories.map((category) => (
+                                <option key={category.id} value={category.code}>{category.name}</option>
+                            ))}
                         </select>
                     </div>
 
@@ -250,7 +245,7 @@ export default function FinanceJournalTab() {
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             <span className="inline-flex rounded-full bg-[#EAF5FF] px-2.5 py-0.5 text-xs font-medium text-[#0A3F82]">
-                                                {CATEGORY_LABELS[entry.category] || entry.category}
+                                                {entry.category_name || CATEGORY_LABELS[entry.category] || entry.category}
                                             </span>
                                         </td>
                                         <td className={`px-4 py-3 font-semibold tabular-nums whitespace-nowrap ${entry.type === 'income' ? 'text-[#16785B]' : 'text-[#B93664]'}`}>

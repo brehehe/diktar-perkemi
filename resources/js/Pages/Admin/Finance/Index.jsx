@@ -19,9 +19,11 @@ import {
     RefreshCw,
     FileText,
     Filter,
+    Tags,
 } from 'lucide-react';
 import AdminLayout from '../../../Layouts/AdminLayout';
 import FinanceInsights from '../../../Components/admin/FinanceInsights';
+import FinanceCategoryManager from '../../../Components/admin/FinanceCategoryManager';
 import PageHeader from '../../../Components/admin/PageHeader';
 import Button from '../../../Components/ui/Button';
 import Pagination from '../../../Components/ui/Pagination';
@@ -50,10 +52,12 @@ export default function Index({
     events = [],
     filters = {},
     canCreateTransaction = false,
+    financeCategories = [],
 }) {
     const entries = transactions.data || [];
     const activeEventId = filters.event || '';
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showCategoryManager, setShowCategoryManager] = useState(false);
     const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'journal' | 'breakdown' | 'events'
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -141,6 +145,7 @@ export default function Index({
         categoryBreakdown,
         events,
         canCreateTransaction,
+        financeCategories,
         entries,
         activeEventId,
         setShowAddModal,
@@ -166,15 +171,25 @@ export default function Index({
                     action={
                         <div className="flex flex-wrap items-center gap-2">
                             {canCreateTransaction && (
-                                <Button
-                                    type="button"
-                                    variant="primary"
-                                    icon={Plus}
-                                    onClick={() => setShowAddModal(true)}
-                                    id="btn-tambah-transaksi"
-                                >
-                                    Tambah Transaksi
-                                </Button>
+                                <>
+                                    <Button
+                                        type="button"
+                                        variant="primary"
+                                        icon={Plus}
+                                        onClick={() => setShowAddModal(true)}
+                                        id="btn-tambah-transaksi"
+                                    >
+                                        Tambah Transaksi
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        icon={Tags}
+                                        onClick={() => setShowCategoryManager(true)}
+                                    >
+                                        Master Kategori
+                                    </Button>
+                                </>
                             )}
                             <Button
                                 as="a"
@@ -362,6 +377,17 @@ export default function Index({
                 isOpen={showAddModal}
                 onClose={() => setShowAddModal(false)}
                 events={events}
+                financeCategories={financeCategories}
+                onManageCategories={() => {
+                    setShowAddModal(false);
+                    setShowCategoryManager(true);
+                }}
+            />
+
+            <FinanceCategoryManager
+                isOpen={showCategoryManager}
+                onClose={() => setShowCategoryManager(false)}
+                categories={financeCategories}
             />
 
             {/* Delete Transaction Confirmation Dialog */}
@@ -371,7 +397,7 @@ export default function Index({
                 onConfirm={handleDelete}
                 loading={isDeleting}
                 title="Hapus Transaksi Keuangan?"
-                description={`Transaksi "${deleteTarget?.description || ''}" sebesar ${rupiah(deleteTarget?.amount)} (${CATEGORY_LABELS[deleteTarget?.category] || deleteTarget?.category || ''}) pada kegiatan "${deleteTarget?.event_name || ''}" akan dihapus permanen.`}
+                description={`Transaksi "${deleteTarget?.description || ''}" sebesar ${rupiah(deleteTarget?.amount)} (${deleteTarget?.category_name || CATEGORY_LABELS[deleteTarget?.category] || deleteTarget?.category || ''}) pada kegiatan "${deleteTarget?.event_name || ''}" akan dihapus permanen.`}
                 confirmText="Hapus Transaksi"
                 cancelText="Batal"
                 variant="danger"

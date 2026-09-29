@@ -27,6 +27,7 @@ export default function FinancePrint({
     transactions = [],
     summary = {},
     filters = {},
+    categoryLabels = {},
     printedBy = 'Administrator',
     printDate = '',
 }) {
@@ -205,7 +206,7 @@ export default function FinancePrint({
                                     Object.entries(categoryStats.income).map(([cat, data]) => (
                                         <tr key={cat} className="hover:bg-slate-50">
                                             <td className="px-3 py-1.5 font-medium text-slate-800">
-                                                {CATEGORY_LABELS[cat] || cat}
+                                                {categoryLabels[cat] || CATEGORY_LABELS[cat] || cat}
                                             </td>
                                             <td className="px-2 py-1.5 text-right text-slate-500">
                                                 {data.count} trx
@@ -248,7 +249,7 @@ export default function FinancePrint({
                                     Object.entries(categoryStats.expense).map(([cat, data]) => (
                                         <tr key={cat} className="hover:bg-slate-50">
                                             <td className="px-3 py-1.5 font-medium text-slate-800">
-                                                {CATEGORY_LABELS[cat] || cat}
+                                                {categoryLabels[cat] || CATEGORY_LABELS[cat] || cat}
                                             </td>
                                             <td className="px-2 py-1.5 text-right text-slate-500">
                                                 {data.count} trx
@@ -321,7 +322,7 @@ export default function FinancePrint({
                                                     </td>
                                                 )}
                                                 <td className="p-2 text-slate-700 whitespace-nowrap">
-                                                    {CATEGORY_LABELS[tx.category] || tx.category}
+                                                    {tx.category_name || CATEGORY_LABELS[tx.category] || tx.category}
                                                 </td>
                                                 <td className="p-2 text-slate-800">
                                                     <span>{tx.description}</span>

@@ -5,7 +5,9 @@ export default function FinanceBreakdownTab() {
     const {
         categoryBreakdown,
         totals,
+        financeCategories,
     } = useFinancePage();
+    const categoryNames = Object.fromEntries(financeCategories.map((category) => [category.code, category.name]));
 
     return (
         <div className="space-y-6">
@@ -46,7 +48,7 @@ export default function FinanceBreakdownTab() {
                                     return (
                                         <tr key={cat.category} className="hover:bg-[#F8FBFF]">
                                             <td className="px-3 py-2.5 font-medium text-[#112743]">
-                                                {CATEGORY_LABELS[cat.category] || cat.category}
+                                                {categoryNames[cat.category] || CATEGORY_LABELS[cat.category] || cat.category}
                                             </td>
                                             <td className="px-3 py-2.5 text-center text-[#6B7C93] tabular-nums">
                                                 {cat.count} trx
@@ -101,7 +103,7 @@ export default function FinanceBreakdownTab() {
                                     return (
                                         <tr key={cat.category} className="hover:bg-[#F8FBFF]">
                                             <td className="px-3 py-2.5 font-medium text-[#112743]">
-                                                {CATEGORY_LABELS[cat.category] || cat.category}
+                                                {categoryNames[cat.category] || CATEGORY_LABELS[cat.category] || cat.category}
                                             </td>
                                             <td className="px-3 py-2.5 text-center text-[#6B7C93] tabular-nums">
                                                 {cat.count} trx

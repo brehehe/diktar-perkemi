@@ -1,9 +1,11 @@
+import FinanceCategoryManager from '../../../../Components/admin/FinanceCategoryManager';
 import Button from '../../../../Components/ui/Button';
 import FinanceInsights from '../../../../Components/admin/FinanceInsights';
 import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
 import FileInput from '../../../../Components/ui/FileInput';
-import { FileSpreadsheet, Pencil, Plus, Trash2, Shield } from 'lucide-react';
+import { FileSpreadsheet, Pencil, Plus, Tags, Trash2, Shield } from 'lucide-react';
+import { useState } from 'react';
 import { CATEGORY_LABELS, rupiah, dateLabel, Metric, Empty } from './EventReportsTabShared';
 import { useEventReportsTab } from './EventReportsTabContext';
 
@@ -12,6 +14,7 @@ export default function EventReportFinancePanel() {
         event,
         finances,
         financeAnalysis,
+        financeCategories,
         permissions,
         editingFinance,
         setDeleteTarget,
@@ -20,6 +23,16 @@ export default function EventReportFinancePanel() {
         editFinance,
         submitFinance,
     } = useEventReportsTab();
+    const [showCategoryManager, setShowCategoryManager] = useState(false);
+    const categoryOptions = financeCategories
+        .filter((category) => ['both', financeForm.data.type].includes(category.transaction_type))
+        .map((category) => ({ value: category.code, label: category.name }));
+
+    const changeTransactionType = (event) => {
+        const type = event.target.value;
+        const category = financeCategories.find((item) => ['both', type].includes(item.transaction_type))?.code || '';
+        financeForm.setData({ ...financeForm.data, type, category, sponsor_name: '' });
+    };
 
     return (
         <section className="space-y-6">
@@ -94,7 +107,7 @@ export default function EventReportFinancePanel() {
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap">
                                                 <span className="inline-flex rounded-full bg-[#EAF5FF] px-2 py-0.5 text-xs font-medium text-[#0A3F82]">
-                                                    {CATEGORY_LABELS[entry.category] || entry.category}
+                                                    {entry.category_name || CATEGORY_LABELS[entry.category] || entry.category}
                                                 </span>
                                             </td>
                                             <td className={`px-4 py-3 font-semibold tabular-nums whitespace-nowrap ${entry.type === 'income' ? 'text-[#16785B]' : 'text-[#B93664]'}`}>
@@ -168,7 +181,7 @@ export default function EventReportFinancePanel() {
                                     name="type"
                                     label="Jenis"
                                     value={financeForm.data.type}
-                                    onChange={(e) => financeForm.setData('type', e.target.value)}
+                                    onChange={changeTransactionType}
                                     options={[
                                         { value: 'income', label: 'Pemasukan' },
                                         { value: 'expense', label: 'Pengeluaran' },
@@ -181,14 +194,20 @@ export default function EventReportFinancePanel() {
                                     label="Kategori"
                                     value={financeForm.data.category}
                                     onChange={(e) => financeForm.setData('category', e.target.value)}
-                                    options={Object.entries(CATEGORY_LABELS).map(([value, label]) => ({
-                                        value,
-                                        label,
-                                    }))}
+                                    options={categoryOptions}
                                     error={financeForm.errors.category}
                                     autoComplete="off"
                                 />
                             </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowCategoryManager(true)}
+                                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 text-xs font-semibold text-[#0B63CE] transition-colors hover:border-[#0B63CE] hover:bg-[#EAF5FF] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"
+                            >
+                                <Tags className="size-4" aria-hidden="true" />
+                                Kelola Master Kategori
+                            </button>
 
                             <Input
                                 name="description"
@@ -265,6 +284,11 @@ export default function EventReportFinancePanel() {
                     </form>
                 )}
             </div>
+            <FinanceCategoryManager
+                isOpen={showCategoryManager}
+                onClose={() => setShowCategoryManager(false)}
+                categories={financeCategories}
+            />
         </section>
     );
 }

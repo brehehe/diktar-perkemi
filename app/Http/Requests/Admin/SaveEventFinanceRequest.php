@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class SaveEventFinanceRequest extends FormRequest
 {
@@ -29,25 +30,17 @@ class SaveEventFinanceRequest extends FormRequest
     {
         return [
             'type' => ['required', 'in:income,expense'],
-            'category' => ['required', 'in:sponsorship,registration,grant,accommodation,consumption,printing,venue,transport,other'],
+            'category' => [
+                'required',
+                Rule::exists('finance_categories', 'code')->where(
+                    fn ($query) => $query->whereIn('transaction_type', [$this->input('type'), 'both'])
+                ),
+            ],
             'description' => ['required', 'string', 'max:255'],
             'sponsor_name' => ['nullable', 'string', 'max:255', 'required_if:category,sponsorship'],
             'amount' => ['required', 'integer', 'min:1', 'max:999999999999'],
             'occurred_on' => ['required', 'date'],
             'evidence' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
         ];
-    }
-
-    public function after(): array
-    {
-        return [function ($validator): void {
-            $income = ['sponsorship', 'registration', 'grant'];
-            $type = $this->input('type');
-            $category = $this->input('category');
-            if ($type && $category && $category !== 'other'
-                && (($type === 'income') !== in_array($category, $income, true))) {
-                $validator->errors()->add('category', 'Kategori tidak sesuai dengan jenis transaksi.');
-            }
-        }];
     }
 }

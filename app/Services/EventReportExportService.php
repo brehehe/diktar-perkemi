@@ -6,6 +6,7 @@ use App\Models\CbtExamAttempt;
 use App\Models\Event;
 use App\Models\EventFinance;
 use App\Models\EventParticipant;
+use App\Models\FinanceCategory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -21,23 +22,108 @@ class EventReportExportService
 {
     public function attendance(Event $event): BinaryFileResponse
     {
+        $report = $this->attendanceData($event);
+        $reportSheet = $report['sheets'][0];
+        $sheet = $this->workbook($event, $report['title'], $reportSheet['name'])->getActiveSheet();
+        $this->headers($sheet, $reportSheet['headers']);
+
+        foreach ($reportSheet['rows'] as $index => $values) {
+            $excelRow = $index + 8;
+            $this->writeRow($sheet, $excelRow, $values);
+            $sheet->setCellValueExplicit("C{$excelRow}", (string) $values[2], DataType::TYPE_STRING);
+        }
+
+        return $this->download($sheet->getParent(), $event, 'laporan-absensi');
+    }
+
+    public function outcomes(Event $event): BinaryFileResponse
+    {
+        $report = $this->outcomesData($event);
+        $reportSheet = $report['sheets'][0];
+        $sheet = $this->workbook($event, $report['title'], $reportSheet['name'])->getActiveSheet();
+        $this->headers($sheet, $reportSheet['headers']);
+
+        foreach ($reportSheet['rows'] as $index => $values) {
+            $this->writeRow($sheet, $index + 8, $values);
+        }
+
+        return $this->download($sheet->getParent(), $event, 'laporan-capaian-kedisiplinan');
+    }
+
+    public function completenessAndAttempts(Event $event): BinaryFileResponse
+    {
+        $report = $this->completenessData($event);
+        $primaryReportSheet = $report['sheets'][0];
+        $spreadsheet = $this->workbook($event, $report['title'], $primaryReportSheet['name']);
+        $sheet = $spreadsheet->getActiveSheet();
+        $this->headers($sheet, $primaryReportSheet['headers']);
+
+        foreach ($primaryReportSheet['rows'] as $index => $values) {
+            $this->writeRow($sheet, $index + 8, $values);
+        }
+
+        $attemptReportSheet = $report['sheets'][1];
+        $attemptSheet = $spreadsheet->createSheet();
+        $attemptSheet->setTitle($attemptReportSheet['name']);
+        $this->documentHeading($attemptSheet, $event, $attemptReportSheet['title']);
+        $this->headers($attemptSheet, $attemptReportSheet['headers']);
+        foreach ($attemptReportSheet['rows'] as $index => $values) {
+            $this->writeRow($attemptSheet, $index + 8, $values);
+        }
+
+        return $this->download($spreadsheet, $event, 'rekap-kelengkapan-dan-cbt');
+    }
+
+    public function finances(Event $event): BinaryFileResponse
+    {
+        $report = $this->financeData($event);
+        $reportSheet = $report['sheets'][0];
+        $sheet = $this->workbook($event, $report['title'], $reportSheet['name'])->getActiveSheet();
+        $this->headers($sheet, $reportSheet['headers']);
+        foreach ($reportSheet['rows'] as $index => $values) {
+            $this->writeRow($sheet, $index + 8, $values);
+            $sheet->getStyle('G'.($index + 8))->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+        }
+
+        return $this->download($sheet->getParent(), $event, 'laporan-keuangan');
+    }
+
+    /** @return array<string, mixed> */
+    public function preview(Event $event, string $report): array
+    {
+        $data = match ($report) {
+            'attendance' => $this->attendanceData($event),
+            'outcomes' => $this->outcomesData($event),
+            'completeness' => $this->completenessData($event),
+            'finance' => $this->financeData($event),
+            default => abort(404),
+        };
+
+        return [
+            'key' => $report,
+            'title' => $data['title'],
+            'generated_at' => now()->translatedFormat('d F Y, H:i'),
+            'sheets' => $data['sheets'],
+        ];
+    }
+
+    /** @return array{title: string, sheets: array<int, array{name: string, headers: array<int, string>, rows: array<int, array<int, mixed>>}>} */
+    private function attendanceData(Event $event): array
+    {
         $event->load([
             'sessions:id,event_id,topic,session_type_code,date',
             'eventParticipants.participant:id,name,kenshi_id_number,origin_province,origin_city',
             'eventParticipants.registrationForm:id,event_id,participant_id,status',
             'attendances:id,event_id,event_session_id,participant_id,status,checked_in_at',
         ]);
-        $sheet = $this->workbook($event, 'LAPORAN ABSENSI TAHAPAN EVENT', 'Absensi')->getActiveSheet();
-        $headers = ['No', 'Nama Peserta', 'NIK', 'Registrasi', 'Kehadiran Kelas', 'Ujian', 'Penutupan', 'Total Hadir', 'Total Sesi', 'Persentase'];
-        $this->headers($sheet, $headers);
         $sessions = $event->sessions;
         $attendances = $event->attendances->groupBy('participant_id');
+        $rows = [];
 
         foreach ($event->eventParticipants as $index => $enrollment) {
             $participantAttendances = $attendances->get($enrollment->participant_id, collect());
             $presentSessionIds = $participantAttendances->whereIn('status', ['present', 'late', 'manual_override'])->pluck('event_session_id')->filter()->unique();
-            $row = $index + 8;
-            $values = [
+            $rows[] = [
                 $index + 1,
                 $enrollment->participant?->name ?? '-',
                 $enrollment->participant?->kenshi_id_number ?? '-',
@@ -49,14 +135,20 @@ class EventReportExportService
                 $sessions->count(),
                 $sessions->count() > 0 ? round($presentSessionIds->count() / $sessions->count() * 100, 1).'%' : '0%',
             ];
-            $this->writeRow($sheet, $row, $values);
-            $sheet->setCellValueExplicit("C{$row}", (string) $values[2], DataType::TYPE_STRING);
         }
 
-        return $this->download($sheet->getParent(), $event, 'laporan-absensi');
+        return [
+            'title' => 'LAPORAN ABSENSI TAHAPAN EVENT',
+            'sheets' => [[
+                'name' => 'Absensi',
+                'headers' => ['No', 'Nama Peserta', 'NIK', 'Registrasi', 'Kehadiran Kelas', 'Ujian', 'Penutupan', 'Total Hadir', 'Total Sesi', 'Persentase'],
+                'rows' => $rows,
+            ]],
+        ];
     }
 
-    public function outcomes(Event $event): BinaryFileResponse
+    /** @return array{title: string, sheets: array<int, array{name: string, headers: array<int, string>, rows: array<int, array<int, mixed>>}>} */
+    private function outcomesData(Event $event): array
     {
         $event->load([
             'eventParticipants.participant:id,name,kenshi_id_number',
@@ -66,8 +158,7 @@ class EventReportExportService
         ]);
         $attempts = CbtExamAttempt::query()->where('event_id', $event->id)->get()->groupBy('participant_id');
         $present = $event->attendances->whereIn('status', ['present', 'late', 'manual_override'])->groupBy('participant_id');
-        $sheet = $this->workbook($event, 'LAPORAN HASIL, CAPAIAN & KEDISIPLINAN', 'Capaian')->getActiveSheet();
-        $this->headers($sheet, ['No', 'Nama Peserta', 'NIK', 'Jalur', 'Nilai CBT Terbaik', 'Percobaan CBT', 'Rerata Praktik', 'Kehadiran', 'Kedisiplinan', 'Kelulusan', 'Catatan']);
+        $rows = [];
 
         foreach ($event->eventParticipants as $index => $enrollment) {
             $participantAttempts = $attempts->get($enrollment->participant_id, collect());
@@ -76,7 +167,7 @@ class EventReportExportService
             $attendanceRate = round($participantPresence->pluck('event_session_id')->filter()->unique()->count() / $attendanceTotal * 100, 1);
             $lateCount = $participantPresence->where('status', 'late')->count();
             $practiceAverage = $enrollment->assessments->count() > 0 ? round((float) $enrollment->assessments->avg('total_score'), 1) : null;
-            $this->writeRow($sheet, $index + 8, [
+            $rows[] = [
                 $index + 1,
                 $enrollment->participant?->name ?? '-',
                 $enrollment->participant?->kenshi_id_number ?? '-',
@@ -88,25 +179,31 @@ class EventReportExportService
                 $lateCount === 0 ? 'Tepat waktu' : "{$lateCount} kali terlambat",
                 $enrollment->graduation_status ?? 'Belum ditetapkan',
                 $enrollment->evaluation_notes ?? '-',
-            ]);
+            ];
         }
 
-        return $this->download($sheet->getParent(), $event, 'laporan-capaian-kedisiplinan');
+        return [
+            'title' => 'LAPORAN HASIL, CAPAIAN & KEDISIPLINAN',
+            'sheets' => [[
+                'name' => 'Capaian',
+                'headers' => ['No', 'Nama Peserta', 'NIK', 'Jalur', 'Nilai CBT Terbaik', 'Percobaan CBT', 'Rerata Praktik', 'Kehadiran', 'Kedisiplinan', 'Kelulusan', 'Catatan'],
+                'rows' => $rows,
+            ]],
+        ];
     }
 
-    public function completenessAndAttempts(Event $event): BinaryFileResponse
+    /** @return array{title: string, sheets: array<int, array{name: string, title?: string, headers: array<int, string>, rows: array<int, array<int, mixed>>}>} */
+    private function completenessData(Event $event): array
     {
         $event->load([
             'eventParticipants.participant:id,name,kenshi_id_number,photo_path',
             'eventParticipants.registrationForm:id,event_id,participant_id,status,file_path',
             'eventParticipants.integrityPact:id,event_id,participant_id,status',
         ]);
-        $spreadsheet = $this->workbook($event, 'REKAP KELENGKAPAN PESERTA & CBT', 'Kelengkapan');
-        $sheet = $spreadsheet->getActiveSheet();
-        $this->headers($sheet, ['No', 'Nama Peserta', 'NIK', 'Foto', 'Formulir', 'Pakta Integritas', 'Status Admin', 'Check-in', 'Sertifikat', 'Transkrip']);
+        $completenessRows = [];
 
         foreach ($event->eventParticipants as $index => $enrollment) {
-            $this->writeRow($sheet, $index + 8, [
+            $completenessRows[] = [
                 $index + 1,
                 $enrollment->participant?->name ?? '-',
                 $enrollment->participant?->kenshi_id_number ?? '-',
@@ -117,40 +214,76 @@ class EventReportExportService
                 $enrollment->checked_in_at ? 'Sudah' : 'Belum',
                 ($enrollment->certificate_file_path || $enrollment->secondary_certificate_file_path) ? 'Tersedia' : 'Belum tersedia',
                 ($enrollment->transcript_file_path || $enrollment->secondary_transcript_file_path) ? 'Tersedia' : 'Belum tersedia',
-            ]);
+            ];
         }
 
-        $attemptSheet = $spreadsheet->createSheet();
-        $attemptSheet->setTitle('Riwayat CBT');
-        $this->documentHeading($attemptSheet, $event, 'RIWAYAT PERCOBAAN CBT');
-        $this->headers($attemptSheet, ['No', 'Nama Peserta', 'NIK', 'Paket', 'Percobaan', 'Status', 'Nilai', 'Lulus', 'Mulai', 'Selesai']);
-        $attempts = CbtExamAttempt::query()->where('event_id', $event->id)->with(['participant:id,name,kenshi_id_number', 'package:id,title,code'])->orderBy('participant_id')->orderBy('attempt_number')->get();
-        foreach ($attempts as $index => $attempt) {
-            $this->writeRow($attemptSheet, $index + 8, [
-                $index + 1, $attempt->participant?->name ?? '-', $attempt->participant?->kenshi_id_number ?? '-',
-                $attempt->package?->title ?? '-', $attempt->attempt_number, $attempt->status, $attempt->total_score ?? '-',
-                $attempt->is_passed ? 'Ya' : 'Tidak', $attempt->started_at?->format('d/m/Y H:i') ?? '-', $attempt->submitted_at?->format('d/m/Y H:i') ?? '-',
-            ]);
-        }
+        $attemptRows = CbtExamAttempt::query()
+            ->where('event_id', $event->id)
+            ->with(['participant:id,name,kenshi_id_number', 'package:id,title,code'])
+            ->orderBy('participant_id')
+            ->orderBy('attempt_number')
+            ->get()
+            ->values()
+            ->map(fn (CbtExamAttempt $attempt, int $index) => [
+                $index + 1,
+                $attempt->participant?->name ?? '-',
+                $attempt->participant?->kenshi_id_number ?? '-',
+                $attempt->package?->title ?? '-',
+                $attempt->attempt_number,
+                $attempt->status,
+                $attempt->total_score ?? '-',
+                $attempt->is_passed ? 'Ya' : 'Tidak',
+                $attempt->started_at?->format('d/m/Y H:i') ?? '-',
+                $attempt->submitted_at?->format('d/m/Y H:i') ?? '-',
+            ])->all();
 
-        return $this->download($spreadsheet, $event, 'rekap-kelengkapan-dan-cbt');
+        return [
+            'title' => 'REKAP KELENGKAPAN PESERTA & CBT',
+            'sheets' => [
+                [
+                    'name' => 'Kelengkapan',
+                    'headers' => ['No', 'Nama Peserta', 'NIK', 'Foto', 'Formulir', 'Pakta Integritas', 'Status Admin', 'Check-in', 'Sertifikat', 'Transkrip'],
+                    'rows' => $completenessRows,
+                ],
+                [
+                    'name' => 'Riwayat CBT',
+                    'title' => 'RIWAYAT PERCOBAAN CBT',
+                    'headers' => ['No', 'Nama Peserta', 'NIK', 'Paket', 'Percobaan', 'Status', 'Nilai', 'Lulus', 'Mulai', 'Selesai'],
+                    'rows' => $attemptRows,
+                ],
+            ],
+        ];
     }
 
-    public function finances(Event $event): BinaryFileResponse
+    /** @return array{title: string, sheets: array<int, array{name: string, headers: array<int, string>, rows: array<int, array<int, mixed>>}>} */
+    private function financeData(Event $event): array
     {
-        $transactions = $event->finances()->with('creator:id,name')->orderBy('occurred_on')->get();
-        $sheet = $this->workbook($event, 'LAPORAN KEUANGAN KEGIATAN', 'Keuangan')->getActiveSheet();
-        $this->headers($sheet, ['No', 'Tanggal', 'Jenis', 'Kategori', 'Uraian', 'Sponsor', 'Nominal', 'Bukti', 'Dicatat oleh']);
-        foreach ($transactions as $index => $entry) {
-            $this->writeRow($sheet, $index + 8, [
-                $index + 1, $entry->occurred_on->format('d/m/Y'), $entry->type === 'income' ? 'Pemasukan' : 'Pengeluaran',
-                $entry->category, $entry->description, $entry->sponsor_name ?? '-', $entry->amount,
-                $entry->evidence_path ? 'Ada' : 'Belum ada', $entry->creator?->name ?? '-',
-            ]);
-            $sheet->getStyle('G'.($index + 8))->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
-        }
+        $rows = $event->finances()
+            ->with(['creator:id,name', 'categoryMaster:id,code,name'])
+            ->orderBy('occurred_on')
+            ->orderBy('id')
+            ->get()
+            ->values()
+            ->map(fn (EventFinance $entry, int $index) => [
+                $index + 1,
+                $entry->occurred_on->format('d/m/Y'),
+                $entry->type === 'income' ? 'Pemasukan' : 'Pengeluaran',
+                $entry->categoryMaster?->name ?? $entry->category,
+                $entry->description,
+                $entry->sponsor_name ?? '-',
+                $entry->amount,
+                $entry->evidence_path ? 'Ada' : 'Belum ada',
+                $entry->creator?->name ?? '-',
+            ])->all();
 
-        return $this->download($sheet->getParent(), $event, 'laporan-keuangan');
+        return [
+            'title' => 'LAPORAN KEUANGAN KEGIATAN',
+            'sheets' => [[
+                'name' => 'Keuangan',
+                'headers' => ['No', 'Tanggal', 'Jenis', 'Kategori', 'Uraian', 'Sponsor', 'Nominal', 'Bukti', 'Dicatat oleh'],
+                'rows' => $rows,
+            ]],
+        ];
     }
 
     /** @param  array<int, int>|null  $allowedEventIds */
@@ -178,17 +311,7 @@ class EventReportExportService
         $spreadsheet = new Spreadsheet;
         $spreadsheet->getProperties()->setCreator('PB PERKEMI - Pustaka Penataran')->setTitle('Master Laporan Keuangan Penataran');
 
-        $categoryLabels = [
-            'sponsorship' => 'Sponsorship',
-            'registration' => 'Pendaftaran Peserta',
-            'grant' => 'Hibah / Bantuan',
-            'accommodation' => 'Akomodasi',
-            'consumption' => 'Konsumsi',
-            'printing' => 'Cetak & ATK',
-            'venue' => 'Tempat / Venue',
-            'transport' => 'Transportasi',
-            'other' => 'Lain-lain',
-        ];
+        $categoryLabels = FinanceCategory::query()->pluck('name', 'code')->all();
 
         $totalIncome = (int) $transactions->where('type', 'income')->sum('amount');
         $totalExpense = (int) $transactions->where('type', 'expense')->sum('amount');
@@ -381,6 +504,7 @@ class EventReportExportService
 
         $path = tempnam(sys_get_temp_dir(), 'master_finance_').'.xlsx';
         (new Xlsx($spreadsheet))->save($path);
+        $spreadsheet->disconnectWorksheets();
         $filename = 'master-laporan-keuangan-'.now()->format('Ymd-His').'.xlsx';
 
         return response()->download($path, $filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
@@ -485,6 +609,7 @@ class EventReportExportService
     {
         $path = tempnam(sys_get_temp_dir(), 'event_report_').'.xlsx';
         (new Xlsx($spreadsheet))->save($path);
+        $spreadsheet->disconnectWorksheets();
         $filename = $prefix.'-'.Str::slug($event->name).'-'.now()->format('Ymd-His').'.xlsx';
 
         return response()->download($path, $filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);

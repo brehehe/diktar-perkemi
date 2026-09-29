@@ -5,6 +5,7 @@ use App\Models\Event;
 use App\Models\EventFinance;
 use App\Models\EventParticipant;
 use App\Models\EventStaff;
+use App\Models\FinanceCategory;
 use App\Models\Participant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,6 +41,7 @@ test('admin can open event reports and record a finance transaction', function (
             ->component('Admin/Events/Reports')
             ->where('event.id', $this->event->id)
             ->where('permissions.manage_finance', true)
+            ->has('financeCategories', 9)
             ->where('financeAnalysis.transaction_count', 0));
 
     $this->post(route('admin.event.reports.finance.store', $this->event), [
@@ -56,6 +58,167 @@ test('admin can open event reports and record a finance transaction', function (
         'created_by' => $this->admin->id,
         'amount' => 4000000,
     ]);
+});
+
+test('admin can manage finance categories and cannot delete a category in use', function () {
+    $this->actingAs($this->admin)
+        ->post(route('admin.finance.categories.store'), [
+            'name' => 'Dokumentasi Kegiatan',
+            'transaction_type' => 'expense',
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $category = FinanceCategory::query()->where('code', 'dokumentasi_kegiatan')->firstOrFail();
+
+    $this->put(route('admin.finance.categories.update', $category), [
+        'name' => 'Dokumentasi & Publikasi',
+        'transaction_type' => 'both',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('finance_categories', [
+        'id' => $category->id,
+        'name' => 'Dokumentasi & Publikasi',
+        'transaction_type' => 'both',
+    ]);
+
+    $unusedCategory = FinanceCategory::factory()->create([
+        'code' => 'kategori_sementara',
+        'name' => 'Kategori Sementara',
+        'transaction_type' => 'expense',
+    ]);
+
+    $this->delete(route('admin.finance.categories.destroy', $unusedCategory))
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Kategori keuangan berhasil dihapus.');
+
+    $this->assertModelMissing($unusedCategory);
+
+    EventFinance::create([
+        'event_id' => $this->event->id,
+        'type' => 'expense',
+        'category' => $category->code,
+        'description' => 'Dokumentasi acara',
+        'amount' => 750000,
+        'occurred_on' => '2026-09-20',
+    ]);
+
+    $this->delete(route('admin.finance.categories.destroy', $category))
+        ->assertRedirect()
+        ->assertSessionHas('error', 'Kategori tidak dapat dihapus karena sudah dipakai pada transaksi keuangan.');
+
+    $this->assertModelExists($category);
+
+    $this->put(route('admin.finance.categories.update', $category), [
+        'name' => 'Dokumentasi & Publikasi',
+        'transaction_type' => 'income',
+    ])->assertSessionHasErrors('transaction_type');
+
+    expect($category->refresh()->transaction_type)->toBe('both');
+});
+
+test('unassigned treasurer cannot change the finance category master', function () {
+    $treasurer = User::factory()->create(['role' => 'Bendahara']);
+
+    $this->actingAs($treasurer)
+        ->post(route('admin.finance.categories.store'), [
+            'name' => 'Kategori Tanpa Izin',
+            'transaction_type' => 'expense',
+        ])->assertForbidden();
+
+    $this->assertDatabaseMissing('finance_categories', ['name' => 'Kategori Tanpa Izin']);
+});
+
+test('reporting staff cannot preview event finance without finance access', function () {
+    $documentation = User::factory()->create(['role' => 'Dokumentasi']);
+    EventStaff::create([
+        'event_id' => $this->event->id,
+        'user_id' => $documentation->id,
+        'duty' => 'dokumentasi',
+    ]);
+
+    $this->actingAs($documentation)
+        ->get(route('admin.event.reports.preview', ['event' => $this->event, 'report' => 'attendance']))
+        ->assertOk();
+
+    $this->get(route('admin.event.reports.preview', ['event' => $this->event, 'report' => 'finance']))
+        ->assertForbidden();
+});
+
+test('finance transaction validation follows the selected master category type', function () {
+    $category = FinanceCategory::factory()->create([
+        'code' => 'dokumentasi',
+        'name' => 'Dokumentasi',
+        'transaction_type' => 'expense',
+    ]);
+
+    $this->actingAs($this->admin)
+        ->post(route('admin.finance.store'), [
+            'event_id' => $this->event->id,
+            'type' => 'expense',
+            'category' => $category->code,
+            'description' => 'Dokumentasi kegiatan',
+            'amount' => 800000,
+            'occurred_on' => '2026-09-20',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $this->post(route('admin.event.reports.finance.store', $this->event), [
+        'type' => 'income',
+        'category' => $category->code,
+        'description' => 'Kategori tidak sesuai',
+        'amount' => 800000,
+        'occurred_on' => '2026-09-20',
+    ])->assertSessionHasErrors('category');
+
+    $this->assertDatabaseCount('event_finances', 1);
+});
+
+test('report previews use the same rows and labels as excel exports', function () {
+    $participant = Participant::create(['name' => 'Kenshi Preview', 'kenshi_id_number' => '88.99.00']);
+    EventParticipant::create([
+        'event_id' => $this->event->id,
+        'participant_id' => $participant->id,
+        'track_code' => 'PD',
+    ]);
+    $category = FinanceCategory::query()->where('code', 'consumption')->firstOrFail();
+    $category->update(['name' => 'Konsumsi Kegiatan']);
+    EventFinance::create([
+        'event_id' => $this->event->id,
+        'created_by' => $this->admin->id,
+        'type' => 'expense',
+        'category' => $category->code,
+        'description' => 'Konsumsi peserta',
+        'amount' => 1250000,
+        'occurred_on' => '2026-09-20',
+    ]);
+
+    $this->actingAs($this->admin)
+        ->get(route('admin.event.reports.preview', ['event' => $this->event, 'report' => 'attendance']))
+        ->assertOk()
+        ->assertJsonPath('sheets.0.name', 'Absensi')
+        ->assertJsonPath('sheets.0.rows.0.1', 'Kenshi Preview');
+
+    $this->get(route('admin.event.reports.preview', ['event' => $this->event, 'report' => 'outcomes']))
+        ->assertOk()
+        ->assertJsonPath('sheets.0.name', 'Capaian')
+        ->assertJsonPath('sheets.0.rows.0.1', 'Kenshi Preview');
+
+    $this->get(route('admin.event.reports.preview', ['event' => $this->event, 'report' => 'completeness']))
+        ->assertOk()
+        ->assertJsonCount(2, 'sheets')
+        ->assertJsonPath('sheets.1.name', 'Riwayat CBT');
+
+    $financePreview = $this->get(route('admin.event.reports.preview', ['event' => $this->event, 'report' => 'finance']))
+        ->assertOk()
+        ->assertJsonPath('sheets.0.rows.0.3', 'Konsumsi Kegiatan');
+
+    $export = $this->get(route('admin.event.reports.finance.export', $this->event))->assertOk();
+    $workbook = IOFactory::load($export->baseResponse->getFile()->getPathname());
+
+    expect($workbook->getActiveSheet()->getCell('D8')->getValue())
+        ->toBe($financePreview->json('sheets.0.rows.0.3'));
+
+    $workbook->disconnectWorksheets();
 });
 
 test('assigned reporting staff only manages the matching event duty', function () {

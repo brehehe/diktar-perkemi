@@ -1,15 +1,15 @@
 import { useForm } from '@inertiajs/react';
-import { Receipt } from 'lucide-react';
+import { Receipt, Tags } from 'lucide-react';
+import { useEffect } from 'react';
 import Modal from '../../../../Components/ui/Modal';
 import Button from '../../../../Components/ui/Button';
 import Select from '../../../../Components/ui/Select';
 import Input from '../../../../Components/ui/Input';
 import Textarea from '../../../../Components/ui/Textarea';
 import FileInput from '../../../../Components/ui/FileInput';
-import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from './financeShared';
 
 // ─── Add Transaction Modal ───────────────────────────────────────────────────
-export default function AddTransactionModal({ isOpen, onClose, events = [] }) {
+export default function AddTransactionModal({ isOpen, onClose, events = [], financeCategories = [], onManageCategories }) {
     const form = useForm({
         event_id: '',
         type: 'expense',
@@ -21,11 +21,19 @@ export default function AddTransactionModal({ isOpen, onClose, events = [] }) {
         evidence: null,
     });
 
-    const categoryOptions = form.data.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    const categoryOptions = financeCategories
+        .filter((category) => ['both', form.data.type].includes(category.transaction_type))
+        .map((category) => ({ value: category.code, label: category.name }));
+
+    useEffect(() => {
+        if (categoryOptions.length > 0 && !categoryOptions.some((category) => category.value === form.data.category)) {
+            form.setData('category', categoryOptions[0].value);
+        }
+    }, [financeCategories, form.data.category, form.data.type]);
 
     const handleTypeChange = (e) => {
         const newType = e.target.value;
-        const defaultCat = newType === 'income' ? 'sponsorship' : 'consumption';
+        const defaultCat = financeCategories.find((category) => ['both', newType].includes(category.transaction_type))?.code || '';
         form.setData({ ...form.data, type: newType, category: defaultCat, sponsor_name: '' });
     };
 
@@ -167,6 +175,15 @@ export default function AddTransactionModal({ isOpen, onClose, events = [] }) {
                         )}
                     </div>
                 </div>
+
+                <button
+                    type="button"
+                    onClick={onManageCategories}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 text-xs font-semibold text-[#0B63CE] transition-colors hover:border-[#0B63CE] hover:bg-[#EAF5FF] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE]"
+                >
+                    <Tags className="size-4" aria-hidden="true" />
+                    Kelola Master Kategori
+                </button>
 
                 {/* Sponsor name — only when category=sponsorship */}
                 {form.data.category === 'sponsorship' && (

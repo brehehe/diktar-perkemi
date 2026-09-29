@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Event;
 use App\Models\EventFinance;
+use App\Models\FinanceCategory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -70,17 +71,7 @@ class EventFinanceAnalysisService
             $recommendations[] = 'Gunakan survei digital untuk mengukur kepuasan peserta; data survei belum tersedia di laporan keuangan.';
         }
 
-        $categoryLabels = [
-            'sponsorship' => 'Sponsor',
-            'registration' => 'Pendaftaran',
-            'grant' => 'Hibah',
-            'accommodation' => 'Akomodasi',
-            'consumption' => 'Konsumsi',
-            'printing' => 'Cetak',
-            'venue' => 'Tempat',
-            'transport' => 'Transportasi',
-            'other' => 'Lainnya',
-        ];
+        $categoryLabels = FinanceCategory::query()->pluck('name', 'code')->all();
 
         $expenseColors = [
             'accommodation' => '#0B63CE',

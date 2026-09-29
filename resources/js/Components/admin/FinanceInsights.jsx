@@ -16,16 +16,19 @@ export default function FinanceInsights({ analysis, eventId = null }) {
     const [generating, setGenerating] = useState(false);
     const hasTransactions = (analysis?.transaction_count || 0) > 0;
     const dominant = analysis?.dominant_expense;
+    const dominantLabel = analysis?.expense_chart_data?.find((item) => item.category === dominant?.category)?.label
+        || CATEGORY_LABELS[dominant?.category]
+        || dominant?.category;
     const combinedShare = analysis?.accommodation_consumption_share;
     const combinedDominant = (analysis?.expense_by_category?.accommodation || 0) > 0
         && (analysis?.expense_by_category?.consumption || 0) > 0
         && combinedShare >= 50;
     const patternTitle = combinedDominant
         ? 'Akomodasi & konsumsi dominan'
-        : dominant ? `${CATEGORY_LABELS[dominant.category] || dominant.category} paling besar` : 'Belum ada pengeluaran';
+        : dominant ? `${dominantLabel} paling besar` : 'Belum ada pengeluaran';
     const patternDescription = combinedDominant
         ? `Kedua pos ini menyerap ${combinedShare}% dari total pengeluaran tercatat.`
-        : dominant ? `${CATEGORY_LABELS[dominant.category] || dominant.category} menyerap ${dominant.share}% dari total pengeluaran tercatat.` : 'Catat pengeluaran menurut kategori untuk melihat polanya.';
+        : dominant ? `${dominantLabel} menyerap ${dominant.share}% dari total pengeluaran tercatat.` : 'Catat pengeluaran menurut kategori untuk melihat polanya.';
 
     const generateNarrative = () => {
         router.post('/admin/keuangan/analisis-ai', { event: eventId || null }, {

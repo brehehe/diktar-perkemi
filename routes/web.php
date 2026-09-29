@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\EventPracticalExamController;
 use App\Http\Controllers\Admin\EventReferenceController;
 use App\Http\Controllers\Admin\EventReportController;
 use App\Http\Controllers\Admin\ExamRevisionController;
+use App\Http\Controllers\Admin\FinanceCategoryController;
 use App\Http\Controllers\Admin\HelpController;
 use App\Http\Controllers\Admin\LearningModuleController;
 use App\Http\Controllers\Admin\MasterTrackController;
@@ -81,6 +82,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('/keuangan/analisis-ai', [EventReportController::class, 'generateFinanceNarrative'])->name('finance.ai.generate');
     Route::get('/keuangan/export', [EventReportController::class, 'exportMasterFinance'])->name('finance.export');
     Route::get('/keuangan/cetak', [EventReportController::class, 'printMasterFinance'])->name('finance.print');
+    Route::post('/keuangan/kategori', [FinanceCategoryController::class, 'store'])->name('finance.categories.store');
+    Route::put('/keuangan/kategori/{financeCategory}', [FinanceCategoryController::class, 'update'])->name('finance.categories.update');
+    Route::delete('/keuangan/kategori/{financeCategory}', [FinanceCategoryController::class, 'destroy'])->name('finance.categories.destroy');
     Route::post('/keuangan/transaksi', [EventReportController::class, 'storeMasterFinance'])->name('finance.store');
     Route::delete('/keuangan/transaksi/{finance}', [EventReportController::class, 'destroyMasterFinance'])->name('finance.destroy');
     Route::get('/dokumentasi', [EventReportController::class, 'documentationRedirect'])->name('reports.documentation');
@@ -97,6 +101,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/event/{event}/laporan/kegiatan/{eventActivity}/media', [EventReportController::class, 'activityMedia'])->name('event.reports.activity.media');
     Route::post('/event/{event}/laporan/petugas', [EventReportController::class, 'storeStaff'])->name('event.reports.staff.store');
     Route::delete('/event/{event}/laporan/petugas/{staff}', [EventReportController::class, 'destroyStaff'])->name('event.reports.staff.destroy');
+    Route::get('/event/{event}/laporan/preview/{report}', [EventReportController::class, 'preview'])
+        ->whereIn('report', ['attendance', 'outcomes', 'completeness', 'finance'])
+        ->name('event.reports.preview');
     Route::get('/event/{event}/laporan/export/absensi', [EventReportController::class, 'exportAttendance'])->name('event.reports.attendance.export');
     Route::get('/event/{event}/laporan/export/capaian', [EventReportController::class, 'exportOutcomes'])->name('event.reports.outcomes.export');
     Route::get('/event/{event}/laporan/export/kelengkapan-cbt', [EventReportController::class, 'exportCompleteness'])->name('event.reports.completeness.export');

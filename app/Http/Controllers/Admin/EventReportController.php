@@ -9,12 +9,15 @@ use App\Models\Event;
 use App\Models\EventActivityRecord;
 use App\Models\EventFinance;
 use App\Models\EventStaff;
+use App\Models\FinanceCategory;
 use App\Models\User;
 use App\Services\EventFinanceAnalysisService;
 use App\Services\EventFinanceNarrativeService;
 use App\Services\EventReportExportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -36,10 +39,11 @@ class EventReportController extends Controller
 
         return Inertia::render('Admin/Events/Reports', [
             'event' => $event->only(['id', 'name', 'slug', 'date_formatted', 'place', 'organizer', 'status_label']),
-            'finances' => $canViewFinance ? $event->finances()->with('creator:id,name')->latest('occurred_on')->latest('id')->get()->map(fn (EventFinance $entry) => [
+            'finances' => $canViewFinance ? $event->finances()->with(['creator:id,name', 'categoryMaster:id,code,name'])->latest('occurred_on')->latest('id')->get()->map(fn (EventFinance $entry) => [
                 'id' => $entry->id,
                 'type' => $entry->type,
                 'category' => $entry->category,
+                'category_name' => $entry->categoryMaster?->name ?? $entry->category,
                 'description' => $entry->description,
                 'sponsor_name' => $entry->sponsor_name,
                 'amount' => $entry->amount,
@@ -48,6 +52,7 @@ class EventReportController extends Controller
                 'creator_name' => $entry->creator?->name,
             ]) : [],
             'financeAnalysis' => $canViewFinance ? $narrative->annotate($analysis->forEvent($event)) : null,
+            'financeCategories' => $this->financeCategories(),
             'activities' => $event->activityRecords()->with(['creator:id,name', 'session:id,topic'])->latest('occurred_on')->latest('id')->get()->map(fn (EventActivityRecord $record) => [
                 'id' => $record->id,
                 'kind' => $record->kind,
@@ -151,7 +156,7 @@ class EventReportController extends Controller
         abort_if($eventId && $allowedEventIds !== null && ! in_array($eventId, $allowedEventIds, true), 404);
 
         $transactionsQuery = EventFinance::query()
-            ->with(['event:id,title,slug', 'creator:id,name'])
+            ->with(['event:id,title,slug', 'creator:id,name', 'categoryMaster:id,code,name'])
             ->when($allowedEventIds !== null, fn ($query) => $query->whereIn('event_id', $allowedEventIds))
             ->when($eventId, fn ($query) => $query->where('event_id', $eventId))
             ->when($type, fn ($query) => $query->where('type', $type))
@@ -182,6 +187,7 @@ class EventReportController extends Controller
                 'event_name' => $entry->event?->name,
                 'type' => $entry->type,
                 'category' => $entry->category,
+                'category_name' => $entry->categoryMaster?->name ?? $entry->category,
                 'description' => $entry->description,
                 'sponsor_name' => $entry->sponsor_name,
                 'amount' => $entry->amount,
@@ -270,6 +276,7 @@ class EventReportController extends Controller
                 'search' => $search,
             ],
             'canCreateTransaction' => $canCreateTransaction,
+            'financeCategories' => $this->financeCategories(),
         ]);
     }
 
@@ -332,7 +339,7 @@ class EventReportController extends Controller
         $selectedEvent = $eventId ? Event::find($eventId) : null;
 
         $transactions = EventFinance::query()
-            ->with(['event:id,title,slug', 'creator:id,name'])
+            ->with(['event:id,title,slug', 'creator:id,name', 'categoryMaster:id,code,name'])
             ->when($allowedEventIds !== null, fn ($query) => $query->whereIn('event_id', $allowedEventIds))
             ->when($eventId, fn ($query) => $query->where('event_id', $eventId))
             ->when($type, fn ($query) => $query->where('type', $type))
@@ -351,6 +358,7 @@ class EventReportController extends Controller
                 'event_name' => $entry->event?->name,
                 'type' => $entry->type,
                 'category' => $entry->category,
+                'category_name' => $entry->categoryMaster?->name ?? $entry->category,
                 'description' => $entry->description,
                 'sponsor_name' => $entry->sponsor_name,
                 'amount' => $entry->amount,
@@ -388,6 +396,7 @@ class EventReportController extends Controller
                 'end_date' => $endDate,
                 'search' => $search,
             ],
+            'categoryLabels' => FinanceCategory::query()->pluck('name', 'code'),
             'printedBy' => $user->name,
             'printDate' => now()->translatedFormat('d F Y, H:i'),
         ]);
@@ -417,7 +426,12 @@ class EventReportController extends Controller
         $validated = $request->validate([
             'event_id' => ['required', 'integer', 'exists:events,id'],
             'type' => ['required', 'in:income,expense'],
-            'category' => ['required', 'in:sponsorship,registration,grant,accommodation,consumption,printing,venue,transport,other'],
+            'category' => [
+                'required',
+                Rule::exists('finance_categories', 'code')->where(
+                    fn ($query) => $query->whereIn('transaction_type', [$request->input('type'), 'both'])
+                ),
+            ],
             'description' => ['required', 'string', 'max:255'],
             'sponsor_name' => ['nullable', 'string', 'max:255', 'required_if:category,sponsorship'],
             'amount' => ['required', 'integer', 'min:1', 'max:999999999999'],
@@ -428,12 +442,6 @@ class EventReportController extends Controller
         /** @var Event $event */
         $event = Event::findOrFail($validated['event_id']);
         abort_unless($user->can('manageFinance', $event), 403);
-
-        $income = ['sponsorship', 'registration', 'grant'];
-        if ($validated['category'] !== 'other'
-            && (($validated['type'] === 'income') !== in_array($validated['category'], $income, true))) {
-            return back()->withErrors(['category' => 'Kategori tidak sesuai dengan jenis transaksi.'])->withInput();
-        }
 
         $data = collect($validated)->except(['event_id', 'evidence'])->toArray();
         $data['created_by'] = $user->id;
@@ -597,6 +605,17 @@ class EventReportController extends Controller
         return $exporter->attendance($event);
     }
 
+    public function preview(Event $event, string $report, EventReportExportService $exporter): JsonResponse
+    {
+        Gate::authorize('viewReport', $event);
+
+        if ($report === 'finance') {
+            Gate::authorize('viewFinance', $event);
+        }
+
+        return response()->json($exporter->preview($event, $report));
+    }
+
     public function exportOutcomes(Event $event, EventReportExportService $exporter): BinaryFileResponse
     {
         Gate::authorize('viewReport', $event);
@@ -626,5 +645,22 @@ class EventReportController extends Controller
     private function ensureActivityBelongsToEvent(Event $event, EventActivityRecord $record): void
     {
         abort_unless($record->event_id === $event->id, 404);
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private function financeCategories(): Collection
+    {
+        return FinanceCategory::query()
+            ->withCount('finances')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id', 'code', 'name', 'transaction_type', 'sort_order'])
+            ->map(fn (FinanceCategory $category) => [
+                'id' => $category->id,
+                'code' => $category->code,
+                'name' => $category->name,
+                'transaction_type' => $category->transaction_type,
+                'transactions_count' => $category->finances_count,
+            ]);
     }
 }

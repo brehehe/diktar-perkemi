@@ -450,7 +450,7 @@ class AdminEventDetailService
         $registrationFormsPayload = $event->eventParticipants->map(function (EventParticipant $ep) use ($registrationFormsByParticipant, $event) {
             /** @var EventRegistrationForm|null $rf */
             $rf = $registrationFormsByParticipant->get($ep->participant_id);
-            $resolvedForm = EventRegistrationFormController::resolveFormType($rf?->form_type ?? $ep->track?->code);
+            $resolvedForm = EventRegistrationFormController::resolveFormType($rf?->form_type ?? $ep->track?->code, $rf?->penataran_level ?? $ep->track?->name, $event);
 
             return [
                 'id' => $rf?->id,
@@ -465,6 +465,16 @@ class AdminEventDetailService
                 'track_name' => $ep->track?->name ?? '-',
                 'form_type' => $rf?->form_type ?? $resolvedForm['form_type'],
                 'penataran_level' => $rf?->penataran_level ?? $resolvedForm['penataran_level'],
+                'target_level' => $rf?->target_level ?? $ep->track?->name,
+                'last_exam_date' => $rf?->last_exam_date?->format('d F Y'),
+                'last_certificate_number' => $rf?->last_certificate_number,
+                'last_certificate_date' => $rf?->last_certificate_date?->format('d F Y'),
+                'dojo_name' => $rf?->dojo_name ?? $ep->participant?->origin_dojo ?? $ep->participant?->origin,
+                'dojo_leader_name' => $rf?->dojo_leader_name,
+                'dojo_leader_position' => $rf?->dojo_leader_position,
+                'exam_fee' => $rf?->exam_fee,
+                'is_kenshi' => ($rf?->form_type === 'KENSHI') || ($resolvedForm['form_type'] === 'KENSHI') || $event->isUkt(),
+                'form_code' => $resolvedForm['form_code'] ?? 'Formulir Pendaftaran',
                 'lampiran_label' => $resolvedForm['lampiran_label'],
                 'waiver_lampiran_label' => $resolvedForm['waiver_lampiran_label'],
                 'photo_requirements' => $resolvedForm['photo_requirements'],

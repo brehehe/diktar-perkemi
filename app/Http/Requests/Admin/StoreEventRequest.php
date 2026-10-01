@@ -31,6 +31,7 @@ class StoreEventRequest extends FormRequest
             'learning_method' => ['nullable', 'string', 'max:255'],
             'participant_quota' => ['required', 'integer', 'min:1'],
             'status' => ['required', 'in:draft,open_registration,ongoing,completed,archived'],
+            'event_type' => ['nullable', 'string', 'in:penataran,ukt,kenshi'],
             'cover_image' => ['nullable', 'string'],
             'banner_image' => ['nullable', 'string'],
         ];

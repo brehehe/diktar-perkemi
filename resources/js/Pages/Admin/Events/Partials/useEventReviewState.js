@@ -57,6 +57,8 @@ export default function useEventReviewState({ event, registrationForms, integrit
 
             const matchesTrack = formTrackFilter === 'all' ||
                 rf.track_code?.toLowerCase().includes(formTrackFilter.toLowerCase()) ||
+                rf.track_name?.toLowerCase().includes(formTrackFilter.toLowerCase()) ||
+                rf.target_level?.toLowerCase().includes(formTrackFilter.toLowerCase()) ||
                 rf.form_type?.toLowerCase() === formTrackFilter.toLowerCase();
 
             const matchesStatus = formStatusFilter === 'all' || rf.status === formStatusFilter;

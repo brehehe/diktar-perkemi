@@ -25,6 +25,7 @@ export default function Create({ organizers = [], canAssignOrganizer = true, cur
         learning_method: '',
         participant_quota: '',
         status: 'draft',
+        event_type: 'penataran',
         cover_image: '',
         banner_image: '',
     });
@@ -36,14 +37,14 @@ export default function Create({ organizers = [], canAssignOrganizer = true, cur
 
     return (
         <AdminLayout>
-            <Head title="Tambah Event Penataran Baru" />
+            <Head title="Tambah Event Baru" />
 
             <div className="mx-auto w-full max-w-full space-y-6">
                 <PageHeader
-                    title="Buat Event Penataran Baru"
-                    description="Daftarkan kegiatan penataran kualifikasi, beban jam pelajaran efektif, dan metode pelatihan."
+                    title="Buat Event Baru"
+                    description="Daftarkan kegiatan penataran (pelatih/penguji/wasit) atau gashuku & UKT kenshi."
                     breadcrumbs={[
-                        { label: 'Event Penataran', href: '/admin/event' },
+                        { label: 'Event', href: '/admin/event' },
                         { label: 'Tambah Event' },
                     ]}
                     action={
@@ -59,11 +60,26 @@ export default function Create({ organizers = [], canAssignOrganizer = true, cur
                         <div className="flex items-center gap-2 pb-3 border-b border-[#DCE7F3]">
                             <Calendar className="w-5 h-5 text-[#0B63CE]" />
                             <h3 className="font-display font-bold text-sm text-[#0E2747]">
-                                Informasi Umum Penataran
+                                Informasi Umum Kegiatan
                             </h3>
                         </div>
 
-                        <FormField label="Nama Event Penataran" error={errors.name} required>
+                        <FormField label="Tipe Kegiatan / Sasaran Peserta" error={errors.event_type} required>
+                            <Select
+                                value={data.event_type}
+                                onChange={(e) => setData('event_type', e.target.value)}
+                            >
+                                <option value="penataran">Penataran (Pelatih, Penguji, Wasit)</option>
+                                <option value="ukt">Gashuku & UKT (Kenshi)</option>
+                            </Select>
+                            <p className="mt-1 text-xs text-[#6B7C93]">
+                                {data.event_type === 'ukt'
+                                    ? 'Khusus peserta Kenshi: Menggunakan Formulir – 24 (Permohonan Ujian Kenshi), bank soal Kyu, serta e-Sertifikat & Transkrip Kelulusan Kenshi.'
+                                    : 'Peserta Pelatih/Penguji/Wasit: Menggunakan format Formulir Penataran (Lampiran A/B/C/D) dan Surat Pernyataan.'}
+                            </p>
+                        </FormField>
+
+                        <FormField label="Nama Event" error={errors.name} required>
                             <Input
                                 value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}

@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\CbtExamAttempt;
 use App\Models\Event;
 use App\Models\EventParticipant;
+use App\Models\EventRegistrationForm;
 use App\Models\Setting;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -28,6 +30,14 @@ class EventDocumentGenerator
             'PED' => 'penguji-daerah-a4.png',
             'PEN' => 'penguji-nasional-a4.png',
             'PN' => 'pelatih-nasional-a4.png',
+            'KYU-8' => 'sertifikat-kenshi-background.png',
+            'KYU-7' => 'sertifikat-kenshi-background.png',
+            'KYU-6' => 'sertifikat-kenshi-background.png',
+            'KYU-5' => 'sertifikat-kenshi-background.png',
+            'KYU-4' => 'sertifikat-kenshi-background.png',
+            'KYU-3' => 'sertifikat-kenshi-background.png',
+            'KYU-2' => 'sertifikat-kenshi-background.png',
+            'KYU-1' => 'sertifikat-kenshi-background.png',
         ],
         'transcript' => [
             'PD' => 'transkrip-background-tanpa-garis.png',
@@ -36,6 +46,14 @@ class EventDocumentGenerator
             'PED' => 'transkrip-background-tanpa-garis.png',
             'PEN' => 'transkrip-background-tanpa-garis.png',
             'PN' => 'transkrip-background-tanpa-garis.png',
+            'KYU-8' => 'transkrip-background-tanpa-garis.png',
+            'KYU-7' => 'transkrip-background-tanpa-garis.png',
+            'KYU-6' => 'transkrip-background-tanpa-garis.png',
+            'KYU-5' => 'transkrip-background-tanpa-garis.png',
+            'KYU-4' => 'transkrip-background-tanpa-garis.png',
+            'KYU-3' => 'transkrip-background-tanpa-garis.png',
+            'KYU-2' => 'transkrip-background-tanpa-garis.png',
+            'KYU-1' => 'transkrip-background-tanpa-garis.png',
         ],
     ];
 
@@ -48,6 +66,14 @@ class EventDocumentGenerator
         'PED' => 'PGJ-DRH',
         'PEN' => 'PGJ-NAS',
         'PN' => 'PLT-NAS',
+        'KYU-8' => 'UKT-KYU8',
+        'KYU-7' => 'UKT-KYU7',
+        'KYU-6' => 'UKT-KYU6',
+        'KYU-5' => 'UKT-KYU5',
+        'KYU-4' => 'UKT-KYU4',
+        'KYU-3' => 'UKT-KYU3',
+        'KYU-2' => 'UKT-KYU2',
+        'KYU-1' => 'UKT-KYU1',
     ];
 
     public const TRANSCRIPT_NUMBER_SUFFIXES = [
@@ -57,6 +83,14 @@ class EventDocumentGenerator
         'PED' => 'TR-PGJ-DRH',
         'PEN' => 'TR-PGJ-NAS',
         'PN' => 'TR-PLT-NAS',
+        'KYU-8' => 'TR-UKT-KYU8',
+        'KYU-7' => 'TR-UKT-KYU7',
+        'KYU-6' => 'TR-UKT-KYU6',
+        'KYU-5' => 'TR-UKT-KYU5',
+        'KYU-4' => 'TR-UKT-KYU4',
+        'KYU-3' => 'TR-UKT-KYU3',
+        'KYU-2' => 'TR-UKT-KYU2',
+        'KYU-1' => 'TR-UKT-KYU1',
     ];
 
     private const ROMAN_MONTHS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
@@ -68,6 +102,14 @@ class EventDocumentGenerator
         'PEN' => 'Sertifikat Penguji Nasional',
         'WAD' => 'Sertifikat Wasit Daerah',
         'WAN' => 'Sertifikat Wasit Nasional',
+        'KYU-8' => 'Sertifikat Kelulusan UKT - Kyu 8',
+        'KYU-7' => 'Sertifikat Kelulusan UKT - Kyu 7',
+        'KYU-6' => 'Sertifikat Kelulusan UKT - Kyu 6',
+        'KYU-5' => 'Sertifikat Kelulusan UKT - Kyu 5',
+        'KYU-4' => 'Sertifikat Kelulusan UKT - Kyu 4',
+        'KYU-3' => 'Sertifikat Kelulusan UKT - Kyu 3',
+        'KYU-2' => 'Sertifikat Kelulusan UKT - Kyu 2',
+        'KYU-1' => 'Sertifikat Kelulusan UKT - Kyu 1',
     ];
 
     public const TRANSCRIPT_NUMBER_LABELS = [
@@ -77,6 +119,14 @@ class EventDocumentGenerator
         'PEN' => 'E-Transkrip Penguji Nasional',
         'WAD' => 'E-Transkrip Wasit Daerah',
         'WAN' => 'E-Transkrip Wasit Nasional',
+        'KYU-8' => 'E-Transkrip UKT - Kyu 8',
+        'KYU-7' => 'E-Transkrip UKT - Kyu 7',
+        'KYU-6' => 'E-Transkrip UKT - Kyu 6',
+        'KYU-5' => 'E-Transkrip UKT - Kyu 5',
+        'KYU-4' => 'E-Transkrip UKT - Kyu 4',
+        'KYU-3' => 'E-Transkrip UKT - Kyu 3',
+        'KYU-2' => 'E-Transkrip UKT - Kyu 2',
+        'KYU-1' => 'E-Transkrip UKT - Kyu 1',
     ];
 
     /**
@@ -446,6 +496,10 @@ class EventDocumentGenerator
         }
 
         if ($type === 'transcript' && ! isset(self::STANDARD_TRACK_MODULES[$trackCode])) {
+            if (self::isKenshiTrack($trackCode) || $event->isUkt()) {
+                return null;
+            }
+
             $moduleCount = $event->modules
                 ->filter(fn ($module) => in_array($trackCode, $module->track_codes ?? [], true))
                 ->count();
@@ -456,6 +510,13 @@ class EventDocumentGenerator
         }
 
         return null;
+    }
+
+    public static function isKenshiTrack(?string $trackCode): bool
+    {
+        $code = strtoupper(trim((string) $trackCode));
+
+        return str_starts_with($code, 'KYU') || in_array($code, ['KYU-1', 'KYU-2', 'KYU-3', 'KYU-4', 'KYU-5', 'KYU-6', 'KYU-7', 'KYU-8'], true);
     }
 
     public function suggestedNumber(Event $event, EventParticipant $eventParticipant, string $type, ?string $documentTrackCode = null): ?string
@@ -746,6 +807,11 @@ class EventDocumentGenerator
         $eventParticipant->loadMissing(['participant', 'event']);
         $participant = $eventParticipant->participant;
         $event = $eventParticipant->event ?? Event::query()->find($eventParticipant->event_id);
+
+        if (self::isKenshiTrack($trackCode) || ($event && $event->isUkt())) {
+            return $this->kenshiCertificateOverlays($eventParticipant, $certificateNumber, $trackCode);
+        }
+
         $sigSettings = $event ? $this->effectiveSignatureSettings($event) : [
             'city' => self::DEFAULT_SIGNATURE_SETTINGS['city'],
             'organization' => self::DEFAULT_SIGNATURE_SETTINGS['organization'],
@@ -1055,7 +1121,11 @@ class EventDocumentGenerator
         $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
         $eventParticipant->loadMissing(['participant', 'event']);
         $participant = $eventParticipant->participant;
-        $event = $eventParticipant->event;
+        $event = $eventParticipant->event ?? Event::query()->find($eventParticipant->event_id);
+
+        if (self::isKenshiTrack($trackCode) || ($event && $event->isUkt())) {
+            return $this->kenshiTranscriptOverlays($eventParticipant, $transcriptNumber, $trackCode);
+        }
 
         $overlays = [];
 
@@ -1228,11 +1298,575 @@ class EventDocumentGenerator
         return $overlays;
     }
 
+    private function generateQrImageFile(string $data, int $modulePx = 6): string
+    {
+        $matrix = QrCodeService::generateMatrix($data);
+        $count = count($matrix);
+        $quiet = 2;
+        $totalModules = $count + ($quiet * 2);
+        $imgSize = $totalModules * $modulePx;
+        $img = imagecreatetruecolor($imgSize, $imgSize);
+        $white = imagecolorallocate($img, 255, 255, 255);
+        $black = imagecolorallocate($img, 15, 38, 82);
+        imagefilledrectangle($img, 0, 0, $imgSize, $imgSize, $white);
+        for ($r = 0; $r < $count; $r++) {
+            for ($c = 0; $c < $count; $c++) {
+                if ($matrix[$r][$c] === 1) {
+                    imagefilledrectangle(
+                        $img,
+                        ($c + $quiet) * $modulePx,
+                        ($r + $quiet) * $modulePx,
+                        ($c + $quiet + 1) * $modulePx - 1,
+                        ($r + $quiet + 1) * $modulePx - 1,
+                        $black
+                    );
+                }
+            }
+        }
+        $tmpFile = tempnam(sys_get_temp_dir(), 'qr_').'.png';
+        imagepng($img, $tmpFile);
+        imagedestroy($img);
+
+        return $tmpFile;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function kenshiCertificateOverlays(EventParticipant $eventParticipant, string $certificateNumber, ?string $documentTrackCode = null): array
+    {
+        $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
+        $eventParticipant->loadMissing(['participant', 'event']);
+        $participant = $eventParticipant->participant;
+        $event = $eventParticipant->event ?? Event::query()->find($eventParticipant->event_id);
+
+        $form = EventRegistrationForm::where('event_participant_id', $eventParticipant->id)->first()
+            ?? ($participant ? EventRegistrationForm::where('participant_id', $participant->id)->where('event_id', $eventParticipant->event_id)->first() : null);
+
+        $sigSettings = $event ? $this->effectiveSignatureSettings($event) : [
+            'city' => self::DEFAULT_SIGNATURE_SETTINGS['city'],
+            'organization' => self::DEFAULT_SIGNATURE_SETTINGS['organization'],
+            'position' => self::DEFAULT_SIGNATURE_SETTINGS['position'],
+            'signer_name' => self::DEFAULT_SIGNATURE_SETTINGS['signer_name'],
+            'date_formatted' => $this->indonesianDate(today()),
+            'parsed_date' => today(),
+            'signature_path' => null,
+        ];
+
+        $targetLevel = $form?->target_level
+            ?? $participant?->target_certification
+            ?? ($trackCode ? str_replace('-', ' ', $trackCode) : 'KYU 5');
+
+        $targetRankTitle = match (strtoupper(trim((string) $targetLevel))) {
+            'KYU 1', 'KYU-1', '1' => 'KYU 1 (IKKYU)',
+            'KYU 2', 'KYU-2', '2' => 'KYU 2 (NIKYU)',
+            'KYU 3', 'KYU-3', '3' => 'KYU 3 (SANKYU)',
+            'KYU 4', 'KYU-4', '4' => 'KYU 4 (YONKYU)',
+            'KYU 5', 'KYU-5', '5' => 'KYU 5 (GOKYU)',
+            'KYU 6', 'KYU-6', '6' => 'KYU 6 (ROKKYU)',
+            'KYU 7', 'KYU-7', '7' => 'KYU 7 (NANAKYU)',
+            'KYU 8', 'KYU-8', '8' => 'KYU 8 (HACHIKYU)',
+            default => strtoupper(trim((string) $targetLevel)),
+        };
+
+        $previousLevel = $form?->dan_level
+            ?? $participant?->dan_rank
+            ?? $participant?->dan_roman
+            ?? 'Tingkat Sebelumnya';
+
+        $kenshiId = $participant?->kenshi_id_number ?? $form?->kenshi_id_number ?? '-';
+        $birthPlace = $form?->birth_place ?? $participant?->birth_place ?? 'Surabaya';
+        $bDate = $form?->birth_date ?? $participant?->birth_date;
+        $birthDateFormatted = $bDate ? $this->indonesianDate($bDate) : '-';
+        $ttl = ($birthPlace !== '-' && $birthDateFormatted !== '-') ? "{$birthPlace}, {$birthDateFormatted}" : ($birthPlace ?: $birthDateFormatted);
+
+        $dojo = $form?->dojo_name ?? $participant?->origin_dojo ?? $participant?->dojo ?? '-';
+        $city = $participant?->origin_city ?? ($participant?->simperkemi_data['branch_name'] ?? 'Kota Surabaya');
+        $province = $participant?->origin_province ?? ($participant?->simperkemi_data['prov_name'] ?? 'Jawa Timur');
+
+        $issueDate = $sigSettings['parsed_date'] ?? $event?->end_date ?? today();
+        $issueDateFormatted = $this->indonesianDate($issueDate);
+
+        // Canvas: 3508 x 2480 px, full page landscape A4 PDF
+        $centerX = 1754;
+        $navy = [0.06, 0.15, 0.32];
+        $crimson = [0.75, 0.08, 0.12];
+        $gold = [0.78, 0.60, 0.15];
+        $dark = [0.08, 0.08, 0.08];
+        $muted = [0.35, 0.35, 0.35];
+
+        $overlays = [];
+
+        // Logos: Top Left (PERKEMI) & Top Right (WSKO)
+        $logoPerkemiPath = resource_path('document-templates/'.self::TEMPLATE_DIR.'/logo-perkemi.png');
+        $logoWskoPath = resource_path('document-templates/'.self::TEMPLATE_DIR.'/logo-wsko.png');
+
+        if (is_readable($logoPerkemiPath)) {
+            $overlays[] = $this->imageOverlay($logoPerkemiPath, 360, 130, 220, 220, true);
+        }
+        if (is_readable($logoWskoPath)) {
+            $overlays[] = $this->imageOverlay($logoWskoPath, 2928, 130, 220, 220, true);
+        }
+
+        // Header: Center X = 1754
+        $overlays[] = $this->centeredText('PENGURUS BESAR PERKEMI', $centerX, 155, 40, true, $navy);
+        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $centerX, 215, 52, true, $navy);
+        $overlays[] = $this->centeredText('Anggota Federasi Shorinji Kempo Dunia (WSKO) • Anggota KONI / KOI', $centerX, 275, 28, false, $muted);
+        $overlays[] = $this->coloredRectangle(800, 310, 1908, 4, $gold);
+
+        // Title: SERTIFIKAT KELULUSAN
+        $overlays[] = $this->centeredText('SERTIFIKAT KELULUSAN', $centerX, 395, 66, true, $crimson);
+        $overlays[] = $this->centeredText('UJIAN KENAIKAN TINGKAT SHORINJI KEMPO', $centerX, 470, 46, true, $navy);
+
+        // Certificate Number with gold rule accents
+        $nomorText = 'Nomor : '.$certificateNumber;
+        $nomorSize = 36;
+        $nomorWidth = $this->textWidth($nomorText, $nomorSize, true);
+        $nomorStartX = $centerX - ($nomorWidth / 2);
+        $nomorEndX = $nomorStartX + $nomorWidth;
+
+        $overlays[] = $this->coloredRectangle(550, 532, max(20, $nomorStartX - 40 - 550), 3.5, $gold);
+        $overlays[] = $this->coloredRectangle($nomorEndX + 40, 532, max(20, 2958 - ($nomorEndX + 40)), 3.5, $gold);
+        $overlays[] = $this->centeredText($nomorText, $centerX, 540, $nomorSize, true, $dark);
+
+        // Recipient
+        $overlays[] = $this->centeredText('Diberikan kepada :', $centerX, 615, 32, false, $muted, true);
+        $participantName = strtoupper($participant?->name ?? 'NAMA PESERTA');
+        $nameSize = 58;
+        $overlays[] = $this->centeredText($participantName, $centerX, 700, $nameSize, true, $navy);
+        $nameWidth = $this->textWidth($participantName, $nameSize, true);
+        $overlays[] = $this->coloredRectangle($centerX - ($nameWidth / 2), 714, $nameWidth, 3.5, $gold);
+
+        // Middle 3-Column Area (top: 790 to 1230)
+        // Col 1 (Left): Foto Peserta (x: 360, width: 330, height: 440)
+        $overlays[] = $this->coloredRectangle(358, 788, 334, 444, $gold);
+        $overlays[] = $this->coloredRectangle(360, 790, 330, 440, [0.96, 0.96, 0.96]);
+
+        $fullPhotoPath = null;
+        if (! empty($participant?->photo_path) && Storage::disk('public')->exists($participant->photo_path)) {
+            $fullPhotoPath = Storage::disk('public')->path($participant->photo_path);
+        }
+
+        if ($fullPhotoPath && is_readable($fullPhotoPath)) {
+            $overlays[] = $this->imageOverlay($fullPhotoPath, 364, 794, 322, 432, true);
+        } else {
+            $overlays[] = $this->centeredText('PAS FOTO', 525, 960, 28, true, [0.55, 0.55, 0.55]);
+            $overlays[] = $this->centeredText('3 x 4', 525, 1005, 26, false, [0.55, 0.55, 0.55]);
+            $overlays[] = $this->centeredText('KENSHI', 525, 1045, 24, true, [0.65, 0.65, 0.65]);
+        }
+
+        // Col 2 (Center): Identity Table (x: 740 to 2500)
+        $labelX = 770;
+        $colonX = 1330;
+        $valX = 1370;
+        $rowY = 835;
+        $rowGap = 60;
+        $fSize = 34;
+
+        $rows = [
+            ['Nomor Induk Kenshi (NIK)', $kenshiId, true, $dark],
+            ['Tempat, Tanggal Lahir', $ttl, false, $dark],
+            ['Dojo Asal', $dojo, false, $dark],
+            ['Pengcab / Kota', $city, false, $dark],
+            ['Pengurus Provinsi', $province, false, $dark],
+            ['Tingkat Sebelumnya', $previousLevel, false, $dark],
+            ['Tingkat Yang Dicapai', $targetRankTitle, true, $crimson],
+        ];
+
+        foreach ($rows as $i => [$lbl, $val, $isBold, $color]) {
+            $currentY = $rowY + ($i * $rowGap);
+            $overlays[] = $this->text($lbl, $labelX, $currentY, $fSize, false, $dark);
+            $overlays[] = $this->text(':', $colonX, $currentY, $fSize, false, $dark);
+            $overlays[] = $this->text((string) $val, $valX, $currentY, $fSize, $isBold, $color);
+        }
+
+        // Col 3 (Right): QR Code & Official Verification Badge (x: 2540, width: 610)
+        $overlays[] = $this->coloredRectangle(2538, 788, 614, 444, $gold);
+        $overlays[] = $this->coloredRectangle(2540, 790, 610, 440, [1.0, 1.0, 1.0]);
+
+        $qrPayload = "PERKEMI|UKT|CERT:{$certificateNumber}|NIK:{$kenshiId}|NAMA:{$participantName}|TINGKAT:{$targetRankTitle}";
+        $qrFile = $this->generateQrImageFile($qrPayload, 6);
+        if ($qrFile && is_readable($qrFile)) {
+            $overlays[] = $this->imageOverlay($qrFile, 2745, 815, 200, 200, true);
+        }
+
+        $overlays[] = $this->centeredText('SCAN VERIFIKASI RESMI', 2845, 1050, 22, true, $navy);
+
+        // Red verification badge
+        $overlays[] = $this->coloredRectangle(2570, 1075, 550, 125, [0.85, 0.05, 0.05]);
+        $overlays[] = $this->coloredRectangle(2572, 1077, 546, 121, [0.99, 0.95, 0.95]);
+        $overlays[] = $this->centeredText('VERIFIED PB PERKEMI', 2845, 1115, 24, true, [0.85, 0.05, 0.05]);
+        $overlays[] = $this->centeredText('TERDAFTAR DI DATABASE NASIONAL', 2845, 1150, 18, true, $dark);
+        $overlays[] = $this->centeredText('Sesuai Mandat PB PERKEMI & Dewan Penguji', 2845, 1180, 16, false, $muted, true);
+
+        // Narasi Kelulusan
+        $overlays[] = $this->centeredText(
+            'Telah mengikuti seluruh rangkaian Ujian Kenaikan Tingkat (UKT) Shorinji Kempo dan dinyatakan LULUS,',
+            $centerX, 1285, 34, false, $dark
+        );
+        $overlays[] = $this->centeredText(
+            "serta berhak menyandang tingkat {$targetRankTitle}, dengan segala hak dan kewajiban yang melekat padanya",
+            $centerX, 1335, 34, true, $navy
+        );
+        $overlays[] = $this->centeredText(
+            'sesuai dengan ketentuan dan Anggaran Dasar / Anggaran Rumah Tangga PERSAUDARAAN SHORINJI KEMPO INDONESIA.',
+            $centerX, 1385, 34, false, $dark
+        );
+
+        // Date Line
+        $overlays[] = $this->centeredText(
+            "Ditetapkan di : {$city}, {$issueDateFormatted}",
+            $centerX, 1475, 34, true, $navy
+        );
+
+        // 4 Signature Columns
+        $col1X = 660;
+        $col2X = 1390;
+        $col3X = 2120;
+        $col4X = 2850;
+
+        $panitiaName = 'Ketua Panitia Pelaksana';
+        $pengkotLeader = 'Drs. H. Iwan Setiawan, M.Si';
+        $pengprovLeader = 'Drs. Henky Basuki, M.Pd';
+        $examinerLeader = $sigSettings['signer_name'] ?? 'Sensei Suyanto (V DAN)';
+
+        // Col 1: Penyelenggara
+        $overlays[] = $this->centeredText('PENYELENGGARA UJIAN', $col1X, 1550, 32, true, $navy);
+        $overlays[] = $this->centeredText('Ketua Panitia Pelaksana', $col1X, 1595, 28, false, $dark);
+        $overlays[] = $this->centeredText($panitiaName, $col1X, 1910, 32, true, $dark);
+        $pWidth = $this->textWidth($panitiaName, 32, true);
+        $overlays[] = $this->coloredRectangle($col1X - ($pWidth / 2), 1922, $pWidth, 3, $dark);
+        $overlays[] = $this->centeredText('Panitia Pelaksana', $col1X, 1955, 26, false, $muted);
+
+        // Col 2: Pengkab / Pengkot
+        $overlays[] = $this->centeredText('PENGURUS KAB/KOTA', $col2X, 1550, 32, true, $navy);
+        $overlays[] = $this->centeredText('PERKEMI '.strtoupper($city), $col2X, 1595, 28, false, $dark);
+        $overlays[] = $this->centeredText($pengkotLeader, $col2X, 1910, 32, true, $dark);
+        $cWidth = $this->textWidth($pengkotLeader, 32, true);
+        $overlays[] = $this->coloredRectangle($col2X - ($cWidth / 2), 1922, $cWidth, 3, $dark);
+        $overlays[] = $this->centeredText('Ketua Pengkot / Pengkab', $col2X, 1955, 26, false, $muted);
+
+        // Col 3: Pengprov
+        $overlays[] = $this->centeredText('PENGURUS PROVINSI', $col3X, 1550, 32, true, $navy);
+        $overlays[] = $this->centeredText('PERKEMI '.strtoupper($province), $col3X, 1595, 28, false, $dark);
+        $overlays[] = $this->centeredText($pengprovLeader, $col3X, 1910, 32, true, $dark);
+        $prWidth = $this->textWidth($pengprovLeader, 32, true);
+        $overlays[] = $this->coloredRectangle($col3X - ($prWidth / 2), 1922, $prWidth, 3, $dark);
+        $overlays[] = $this->centeredText('Ketua Umum Pengprov', $col3X, 1955, 26, false, $muted);
+
+        // Col 4: Dewan Penguji
+        $overlays[] = $this->centeredText('DEWAN PENGUJI', $col4X, 1550, 32, true, $navy);
+        $overlays[] = $this->centeredText('(Mandat PB PERKEMI)', $col4X, 1595, 28, false, $muted, true);
+
+        if (! empty($sigSettings['signature_path']) && Storage::disk('public')->exists($sigSettings['signature_path'])) {
+            $sigPath = Storage::disk('public')->path($sigSettings['signature_path']);
+            if (is_readable($sigPath)) {
+                $overlays[] = $this->imageOverlay($sigPath, $col4X - 150, 1660, 300, 130);
+            }
+        }
+
+        $overlays[] = $this->centeredText($examinerLeader, $col4X, 1910, 32, true, $dark);
+        $eWidth = $this->textWidth($examinerLeader, 32, true);
+        $overlays[] = $this->coloredRectangle($col4X - ($eWidth / 2), 1922, $eWidth, 3, $dark);
+        $overlays[] = $this->centeredText('Ketua Dewan Penguji', $col4X, 1955, 26, false, $muted);
+
+        return $overlays;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function kenshiTranscriptOverlays(EventParticipant $eventParticipant, string $transcriptNumber, ?string $documentTrackCode = null): array
+    {
+        $trackCode = self::resolveDocumentTrack($eventParticipant->track_code, $documentTrackCode);
+        $eventParticipant->loadMissing(['participant', 'event']);
+        $participant = $eventParticipant->participant;
+        $event = $eventParticipant->event ?? Event::query()->find($eventParticipant->event_id);
+
+        $form = EventRegistrationForm::where('event_participant_id', $eventParticipant->id)->first()
+            ?? ($participant ? EventRegistrationForm::where('participant_id', $participant->id)->where('event_id', $eventParticipant->event_id)->first() : null);
+
+        $sigSettings = $event ? $this->effectiveSignatureSettings($event) : [
+            'city' => self::DEFAULT_SIGNATURE_SETTINGS['city'],
+            'organization' => self::DEFAULT_SIGNATURE_SETTINGS['organization'],
+            'position' => self::DEFAULT_SIGNATURE_SETTINGS['position'],
+            'signer_name' => self::DEFAULT_SIGNATURE_SETTINGS['signer_name'],
+            'date_formatted' => $this->indonesianDate(today()),
+            'parsed_date' => today(),
+            'signature_path' => null,
+        ];
+
+        $targetLevel = $form?->target_level
+            ?? $participant?->target_certification
+            ?? ($trackCode ? str_replace('-', ' ', $trackCode) : 'KYU 5');
+
+        $targetRankTitle = match (strtoupper(trim((string) $targetLevel))) {
+            'KYU 1', 'KYU-1', '1' => 'KYU 1 (IKKYU)',
+            'KYU 2', 'KYU-2', '2' => 'KYU 2 (NIKYU)',
+            'KYU 3', 'KYU-3', '3' => 'KYU 3 (SANKYU)',
+            'KYU 4', 'KYU-4', '4' => 'KYU 4 (YONKYU)',
+            'KYU 5', 'KYU-5', '5' => 'KYU 5 (GOKYU)',
+            'KYU 6', 'KYU-6', '6' => 'KYU 6 (ROKKYU)',
+            'KYU 7', 'KYU-7', '7' => 'KYU 7 (NANAKYU)',
+            'KYU 8', 'KYU-8', '8' => 'KYU 8 (HACHIKYU)',
+            default => strtoupper(trim((string) $targetLevel)),
+        };
+
+        $kenshiId = $participant?->kenshi_id_number ?? $form?->kenshi_id_number ?? '-';
+        $dojo = $form?->dojo_name ?? $participant?->origin_dojo ?? $participant?->dojo ?? '-';
+        $city = $participant?->origin_city ?? ($participant?->simperkemi_data['branch_name'] ?? 'Kota Surabaya');
+        $province = $participant?->origin_province ?? ($participant?->simperkemi_data['prov_name'] ?? 'Jawa Timur');
+        $eventLocation = $event?->place ? explode(',', $event->place)[0] : ($sigSettings['city'] ?? 'Surabaya');
+
+        $certNumField = self::documentField('certificate', 'number', $eventParticipant->track_code, $trackCode);
+        $certNumber = $eventParticipant->{$certNumField} ?: $this->configuredNumber($event, $eventParticipant, 'certificate', $trackCode);
+
+        $issueDate = $sigSettings['parsed_date'] ?? $event?->end_date ?? today();
+        $issueDateFormatted = $this->indonesianDate($issueDate);
+
+        // Canvas: 1685 x 1192 px, landscape A4 PDF
+        $titleCenterX = 843;
+        $navy = [0.06, 0.15, 0.32];
+        $crimson = [0.75, 0.08, 0.12];
+        $gold = [0.78, 0.60, 0.15];
+        $dark = [0.08, 0.08, 0.08];
+        $muted = [0.35, 0.35, 0.35];
+        $green = [0.0, 0.55, 0.25];
+
+        $overlays = [];
+
+        // Logos: Top Left (PERKEMI) & Top Right (WSKO)
+        $logoPerkemiPath = resource_path('document-templates/'.self::TEMPLATE_DIR.'/logo-perkemi.png');
+        $logoWskoPath = resource_path('document-templates/'.self::TEMPLATE_DIR.'/logo-wsko.png');
+
+        if (is_readable($logoPerkemiPath)) {
+            $overlays[] = $this->imageOverlay($logoPerkemiPath, 100, 35, 95, 95, true);
+        }
+        if (is_readable($logoWskoPath)) {
+            $overlays[] = $this->imageOverlay($logoWskoPath, 1490, 35, 95, 95, true);
+        }
+
+        // Header
+        $overlays[] = $this->centeredText('PENGURUS BESAR PERKEMI', $titleCenterX, 42, 24, true, $navy);
+        $overlays[] = $this->centeredText('PERSAUDARAAN SHORINJI KEMPO INDONESIA', $titleCenterX, 72, 28, true, $navy);
+        $overlays[] = $this->centeredText('e-TRANSKRIP HASIL UJIAN KENAIKAN TINGKAT', $titleCenterX, 105, 24, true, $crimson);
+        $overlays[] = $this->centeredText('TINGKAT : '.$targetRankTitle, $titleCenterX, 136, 20, true, $navy);
+        $overlays[] = $this->coloredRectangle(100, 168, 1485, 2.5, $gold);
+
+        // Metadata Card (top: 185 to 295)
+        $overlays[] = $this->coloredRectangle(98, 183, 1489, 114, $gold);
+        $overlays[] = $this->coloredRectangle(100, 185, 1485, 110, [1.0, 1.0, 1.0]);
+
+        $mLabelX1 = 120;
+        $mColonX1 = 250;
+        $mValX1 = 265;
+
+        $mLabelX2 = 880;
+        $mColonX2 = 1060;
+        $mValX2 = 1075;
+        $mY = 212;
+        $mGap = 24;
+        $mSize = 15;
+
+        // Left Col
+        $overlays[] = $this->text('No. Transkrip', $mLabelX1, $mY, $mSize, false, $dark);
+        $overlays[] = $this->text(':', $mColonX1, $mY, $mSize, false, $dark);
+        $overlays[] = $this->text($transcriptNumber, $mValX1, $mY, $mSize, true, $navy);
+
+        $overlays[] = $this->text('No. Sertifikat', $mLabelX1, $mY + $mGap, $mSize, false, $dark);
+        $overlays[] = $this->text(':', $mColonX1, $mY + $mGap, $mSize, false, $dark);
+        $overlays[] = $this->text($certNumber ?: '-', $mValX1, $mY + $mGap, $mSize, false, $dark);
+
+        $overlays[] = $this->text('Nama Kenshi', $mLabelX1, $mY + ($mGap * 2), $mSize, false, $dark);
+        $overlays[] = $this->text(':', $mColonX1, $mY + ($mGap * 2), $mSize, false, $dark);
+        $overlays[] = $this->text(strtoupper($participant?->name ?? 'NAMA PESERTA'), $mValX1, $mY + ($mGap * 2), $mSize, true, $dark);
+
+        $overlays[] = $this->text('NIK', $mLabelX1, $mY + ($mGap * 3), $mSize, false, $dark);
+        $overlays[] = $this->text(':', $mColonX1, $mY + ($mGap * 3), $mSize, false, $dark);
+        $overlays[] = $this->text($kenshiId, $mValX1, $mY + ($mGap * 3), $mSize, false, $dark);
+
+        // Right Col
+        $overlays[] = $this->text('Dojo / Cabang', $mLabelX2, $mY, $mSize, false, $dark);
+        $overlays[] = $this->text(':', $mColonX2, $mY, $mSize, false, $dark);
+        $overlays[] = $this->text("{$dojo} / {$city}", $mValX2, $mY, $mSize, false, $dark);
+
+        $overlays[] = $this->text('Pengprov', $mLabelX2, $mY + $mGap, $mSize, false, $dark);
+        $overlays[] = $this->text(':', $mColonX2, $mY + $mGap, $mSize, false, $dark);
+        $overlays[] = $this->text($province, $mValX2, $mY + $mGap, $mSize, false, $dark);
+
+        $overlays[] = $this->text('Tgl / Tempat Ujian', $mLabelX2, $mY + ($mGap * 2), $mSize, false, $dark);
+        $overlays[] = $this->text(':', $mColonX2, $mY + ($mGap * 2), $mSize, false, $dark);
+        $overlays[] = $this->text("{$issueDateFormatted} / {$eventLocation}", $mValX2, $mY + ($mGap * 2), $mSize, false, $dark);
+
+        $overlays[] = $this->text('Tingkat Diuji', $mLabelX2, $mY + ($mGap * 3), $mSize, false, $dark);
+        $overlays[] = $this->text(':', $mColonX2, $mY + ($mGap * 3), $mSize, false, $dark);
+        $overlays[] = $this->text($targetRankTitle, $mValX2, $mY + ($mGap * 3), $mSize, true, $crimson);
+
+        // Table Rekapitulasi (top: 315)
+        $overlays[] = $this->text('REKAPITULASI HASIL PENILAIAN UJIAN', 100, 328, 17, true, $navy);
+
+        $isSeniorKyu = in_array(strtoupper(trim((string) $trackCode)), ['KYU-1', 'KYU-2', 'KYU-3', 'KYU 1', 'KYU 2', 'KYU 3'], true);
+
+        $cbtAttempt = CbtExamAttempt::where('participant_id', $participant?->id ?? 0)
+            ->where('event_id', $event?->id ?? 0)
+            ->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)
+            ->latest()
+            ->first();
+
+        $cbtScore = $cbtAttempt?->total_score ? round((float) $cbtAttempt->total_score, 1) : 85.0;
+
+        if ($isSeniorKyu) {
+            $items = [
+                ['1', 'Ujian Filsafat / Tokuhon', $cbtScore, '20%', round($cbtScore * 0.2, 1), 'Kompeten'],
+                ['2', 'Basic Techniques', 84.0, '20%', 16.8, 'Kompeten'],
+                ['3', 'Selected Techniques', 85.0, '20%', 17.0, 'Kompeten'],
+                ['4', 'Paired Embu', 86.0, '20%', 17.2, 'Kompeten'],
+                ['5', "Un'yoho (Application)", 85.0, '20%', 17.0, 'Kompeten'],
+            ];
+            $finalScore = round(($cbtScore * 0.2) + 16.8 + 17.0 + 17.2 + 17.0, 1);
+        } else {
+            $items = [
+                ['1', 'Ujian Teori / Tokuhon', $cbtScore, '20%', round($cbtScore * 0.2, 1), 'Kompeten'],
+                ['2', 'Kihon / Teknik Dasar', 84.0, '30%', 25.2, 'Kompeten'],
+                ['3', 'Hokei / Teknik Tingkat', 86.0, '30%', 25.8, 'Kompeten'],
+                ['4', 'Evaluasi Praktik', 85.0, '20%', 17.0, 'Kompeten'],
+            ];
+            $finalScore = round(($cbtScore * 0.2) + 25.2 + 25.8 + 17.0, 1);
+        }
+
+        $predicate = match (true) {
+            $finalScore >= 85.0 => 'SANGAT BAIK',
+            $finalScore >= 75.0 => 'BAIK',
+            $finalScore >= 65.0 => 'CUKUP',
+            default => 'LULUS',
+        };
+
+        $tblTop = 345;
+        $tblW = 1485;
+        $rowH = 30;
+
+        // Table Header
+        $overlays[] = $this->coloredRectangle(100, $tblTop, $tblW, $rowH, $navy);
+        $overlays[] = $this->centeredText('No', 130, $tblTop + 21, 14, true, [1, 1, 1]);
+        $overlays[] = $this->text('Komponen Penilaian', 180, $tblTop + 21, 14, true, [1, 1, 1]);
+        $overlays[] = $this->centeredText('Nilai Sistem', 845, $tblTop + 21, 14, true, [1, 1, 1]);
+        $overlays[] = $this->centeredText('Bobot', 1025, $tblTop + 21, 14, true, [1, 1, 1]);
+        $overlays[] = $this->centeredText('Nilai Terbobot', 1205, $tblTop + 21, 14, true, [1, 1, 1]);
+        $overlays[] = $this->centeredText('Keterangan', 1445, $tblTop + 21, 14, true, [1, 1, 1]);
+
+        $currRowTop = $tblTop + $rowH;
+        foreach ($items as $idx => [$no, $name, $valSys, $bbt, $valBbt, $ket]) {
+            $bg = ($idx % 2 === 0) ? [1.0, 1.0, 1.0] : [0.97, 0.97, 0.98];
+            $overlays[] = $this->coloredRectangle(100, $currRowTop, $tblW, $rowH, $bg);
+            $overlays[] = $this->coloredRectangle(100, $currRowTop + $rowH - 1, $tblW, 1, [0.85, 0.85, 0.85]);
+
+            $textY = $currRowTop + 21;
+            $overlays[] = $this->centeredText((string) $no, 130, $textY, 14, false, $dark);
+            $overlays[] = $this->text($name, 180, $textY, 14, false, $dark);
+            $overlays[] = $this->centeredText(number_format((float) $valSys, 1), 845, $textY, 14, false, $dark);
+            $overlays[] = $this->centeredText($bbt, 1025, $textY, 14, false, $dark);
+            $overlays[] = $this->centeredText(number_format((float) $valBbt, 1), 1205, $textY, 14, false, $dark);
+            $overlays[] = $this->centeredText($ket, 1445, $textY, 14, false, $green);
+
+            $currRowTop += $rowH;
+        }
+
+        // Nilai Akhir Row
+        $overlays[] = $this->coloredRectangle(100, $currRowTop, $tblW, $rowH + 2, [0.96, 0.92, 0.80]);
+        $overlays[] = $this->text('NILAI AKHIR', 400, $currRowTop + 22, 15, true, $navy);
+        $overlays[] = $this->centeredText('100%', 1025, $currRowTop + 22, 15, true, $navy);
+        $overlays[] = $this->centeredText(number_format($finalScore, 1), 1205, $currRowTop + 22, 15, true, $crimson);
+        $overlays[] = $this->centeredText($predicate, 1445, $currRowTop + 22, 15, true, $navy);
+
+        // Status Card
+        $statusCardTop = $currRowTop + $rowH + 18;
+        $overlays[] = $this->coloredRectangle(98, $statusCardTop - 2, 1489, 46, $gold);
+        $overlays[] = $this->coloredRectangle(100, $statusCardTop, 1485, 42, [1, 1, 1]);
+
+        $stY = $statusCardTop + 27;
+        $overlays[] = $this->text('STATUS HASIL UJIAN :', 130, $stY, 15, false, $dark);
+        $overlays[] = $this->text('LULUS', 300, $stY, 17, true, $green);
+        $overlays[] = $this->text("•  Tingkat Hasil: {$targetRankTitle}", 390, $stY, 15, true, $navy);
+        $overlays[] = $this->text('•  ID Hasil: EXAM-'.str_pad((string) $eventParticipant->id, 6, '0', STR_PAD_LEFT), 780, $stY, 14, false, $muted);
+        $overlays[] = $this->text("•  Tanggal Penetapan: {$issueDateFormatted}", 1150, $stY, 14, false, $dark);
+
+        // Disclaimer
+        $overlays[] = $this->centeredText(
+            'Seluruh identitas, nilai, predikat, tingkat hasil, dan status kelulusan pada e-Transkrip ini dihasilkan otomatis dari data registrasi dan sistem hasil ujian.',
+            $titleCenterX, $statusCardTop + 65, 13, false, $muted, true
+        );
+
+        // 4 Signatures (top: 670 to 860)
+        $tCol1X = 270;
+        $tCol2X = 650;
+        $tCol3X = 1030;
+        $tCol4X = 1410;
+
+        $panitiaName = 'Ketua Panitia Pelaksana';
+        $pengkotLeader = 'Drs. H. Iwan Setiawan, M.Si';
+        $pengprovLeader = 'Drs. Henky Basuki, M.Pd';
+        $examinerLeader = $sigSettings['signer_name'] ?? 'Sensei Suyanto (V DAN)';
+
+        $sigHdrY = $statusCardTop + 95;
+        // Col 1
+        $overlays[] = $this->centeredText('PENYELENGGARA UJIAN', $tCol1X, $sigHdrY, 16, true, $navy);
+        $overlays[] = $this->centeredText('Panitia Pelaksana', $tCol1X, $sigHdrY + 22, 14, false, $dark);
+        $overlays[] = $this->centeredText($panitiaName, $tCol1X, $sigHdrY + 140, 15, true, $dark);
+        $overlays[] = $this->coloredRectangle($tCol1X - 90, $sigHdrY + 148, 180, 2, $dark);
+        $overlays[] = $this->centeredText('Panitia Pelaksana', $tCol1X, $sigHdrY + 168, 13, false, $muted);
+
+        // Col 2
+        $overlays[] = $this->centeredText('PENGURUS KAB/KOTA', $tCol2X, $sigHdrY, 16, true, $navy);
+        $overlays[] = $this->centeredText('PERKEMI '.strtoupper($city), $tCol2X, $sigHdrY + 22, 14, false, $dark);
+        $overlays[] = $this->centeredText($pengkotLeader, $tCol2X, $sigHdrY + 140, 15, true, $dark);
+        $overlays[] = $this->coloredRectangle($tCol2X - 100, $sigHdrY + 148, 200, 2, $dark);
+        $overlays[] = $this->centeredText('Ketua Pengkot / Pengkab', $tCol2X, $sigHdrY + 168, 13, false, $muted);
+
+        // Col 3
+        $overlays[] = $this->centeredText('PENGURUS PROVINSI', $tCol3X, $sigHdrY, 16, true, $navy);
+        $overlays[] = $this->centeredText('PERKEMI '.strtoupper($province), $tCol3X, $sigHdrY + 22, 14, false, $dark);
+        $overlays[] = $this->centeredText($pengprovLeader, $tCol3X, $sigHdrY + 140, 15, true, $dark);
+        $overlays[] = $this->coloredRectangle($tCol3X - 100, $sigHdrY + 148, 200, 2, $dark);
+        $overlays[] = $this->centeredText('Ketua Umum Pengprov', $tCol3X, $sigHdrY + 168, 13, false, $muted);
+
+        // Col 4
+        $overlays[] = $this->centeredText('DEWAN PENGUJI', $tCol4X, $sigHdrY, 16, true, $navy);
+        $overlays[] = $this->centeredText('(Mandat PB PERKEMI)', $tCol4X, $sigHdrY + 22, 14, false, $muted, true);
+
+        if (! empty($sigSettings['signature_path']) && Storage::disk('public')->exists($sigSettings['signature_path'])) {
+            $sigPath = Storage::disk('public')->path($sigSettings['signature_path']);
+            if (is_readable($sigPath)) {
+                $overlays[] = $this->imageOverlay($sigPath, $tCol4X - 70, $sigHdrY + 40, 140, 70);
+            }
+        }
+
+        $overlays[] = $this->centeredText($examinerLeader, $tCol4X, $sigHdrY + 140, 15, true, $dark);
+        $overlays[] = $this->coloredRectangle($tCol4X - 100, $sigHdrY + 148, 200, 2, $dark);
+        $overlays[] = $this->centeredText('Ketua Dewan Penguji', $tCol4X, $sigHdrY + 168, 13, false, $muted);
+
+        // Bottom verification footer
+        $botY = $sigHdrY + 205;
+        $overlays[] = $this->coloredRectangle(100, $botY - 15, 1485, 1.5, [0.85, 0.85, 0.85]);
+        $overlays[] = $this->centeredText(
+            "QR: VERIFIED PB PERKEMI   •   Verification ID: SIM-PERKEMI-{$eventParticipant->id}   •   CERT ID: ".($certNumber ?: '-'),
+            $titleCenterX, $botY, 13, true, $muted
+        );
+
+        return $overlays;
+    }
+
     private function templatePath(string $type, ?string $trackCode): string
     {
         $code = strtoupper((string) $trackCode);
 
         if ($type === 'certificate') {
+            if (self::isKenshiTrack($code)) {
+                $candidate = resource_path('document-templates/'.self::TEMPLATE_DIR.'/sertifikat-kenshi-background.png');
+                if (is_readable($candidate)) {
+                    return $candidate;
+                }
+            }
+
             $trackTemplate = match ($code) {
                 'PD' => 'pelatih-daerah-a4.png',
                 'PN' => 'pelatih-nasional-a4.png',

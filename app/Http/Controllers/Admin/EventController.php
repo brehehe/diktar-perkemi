@@ -103,6 +103,8 @@ class EventController extends Controller
             'status' => $event->status,
             'status_label' => $event->status_label,
             'status_color' => $event->status_color,
+            'event_type' => $event->event_type ?? 'penataran',
+            'event_type_label' => $event->event_type_label,
             'cover_image' => $event->cover_image,
             'can_update' => $request->user()->can('update', $event),
             'report_url' => route('admin.event.show', ['event' => $event->id, 'tab' => 'rekap-laporan']),
@@ -273,6 +275,8 @@ class EventController extends Controller
                 'banner_path' => $event->banner_path,
                 'facilities_checklist' => $event->facilities_checklist ?? [],
                 'requirements_checklist' => $event->requirements_checklist ?? [],
+                'event_type' => $event->event_type ?? 'penataran',
+                'event_type_label' => $event->event_type_label,
             ],
         ]);
     }

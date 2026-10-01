@@ -19,8 +19,9 @@ export default function PrintRegistrationForm({
     };
 
     const isNasional = form.penataran_level === 'Nasional';
-    const formType = form.form_type || 'PELATIH'; // PELATIH, PENGUJI, WASIT
-    const formTitle = `PERMOHONAN PENATARAN ${formType} ${isNasional ? 'NASIONAL' : 'DAERAH'}`;
+    const isKenshi = form.form_type === 'KENSHI' || event.event_type === 'ukt' || form.is_kenshi;
+    const formType = isKenshi ? 'KENSHI' : (form.form_type || 'PELATIH'); // PELATIH, PENGUJI, WASIT, KENSHI
+    const formTitle = isKenshi ? 'PERMOHONAN UJIAN KENSHI' : `PERMOHONAN PENATARAN ${formType} ${isNasional ? 'NASIONAL' : 'DAERAH'}`;
     const waiverTitle = `SURAT PERNYATAAN DAN PEMBEBASAN`;
 
     // Render Piagam Gasnas rows (up to 7 rows as in DOCX)
@@ -35,7 +36,7 @@ export default function PrintRegistrationForm({
 
     return (
         <div className="min-h-screen bg-slate-100 text-slate-900 font-sans antialiased py-6 px-4 print:p-0 print:bg-white">
-            <Head title={`Formulir Pendaftaran ${formType} — ${form.full_name}`} />
+            <Head title={`${isKenshi ? 'Formulir – 24 (Permohonan Ujian Kenshi)' : `Formulir Pendaftaran ${formType}`} — ${form.full_name}`} />
 
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Times+New+Roman&family=Inter:wght@400;500;600;700;800&display=swap');
@@ -80,7 +81,7 @@ export default function PrintRegistrationForm({
                     </Link>
                     <span className="text-slate-300">|</span>
                     <span className="text-xs text-slate-500 font-medium">
-                        {form.full_name} • {formType} {form.penataran_level}
+                        {form.full_name} • {isKenshi ? `Formulir-24 (${form.target_level || form.penataran_level || 'Kenshi'})` : `${formType} ${form.penataran_level}`}
                     </span>
                     {form.status === 'verified' && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -105,9 +106,186 @@ export default function PrintRegistrationForm({
 
             {/* Document sheet */}
             <div className="doc-sheet max-w-4xl mx-auto bg-white p-8 sm:p-14 rounded-2xl border border-slate-200 shadow-md font-serif text-[11pt] leading-normal text-black">
+                {isKenshi ? (
+                    /* ════════ FORMULIR – 24: PERMOHONAN UJIAN KENSHI ════════ */
+                    <article className="space-y-4">
+                        {/* Header Kode Formulir 24 & Nomor Dokumen */}
+                        <div className="flex items-center justify-between font-serif text-[11pt] font-semibold border-b border-black pb-2">
+                            <span>Formulir – 24</span>
+                            <span className="font-mono text-sm tracking-wider">09906000</span>
+                        </div>
 
-                {/* ════════ PAGE 1: SURAT PERMOHONAN PENATARAN ════════ */}
-                <article className="space-y-4">
+                        {/* Title */}
+                        <div className="text-center pt-2 pb-1">
+                            <h1 className="font-bold text-[14pt] uppercase tracking-wide">
+                                PERMOHONAN UJIAN KENSHI
+                            </h1>
+                        </div>
+
+                        {/* Recipient */}
+                        <div className="pt-1">
+                            <div className="text-[11pt] space-y-0.5 leading-snug">
+                                <div>Kepada :</div>
+                                <div className="font-bold">Yth. PB. PERKEMI</div>
+                                <div>Pusdiklat Kempo “Sidharta A. Martoredjo”</div>
+                                <div>Pondok Gede – Bekasi</div>
+                            </div>
+                        </div>
+
+                        {/* Pengantar Permohonan & Target Tingkat */}
+                        <div className="text-[11pt] space-y-1.5 pt-1">
+                            <p className="leading-relaxed">
+                                Bersama ini saya mengajukan permohonan untuk menempuh Ujian Kenaikan Tingkat Menjadi :
+                            </p>
+                            <div className="text-center py-1">
+                                <span className="inline-block px-6 py-1 border-2 border-black font-bold text-[13pt] tracking-widest uppercase">
+                                    {form.target_level ? form.target_level.toUpperCase() : (form.penataran_level ? form.penataran_level.toUpperCase() : 'KYU ........ / DAN ........ *')}
+                                </span>
+                            </div>
+                            <p className="pt-1">
+                                Sebagai bahan pertimbangan, bersama ini saya lampirkan :
+                            </p>
+                        </div>
+
+                        {/* 10 Biodata items (Format Dotted Underline persis DOCX) */}
+                        <div className="space-y-1 text-[10.5pt] pt-1">
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>1. Nama Lengkap</span>
+                                <span>:</span>
+                                <span className="font-bold uppercase tracking-wide border-b border-dotted border-black pb-0.5">
+                                    {form.full_name}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>2. Tempat & Tgl Lahir</span>
+                                <span>:</span>
+                                <span className="border-b border-dotted border-black pb-0.5">
+                                    {form.birth_place || '-'}, {form.birth_date || '-'}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>3. NIK</span>
+                                <span>:</span>
+                                <span className="font-mono font-bold border-b border-dotted border-black pb-0.5">
+                                    {form.kenshi_id_number}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>4. Alamat Rumah / Telp</span>
+                                <span>:</span>
+                                <span className="border-b border-dotted border-black pb-0.5">
+                                    {form.home_address || '-'} / Telp: {form.phone_number || '-'}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>5. Alamat Email</span>
+                                <span>:</span>
+                                <span className="border-b border-dotted border-black pb-0.5">
+                                    {form.email || '-'}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>6. Pekerjaan / Sekolah</span>
+                                <span>:</span>
+                                <span className="border-b border-dotted border-black pb-0.5">
+                                    {form.occupation || '-'}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>7. Alamat Pekerjaan / Telp</span>
+                                <span>:</span>
+                                <span className="border-b border-dotted border-black pb-0.5">
+                                    {form.occupation_address || '-'} / Telp: {form.occupation_phone || '-'}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>8. Alamat Dalam Keadaan Darurat / Telp</span>
+                                <span>:</span>
+                                <span className="font-semibold border-b border-dotted border-black pb-0.5">
+                                    {form.emergency_address || '-'} / Telp: {form.emergency_phone || '-'}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                <span>9. Tanggal Ujian Terakhir</span>
+                                <span>:</span>
+                                <span className="border-b border-dotted border-black pb-0.5">
+                                    {form.last_exam_date || '-'}
+                                </span>
+                            </div>
+                            <div className="space-y-1">
+                                <div className="grid grid-cols-[260px_12px_1fr] items-baseline">
+                                    <span>10. Sertifikat Tingkatan Tertinggi yang Dimiliki</span>
+                                    <span>:</span>
+                                    <span></span>
+                                </div>
+                                <div className="grid grid-cols-[260px_12px_1fr] items-baseline pl-4">
+                                    <span className="italic">Nomor</span>
+                                    <span>:</span>
+                                    <span className="border-b border-dotted border-black pb-0.5">
+                                        {form.last_certificate_number || '-'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[260px_12px_1fr] items-baseline pl-4">
+                                    <span className="italic">Tanggal</span>
+                                    <span>:</span>
+                                    <span className="border-b border-dotted border-black pb-0.5">
+                                        {form.last_certificate_date || '-'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Signatures: Pengurus Dojo & Pemohon */}
+                        <div className="pt-6 grid grid-cols-2 gap-6 items-start">
+                            <div>
+                                <div className="font-semibold">Mengetahui :</div>
+                                <div>Pengurus Dojo (Pengdo) <span className="font-bold">{form.dojo_name || form.origin_dojo || 'Surabaya'}</span></div>
+                                <div className="h-16 flex items-center"></div>
+                                <div className="space-y-0.5 text-[10pt]">
+                                    <div>Nama : <span className="font-bold underline">{form.dojo_leader_name || '...........................................'}</span></div>
+                                    <div>Jabatan : <span>{form.dojo_leader_position || 'Ketua Dojo'}</span></div>
+                                </div>
+                            </div>
+
+                            <div className="text-right">
+                                <div>{form.sign_place || 'Surabaya'}, {form.sign_date || '03 Oktober 2026'}</div>
+                                <div className="font-semibold">Pemohon,</div>
+                                <div className="h-16 flex items-center justify-end">
+                                    {form.signature_data ? (
+                                        <img
+                                            src={form.signature_data}
+                                            alt="Tanda Tangan Pemohon"
+                                            className="max-h-14 max-w-[170px] object-contain"
+                                        />
+                                    ) : (
+                                        <div className="text-xs text-slate-400 italic">
+                                            (Tanda Tangan Pemohon)
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="font-bold underline uppercase">
+                                    ( {form.applicant_name || form.full_name} )
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Notes & Lampiran sesuai DOCX */}
+                        <div className="pt-4 border-t border-slate-300 text-[9.5pt] space-y-1">
+                            <div className="italic">* Coret yang tidak perlu</div>
+                            <div className="grid grid-cols-[80px_1fr]">
+                                <span className="font-semibold">Lampiran :</span>
+                                <div className="space-y-0.5">
+                                    <div>1. 2 helai Pas Foto (2.5 x 3) untuk Kyu</div>
+                                    <div>2. 2 helai Pas Foto (3 x 4) untuk Dan</div>
+                                    <div>3. Uang Ujian Rp. <span className="font-mono font-semibold">{form.exam_fee ? Number(form.exam_fee).toLocaleString('id-ID') : '...........................................'}</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                ) : (
+                    <>
+                    {/* ════════ PAGE 1: SURAT PERMOHONAN PENATARAN ════════ */}
+                    <article className="space-y-4">
                     {/* Header Kop Surat dengan Logo PERKEMI */}
                     <header className="border-b-2 border-black pb-3 text-center">
                         <div className="flex items-center justify-center gap-4 mb-2">
@@ -616,7 +794,9 @@ export default function PrintRegistrationForm({
                     <div className="pt-2 text-[9pt] italic text-slate-600">
                         * Coret yang tidak perlu.
                     </div>
-                </div>
+                    </div>
+                </>
+                )}
             </div>
         </div>
     );

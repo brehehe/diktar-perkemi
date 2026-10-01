@@ -32,6 +32,8 @@ export default function EventRegistrationFormsTab() {
         handleVerifyForm,
     } = useEventShow();
 
+    const isUkt = event?.event_type === 'ukt';
+
     return (
         <div className="space-y-6">
             {/* Summary / Stats Cards */}
@@ -75,10 +77,12 @@ export default function EventRegistrationFormsTab() {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-blue-950">
-                                Status Formulir Penataran: Bersih (Menunggu Pengisian Mandiri)
+                                {isUkt ? 'Status Formulir UKT (Formulir – 24): Bersih' : 'Status Formulir Penataran: Bersih (Menunggu Pengisian Mandiri)'}
                             </p>
                             <p className="text-[11px] text-blue-800">
-                                Data formulir telah dikosongkan. Seluruh peserta ({stats.total_registration_forms ?? registrationForms.length} kenshi) berstatus "Belum Mengisi". Begitu kenshi mengirimkan formulir pendaftaran secara mandiri di portal, berkas akan muncul di tabel ini untuk diverifikasi admin PB PERKEMI.
+                                {isUkt
+                                    ? `Seluruh peserta UKT (${stats.total_registration_forms ?? registrationForms.length} kenshi) berstatus "Belum Mengisi". Peserta dapat mengisi Formulir – 24 secara digital di ruang belajar atau mengunggah berkas scan.`
+                                    : `Data formulir telah dikosongkan. Seluruh peserta (${stats.total_registration_forms ?? registrationForms.length} kenshi) berstatus "Belum Mengisi". Begitu kenshi mengirimkan formulir pendaftaran secara mandiri di portal, berkas akan muncul di tabel ini untuk diverifikasi admin PB PERKEMI.`}
                             </p>
                         </div>
                     </div>
@@ -113,10 +117,26 @@ export default function EventRegistrationFormsTab() {
                         }}
                         className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
                     >
-                        <option value="all">Semua Jalur / Profesi</option>
-                        <option value="pelatih">Pelatih (Daerah / Nasional)</option>
-                        <option value="penguji">Penguji (Daerah / Nasional)</option>
-                        <option value="wasit">Wasit (Daerah / Nasional)</option>
+                        {isUkt ? (
+                            <>
+                                <option value="all">Semua Tingkatan UKT (Kyu)</option>
+                                <option value="kyu 8">Kyu 8</option>
+                                <option value="kyu 7">Kyu 7</option>
+                                <option value="kyu 6">Kyu 6</option>
+                                <option value="kyu 5">Kyu 5</option>
+                                <option value="kyu 4">Kyu 4</option>
+                                <option value="kyu 3">Kyu 3</option>
+                                <option value="kyu 2">Kyu 2</option>
+                                <option value="kyu 1">Kyu 1</option>
+                            </>
+                        ) : (
+                            <>
+                                <option value="all">Semua Jalur / Profesi</option>
+                                <option value="pelatih">Pelatih (Daerah / Nasional)</option>
+                                <option value="penguji">Penguji (Daerah / Nasional)</option>
+                                <option value="wasit">Wasit (Daerah / Nasional)</option>
+                            </>
+                        )}
                     </Select>
 
                     <Select
@@ -161,9 +181,9 @@ export default function EventRegistrationFormsTab() {
                             <tr>
                                 <th className="py-3 px-4 w-12 text-center">No</th>
                                 <th className="py-3 px-4">Nama Kenshi & NIK</th>
-                                <th className="py-3 px-4">Tingkatan DAN & Asal</th>
-                                <th className="py-3 px-4">Jalur & Tingkat</th>
-                                <th className="py-3 px-4">Status Formulir</th>
+                                <th className="py-3 px-4">{isUkt ? 'Tingkatan Saat Ini & Dojo' : 'Tingkatan DAN & Asal'}</th>
+                                <th className="py-3 px-4">{isUkt ? 'Ujian Ke Tingkat (Target)' : 'Jalur & Tingkat'}</th>
+                                <th className="py-3 px-4">{isUkt ? 'Status Formulir – 24' : 'Status Formulir'}</th>
                                 <th className="py-3 px-4">Tanggal Pengisian</th>
                                 <th className="py-3 px-4 text-center">Aksi</th>
                             </tr>
@@ -210,10 +230,21 @@ export default function EventRegistrationFormsTab() {
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4">
-                                                <div className="font-semibold text-[#112743]">
-                                                    {rf.form_type} ({rf.penataran_level})
-                                                </div>
-                                                <div className="text-[11px] text-[#6B7C93]">{rf.track_name}</div>
+                                                {isUkt ? (
+                                                    <div>
+                                                        <span className="inline-block rounded bg-purple-50 border border-purple-200 px-2 py-0.5 text-[11px] font-bold text-purple-700">
+                                                            {rf.target_level || rf.penataran_level || rf.track_name || 'UKT'}
+                                                        </span>
+                                                        <div className="text-[11px] text-[#6B7C93] mt-0.5 font-mono">{rf.track_code}</div>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <div className="font-semibold text-[#112743]">
+                                                            {rf.form_type} ({rf.penataran_level})
+                                                        </div>
+                                                        <div className="text-[11px] text-[#6B7C93]">{rf.track_name}</div>
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="py-3 px-4">
                                                 {rf.status === 'verified' ? (

@@ -40,6 +40,7 @@ class Event extends Model
         'facilities_checklist',
         'requirements_checklist',
         'responsible_user_id',
+        'event_type',
         'document_number_settings',
         'certificate_signature_settings',
         'assessment_settings',
@@ -57,6 +58,7 @@ class Event extends Model
         'status_label',
         'status_color',
         'total_days',
+        'event_type_label',
     ];
 
     protected function casts(): array
@@ -306,5 +308,23 @@ class Event extends Model
         }
 
         return 1;
+    }
+
+    public function isUkt(): bool
+    {
+        return in_array($this->event_type, ['ukt', 'kenshi'], true);
+    }
+
+    public function isPenataran(): bool
+    {
+        return ! $this->isUkt();
+    }
+
+    public function getEventTypeLabelAttribute(): string
+    {
+        return match ($this->event_type) {
+            'ukt', 'kenshi' => 'Gashuku & Ujian Kenaikan Tingkat (Kenshi)',
+            default => 'Penataran (Pelatih, Penguji, Wasit)',
+        };
     }
 }

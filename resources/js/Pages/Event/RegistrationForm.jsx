@@ -37,6 +37,7 @@ import RegistrationAwardsSection from './Partials/RegistrationAwardsSection';
 import RegistrationCertificatesSection from './Partials/RegistrationCertificatesSection';
 import RegistrationWaiverSection from './Partials/RegistrationWaiverSection';
 import RegistrationSignatureSection from './Partials/RegistrationSignatureSection';
+import RegistrationKenshiSection from './Partials/RegistrationKenshiSection';
 
 export default function RegistrationForm({
     event,
@@ -47,10 +48,20 @@ export default function RegistrationForm({
 }) {
     const { flash } = usePage().props;
     const [clientErrors, setClientErrors] = useState({});
+    const isKenshi = formTypeInfo?.form_type === 'KENSHI' || event?.event_type === 'ukt' || initialData?.form_type === 'KENSHI' || formTypeInfo?.is_kenshi;
+
     const { data, setData, post, processing, errors } = useForm({
         participant_id: participant?.id || null,
-        form_type: initialData?.form_type || formTypeInfo?.form_type || 'PELATIH',
-        penataran_level: initialData?.penataran_level || formTypeInfo?.penataran_level || 'Daerah',
+        form_type: initialData?.form_type || formTypeInfo?.form_type || (isKenshi ? 'KENSHI' : 'PELATIH'),
+        penataran_level: initialData?.penataran_level || formTypeInfo?.penataran_level || (isKenshi ? 'Kenshi' : 'Daerah'),
+        target_level: initialData?.target_level || (isKenshi ? (participant?.track?.name || 'KYU 1') : ''),
+        last_exam_date: initialData?.last_exam_date || '',
+        last_certificate_number: initialData?.last_certificate_number || '',
+        last_certificate_date: initialData?.last_certificate_date || '',
+        dojo_name: initialData?.dojo_name || participant?.origin_dojo || participant?.origin || '',
+        dojo_leader_name: initialData?.dojo_leader_name || '',
+        dojo_leader_position: initialData?.dojo_leader_position || 'Ketua Dojo',
+        exam_fee: initialData?.exam_fee || '',
         start_date: initialData?.start_date || '',
         end_date: initialData?.end_date || '',
         location: initialData?.location || '',
@@ -58,7 +69,7 @@ export default function RegistrationForm({
         birth_place: initialData?.birth_place || '',
         birth_date: initialData?.birth_date || '',
         kenshi_id_number: initialData?.kenshi_id_number || participant?.kenshi_id_number || '',
-        dan_level: initialData?.dan_level || participant?.dan_rank || '1 DAN',
+        dan_level: initialData?.dan_level || participant?.dan_rank || (isKenshi ? 'KYU 2' : '1 DAN'),
         home_address: initialData?.home_address || '',
         phone_number: initialData?.phone_number || participant?.phone || '',
         email: initialData?.email || participant?.email || '',
@@ -73,7 +84,7 @@ export default function RegistrationForm({
         certificate_records: Array.isArray(initialData?.certificate_records) && initialData.certificate_records.some((r) => r && (r.jenis || r.nomor || r.tanggal))
             ? initialData.certificate_records.filter((r) => r && (r.jenis || r.nomor || r.tanggal))
             : [],
-        sign_place: initialData?.sign_place || 'Mojokerto',
+        sign_place: initialData?.sign_place || (isKenshi ? 'Surabaya' : 'Mojokerto'),
         sign_date: initialData?.sign_date || new Date().toISOString().split('T')[0],
         applicant_name: initialData?.applicant_name || participant?.name || '',
         signature_data: initialData?.signature_data || '',
@@ -207,16 +218,20 @@ export default function RegistrationForm({
         const errs = {};
         if (!data.full_name?.trim()) errs.full_name = 'Nama lengkap pemohon wajib diisi.';
         if (!data.kenshi_id_number?.trim()) errs.kenshi_id_number = 'Nomor Induk Kenshi (NIK) wajib diisi.';
-        if (!data.dan_level?.trim()) errs.dan_level = 'Tingkatan DAN wajib diisi.';
+        if (isKenshi) {
+            if (!data.target_level?.trim()) errs.target_level = 'Tingkatan target ujian (KYU / DAN) wajib dipilih.';
+        } else {
+            if (!data.dan_level?.trim()) errs.dan_level = 'Tingkatan DAN wajib diisi.';
+            if (!data.emergency_phone?.trim()) errs.emergency_phone = 'Nomor kontak darurat wajib diisi demi keselamatan kegiatan.';
+            if (!data.waiver_agreed) errs.waiver_agreed = 'Anda wajib mencentang persetujuan Surat Pernyataan dan Pembebasan sebelum menyimpan formulir.';
+        }
         if (!data.birth_place?.trim()) errs.birth_place = 'Tempat lahir wajib diisi.';
         if (!data.birth_date) errs.birth_date = 'Tanggal lahir wajib diisi.';
         if (!data.phone_number?.trim()) errs.phone_number = 'Nomor telepon / WhatsApp wajib diisi.';
         if (!data.home_address?.trim()) errs.home_address = 'Alamat rumah tempat tinggal wajib diisi.';
-        if (!data.emergency_phone?.trim()) errs.emergency_phone = 'Nomor kontak darurat wajib diisi demi keselamatan kegiatan.';
         if (!data.sign_place?.trim()) errs.sign_place = 'Kota penandatanganan formulir wajib diisi.';
         if (!data.sign_date) errs.sign_date = 'Tanggal penandatanganan formulir wajib diisi.';
         if (!data.applicant_name?.trim()) errs.applicant_name = 'Nama pemohon penandatangan wajib diisi.';
-        if (!data.waiver_agreed) errs.waiver_agreed = 'Anda wajib mencentang persetujuan Surat Pernyataan dan Pembebasan sebelum menyimpan formulir.';
 
         if (Object.keys(errs).length > 0) {
             setClientErrors(errs);
@@ -365,8 +380,8 @@ export default function RegistrationForm({
 
     return (
         <RegistrationFormContext.Provider value={registrationContext}>
-        <PortalLayout title={`Formulir Penataran ${formTypeInfo.form_type}`}>
-            <Head title={`Formulir Penataran ${formTypeInfo.form_type} — ${event.name}`} />
+        <PortalLayout title={isKenshi ? 'Formulir Permohonan Ujian Kenshi (Formulir – 24)' : `Formulir Penataran ${formTypeInfo.form_type}`}>
+            <Head title={`${isKenshi ? 'Formulir – 24 (Permohonan Ujian Kenshi)' : `Formulir Penataran ${formTypeInfo.form_type}`} — ${event.name}`} />
 
             <div className="w-full max-w-full px-4 py-6 sm:px-6 lg:px-8">
                 {/* Mode Administrator Banner jika admin sedang mengisi untuk peserta */}
@@ -449,7 +464,7 @@ export default function RegistrationForm({
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B63CE] bg-white px-3 py-1.5 text-xs font-semibold text-[#0B63CE] hover:bg-[#EAF5FF] transition-colors"
                             >
                                 <Printer className="h-3.5 w-3.5" />
-                                Cetak Formulir PB
+                                {isKenshi ? 'Cetak Formulir – 24' : 'Cetak Formulir PB'}
                             </a>
                         )}
                     </div>
@@ -466,13 +481,13 @@ export default function RegistrationForm({
                             />
                             <div className="space-y-1">
                                 <span className="inline-block rounded-md bg-[#EE9B25] px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider text-[#0E2747]">
-                                    {formTypeInfo.lampiran_label}
+                                    {isKenshi ? 'FORMULIR – 24 • KODE 09906000' : formTypeInfo.lampiran_label}
                                 </span>
                                 <h1 className="font-display text-xl font-bold tracking-tight text-white sm:text-2xl">
-                                    FORMULIR PERMOHONAN MENGIKUTI PENATARAN {formTypeInfo.form_type} {data.penataran_level.toUpperCase()}
+                                    {isKenshi ? 'PERMOHONAN UJIAN KENSHI (FORMULIR – 24)' : `FORMULIR PERMOHONAN MENGIKUTI PENATARAN ${formTypeInfo.form_type} ${data.penataran_level.toUpperCase()}`}
                                 </h1>
                                 <p className="text-xs text-[#DCE7F3] sm:text-sm">
-                                    Persaudaraan Shorinji Kempo Indonesia (PB PERKEMI) • {event.name}
+                                    {isKenshi ? 'Persaudaraan Shorinji Kempo Indonesia • PB. PERKEMI Pusdiklat Kempo Sidharta A. Martoredjo' : `Persaudaraan Shorinji Kempo Indonesia (PB PERKEMI) • ${event.name}`}
                                 </p>
                             </div>
                         </div>
@@ -609,40 +624,47 @@ export default function RegistrationForm({
                                 Beralih ke Unggah Berkas &rarr;
                             </button>
                         </div>
-                    <RegistrationEventSection />
+                        {isKenshi ? (
+                            <>
+                                <RegistrationKenshiSection />
+                                <RegistrationIdentitySection />
+                                <RegistrationContactSection />
+                                <RegistrationSignatureSection />
+                            </>
+                        ) : (
+                            <>
+                                <RegistrationEventSection />
+                                <RegistrationIdentitySection />
+                                <RegistrationContactSection />
+                                <RegistrationAwardsSection />
+                                <RegistrationCertificatesSection />
+                                <RegistrationWaiverSection />
+                                <RegistrationSignatureSection />
+                            </>
+                        )}
 
-                    <RegistrationIdentitySection />
+                        {/* SUBMIT BUTTON CONTAINER */}
+                        <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
+                            <Link
+                                href={participant?.is_admin_mode ? `/admin/event/${event.id}?tab=formulir` : `/event/${event.slug}/ruang-belajar`}
+                                className="rounded-lg border border-[#DCE7F3] bg-white px-5 py-2.5 text-xs font-semibold text-[#112743] hover:bg-[#F8FBFF]"
+                            >
+                                Batal
+                            </Link>
 
-                    <RegistrationContactSection />
-
-                    <RegistrationAwardsSection />
-
-                    <RegistrationCertificatesSection />
-
-                    <RegistrationWaiverSection />
-
-                    <RegistrationSignatureSection />
-
-                    {/* SUBMIT BUTTON CONTAINER */}
-                    <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
-                        <Link
-                            href={participant?.is_admin_mode ? `/admin/event/${event.id}?tab=formulir` : `/event/${event.slug}/ruang-belajar`}
-                            className="rounded-lg border border-[#DCE7F3] bg-white px-5 py-2.5 text-xs font-semibold text-[#112743] hover:bg-[#F8FBFF]"
-                        >
-                            Batal
-                        </Link>
-
-                        <button
-                            type="submit"
-                            disabled={processing}
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#0B63CE] px-6 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] disabled:opacity-50"
-                        >
-                            <Save className="h-4 w-4" />
-                            {processing ? 'Menyimpan Formulir...' : 'Simpan & Kirim Formulir Penataran'}
-                        </button>
-                    </div>
-                </form>
-            )}
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#0B63CE] px-6 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] disabled:opacity-50"
+                            >
+                                <Save className="h-4 w-4" />
+                                {processing
+                                    ? 'Menyimpan Formulir...'
+                                    : (isKenshi ? 'Simpan & Kirim Formulir – 24 (Permohonan Ujian)' : 'Simpan & Kirim Formulir Penataran')}
+                            </button>
+                        </div>
+                    </form>
+                )}
             </div>
         </PortalLayout>
         </RegistrationFormContext.Provider>

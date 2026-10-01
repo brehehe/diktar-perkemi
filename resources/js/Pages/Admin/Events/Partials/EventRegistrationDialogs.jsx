@@ -53,7 +53,7 @@ export default function EventRegistrationDialogs() {
                 <Modal
                     isOpen={!!selectedFormForModal}
                     onClose={() => setSelectedFormForModal(null)}
-                    title={`Formulir Penataran ${selectedFormForModal.form_type} — ${selectedFormForModal.participant_name}`}
+                    title={selectedFormForModal.is_kenshi ? `Formulir – 24 (Permohonan Ujian Kenshi) — ${selectedFormForModal.participant_name}` : `Formulir Penataran ${selectedFormForModal.form_type} — ${selectedFormForModal.participant_name}`}
                     size="4xl"
                     footer={
                         <div className="flex flex-wrap items-center justify-between gap-3 w-full">
@@ -85,7 +85,7 @@ export default function EventRegistrationDialogs() {
                                         className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B63CE] bg-[#EAF5FF] px-4 py-2 text-xs font-semibold text-[#0B63CE] hover:bg-[#D5EBFF] transition-colors"
                                     >
                                         <Printer className="h-4 w-4" />
-                                        Cetak / Unduh Format PB PERKEMI
+                                        {selectedFormForModal.is_kenshi ? 'Cetak Formulir – 24' : 'Cetak / Unduh Format PB PERKEMI'}
                                     </a>
                                 )}
                                 <Button variant="secondary" onClick={() => setSelectedFormForModal(null)}>
@@ -135,6 +135,147 @@ export default function EventRegistrationDialogs() {
 
                         {/* Word Sheet Look */}
                         <div className="mx-auto max-w-[210mm] bg-white p-6 sm:p-12 shadow-sm border border-slate-300 text-black font-serif leading-normal text-xs sm:text-sm space-y-5">
+                            {selectedFormForModal.is_kenshi ? (
+                                /* ════════ FORMULIR – 24 (PERMOHONAN UJIAN KENSHI) ════════ */
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between font-serif text-[11pt] font-semibold border-b border-black pb-2">
+                                        <span>Formulir – 24</span>
+                                        <span className="font-mono text-sm tracking-wider">09906000</span>
+                                    </div>
+
+                                    <div className="text-center pt-2 pb-1">
+                                        <h1 className="font-bold text-[13pt] uppercase tracking-wide">
+                                            PERMOHONAN UJIAN KENSHI
+                                        </h1>
+                                    </div>
+
+                                    <div className="pt-1">
+                                        <div className="text-[10.5pt] space-y-0.5 leading-snug">
+                                            <div>Kepada :</div>
+                                            <div className="font-bold">Yth. PB. PERKEMI</div>
+                                            <div>Pusdiklat Kempo “Sidharta A. Martoredjo”</div>
+                                            <div>Pondok Gede – Bekasi</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="text-[10.5pt] space-y-1 pt-1">
+                                        <p>Bersama ini saya mengajukan permohonan untuk menempuh Ujian Kenaikan Tingkat Menjadi :</p>
+                                        <div className="text-center py-1">
+                                            <span className="inline-block px-5 py-0.5 border-2 border-black font-bold text-[12pt] tracking-wider uppercase">
+                                                {selectedFormForModal.target_level || selectedFormForModal.penataran_level || 'KYU ........ / DAN ........ *'}
+                                            </span>
+                                        </div>
+                                        <p>Sebagai bahan pertimbangan, bersama ini saya lampirkan :</p>
+                                    </div>
+
+                                    <div className="space-y-1 text-xs sm:text-[10pt] pt-1">
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>1. Nama Lengkap</span>
+                                            <span>:</span>
+                                            <span className="font-bold uppercase border-b border-dotted border-black pb-0.5">{selectedFormForModal.full_name}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>2. Tempat & Tgl Lahir</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.birth_place || '-'}, {selectedFormForModal.birth_date || '-'}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>3. NIK</span>
+                                            <span>:</span>
+                                            <span className="font-mono font-bold border-b border-dotted border-black pb-0.5">{selectedFormForModal.kenshi_id_number}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>4. Alamat Rumah / Telp</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.home_address || '-'} / Telp: {selectedFormForModal.phone_number || '-'}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>5. Alamat Email</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.email || '-'}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>6. Pekerjaan / Sekolah</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.occupation || '-'}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>7. Alamat Pekerjaan / Telp</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.occupation_address || '-'} / Telp: {selectedFormForModal.occupation_phone || '-'}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>8. Alamat Keadaan Darurat / Telp</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.emergency_address || '-'} / Telp: {selectedFormForModal.emergency_phone || '-'}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                            <span>9. Tanggal Ujian Terakhir</span>
+                                            <span>:</span>
+                                            <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.last_exam_date || '-'}</span>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="grid grid-cols-[230px_10px_1fr] items-baseline">
+                                                <span>10. Sertifikat Tingkat Tertinggi</span>
+                                                <span>:</span>
+                                                <span></span>
+                                            </div>
+                                            <div className="grid grid-cols-[230px_10px_1fr] items-baseline pl-4">
+                                                <span className="italic">Nomor</span>
+                                                <span>:</span>
+                                                <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.last_certificate_number || '-'}</span>
+                                            </div>
+                                            <div className="grid grid-cols-[230px_10px_1fr] items-baseline pl-4">
+                                                <span className="italic">Tanggal</span>
+                                                <span>:</span>
+                                                <span className="border-b border-dotted border-black pb-0.5">{selectedFormForModal.last_certificate_date || '-'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 grid grid-cols-2 gap-6 items-start">
+                                        <div>
+                                            <div className="font-semibold text-xs">Mengetahui :</div>
+                                            <div className="text-xs">Pengurus Dojo (Pengdo) <span className="font-bold">{selectedFormForModal.dojo_name || selectedFormForModal.origin_dojo || 'Surabaya'}</span></div>
+                                            <div className="h-12 flex items-center"></div>
+                                            <div className="space-y-0.5 text-xs">
+                                                <div>Nama : <span className="font-bold underline">{selectedFormForModal.dojo_leader_name || '...........................................'}</span></div>
+                                                <div>Jabatan : <span>{selectedFormForModal.dojo_leader_position || 'Ketua Dojo'}</span></div>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-right text-xs">
+                                            <div>{selectedFormForModal.sign_place || 'Surabaya'}, {selectedFormForModal.sign_date || '03 Oktober 2026'}</div>
+                                            <div className="font-semibold">Pemohon,</div>
+                                            <div className="h-12 flex items-center justify-end">
+                                                {selectedFormForModal.signature_data ? (
+                                                    <img
+                                                        src={selectedFormForModal.signature_data}
+                                                        alt="Tanda Tangan"
+                                                        className="max-h-12 max-w-[150px] object-contain"
+                                                    />
+                                                ) : (
+                                                    <div className="text-[10px] text-slate-400 italic">(Tanda Tangan)</div>
+                                                )}
+                                            </div>
+                                            <div className="font-bold underline uppercase">( {selectedFormForModal.applicant_name || selectedFormForModal.full_name} )</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-3 border-t border-slate-300 text-[9pt] space-y-0.5 text-slate-700">
+                                        <div className="italic">* Coret yang tidak perlu</div>
+                                        <div className="grid grid-cols-[70px_1fr]">
+                                            <span className="font-semibold">Lampiran :</span>
+                                            <div className="space-y-0.5">
+                                                <div>1. 2 helai Pas Foto (2.5 x 3) untuk Kyu</div>
+                                                <div>2. 2 helai Pas Foto (3 x 4) untuk Dan</div>
+                                                <div>3. Uang Ujian Rp. {selectedFormForModal.exam_fee ? Number(selectedFormForModal.exam_fee).toLocaleString('id-ID') : '...........................................'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
                             {/* Kop Surat Resmi PB PERKEMI dengan Logo */}
                             <div className="border-b-2 border-black pb-3 text-center">
                                 <div className="flex items-center justify-center gap-3 mb-1">
@@ -483,6 +624,8 @@ export default function EventRegistrationDialogs() {
                                     <span>Pernyataan dan pembebasan telah disetujui & ditandatangani oleh pemohon secara digital.</span>
                                 </div>
                             </div>
+                            </>
+                            )}
                         </div>
                     </div>
                 </Modal>

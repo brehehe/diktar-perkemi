@@ -18,10 +18,36 @@ class EventRegistrationFormController extends Controller
      *
      * @return array{form_type: string, penataran_level: string, lampiran_label: string}
      */
-    public static function resolveFormType(?string $trackCode, ?string $penataranLevel = null): array
+    public static function resolveFormType(?string $trackCode, ?string $penataranLevel = null, ?Event $event = null): array
     {
         $code = strtoupper((string) $trackCode);
         $level = strtolower((string) $penataranLevel);
+
+        // Kenshi / UKT: KENSHI, UKT, KYU-1 s.d. KYU-8, or event is UKT
+        if (
+            str_contains($code, 'KENSHI') ||
+            str_contains($code, 'KYU') ||
+            str_contains($code, 'UKT') ||
+            ($event !== null && $event->isUkt())
+        ) {
+            $kyuMatch = null;
+            if (preg_match('/KYU[-\s]?(\d+)/i', $code, $m)) {
+                $kyuMatch = 'Kyu '.$m[1];
+            } elseif ($penataranLevel && preg_match('/KYU[-\s]?(\d+)/i', $penataranLevel, $m)) {
+                $kyuMatch = 'Kyu '.$m[1];
+            }
+
+            return [
+                'form_type' => 'KENSHI',
+                'penataran_level' => $kyuMatch ?? ($penataranLevel ?: 'Kenshi'),
+                'form_code' => 'Formulir – 24',
+                'form_doc_number' => '09906000',
+                'lampiran_label' => 'FORMULIR-24',
+                'waiver_lampiran_label' => null,
+                'title' => 'PERMOHONAN UJIAN KENSHI',
+                'photo_requirements' => '2 helai Pas Foto (2.5 x 3), 2 helai Pas Foto (3 x 4)',
+            ];
+        }
 
         // Penguji: PED, PEN, PGJ, PENGUJI
         if (str_contains($code, 'PGJ') || str_contains($code, 'PENGUJI') || str_contains($code, 'PED') || str_contains($code, 'PEN')) {
@@ -30,8 +56,11 @@ class EventRegistrationFormController extends Controller
             return [
                 'form_type' => 'PENGUJI',
                 'penataran_level' => $isNas ? 'Nasional' : 'Daerah',
+                'form_code' => 'Formulir Penguji',
+                'form_doc_number' => null,
                 'lampiran_label' => $isNas ? 'LAMPIRAN-D' : 'LAMPIRAN-C',
                 'waiver_lampiran_label' => 'LAMPIRAN-E',
+                'title' => 'PERMOHONAN PENATARAN PENGUJI '.($isNas ? 'NASIONAL' : 'DAERAH'),
                 'photo_requirements' => '1. 2 Helai Pas Foto(3 x 4)',
             ];
         }
@@ -43,8 +72,11 @@ class EventRegistrationFormController extends Controller
             return [
                 'form_type' => 'WASIT',
                 'penataran_level' => $isNas ? 'Nasional' : 'Daerah',
+                'form_code' => 'Formulir Wasit',
+                'form_doc_number' => null,
                 'lampiran_label' => $isNas ? 'LAMPIRAN-B' : 'LAMPIRAN-A',
                 'waiver_lampiran_label' => 'LAMPIRAN-C',
+                'title' => 'PERMOHONAN PENATARAN WASIT '.($isNas ? 'NASIONAL' : 'DAERAH'),
                 'photo_requirements' => '1. 2 Helai Pas Foto (2 1/2 x 3), 2 Helai Pas Foto(3 x 4)',
             ];
         }
@@ -55,8 +87,11 @@ class EventRegistrationFormController extends Controller
         return [
             'form_type' => 'PELATIH',
             'penataran_level' => $isNas ? 'Nasional' : 'Daerah',
+            'form_code' => 'Formulir Pelatih',
+            'form_doc_number' => null,
             'lampiran_label' => $isNas ? 'LAMPIRAN-B' : 'LAMPIRAN-A',
             'waiver_lampiran_label' => 'LAMPIRAN-E',
+            'title' => 'PERMOHONAN PENATARAN PELATIH '.($isNas ? 'NASIONAL' : 'DAERAH'),
             'photo_requirements' => '1. 2 Helai Pas Foto(3 x 4)',
         ];
     }
@@ -91,7 +126,8 @@ class EventRegistrationFormController extends Controller
 
         $resolved = self::resolveFormType(
             $existingForm?->form_type ?? $enrollment?->track_code,
-            $existingForm?->penataran_level
+            $existingForm?->penataran_level,
+            $event
         );
 
         // Extract extra SIM PERKEMI metadata if stored in notes/profile
@@ -101,10 +137,22 @@ class EventRegistrationFormController extends Controller
             $extraData = json_decode($notes, true) ?? [];
         }
 
+        $defaultTargetLevel = $participant->target_certification
+            ?? (preg_match('/KYU[-\s]?(\d+)/i', (string) ($enrollment?->track_code ?? ''), $m) ? 'Kyu '.$m[1] : 'Kyu 1');
+
         $formData = $existingForm ? [
             'id' => $existingForm->id,
             'form_type' => $existingForm->form_type,
             'penataran_level' => $existingForm->penataran_level,
+            'target_level' => $existingForm->target_level ?? $existingForm->penataran_level ?? $defaultTargetLevel,
+            'last_exam_date' => $existingForm->last_exam_date?->format('Y-m-d') ?? (! empty($extraData['ujian_last_date_exam']) && $extraData['ujian_last_date_exam'] !== '0000-00-00' ? $extraData['ujian_last_date_exam'] : null),
+            'last_certificate_number' => $existingForm->last_certificate_number ?? $participant->last_certificate_number ?? (! empty($extraData['ujian_last_certificate']) && $extraData['ujian_last_certificate'] !== '-' ? $extraData['ujian_last_certificate'] : ''),
+            'last_certificate_date' => $existingForm->last_certificate_date?->format('Y-m-d'),
+            'dojo_name' => $existingForm->dojo_name ?? $participant->origin_dojo ?? $extraData['dojo_name'] ?? '',
+            'dojo_leader_name' => $existingForm->dojo_leader_name ?? ('Pengurus Dojo '.($participant->origin_dojo ?? $extraData['dojo_name'] ?? '')),
+            'dojo_leader_position' => $existingForm->dojo_leader_position ?? 'Ketua Dojo',
+            'exam_fee' => $existingForm->exam_fee ?? 'Rp. 150.000,-',
+            'extra_fields' => $existingForm->extra_fields ?? [],
             'start_date' => $existingForm->start_date?->format('Y-m-d') ?? $event->start_date?->format('Y-m-d'),
             'end_date' => $existingForm->end_date?->format('Y-m-d') ?? $event->end_date?->format('Y-m-d'),
             'location' => $existingForm->location ?? $event->place,
@@ -123,7 +171,7 @@ class EventRegistrationFormController extends Controller
             'emergency_phone' => $existingForm->emergency_phone,
             'gasnas_records' => $existingForm->gasnas_records ?? [],
             'certificate_records' => $existingForm->certificate_records ?? [],
-            'sign_place' => $existingForm->sign_place ?? 'Mojokerto',
+            'sign_place' => $existingForm->sign_place ?? ($event->isUkt() ? 'Surabaya' : 'Mojokerto'),
             'sign_date' => $existingForm->sign_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
             'applicant_name' => $existingForm->applicant_name ?? $existingForm->full_name,
             'signature_data' => $existingForm->signature_data,
@@ -142,6 +190,15 @@ class EventRegistrationFormController extends Controller
             'id' => null,
             'form_type' => $resolved['form_type'],
             'penataran_level' => $resolved['penataran_level'],
+            'target_level' => $defaultTargetLevel,
+            'last_exam_date' => ! empty($extraData['ujian_last_date_exam']) && $extraData['ujian_last_date_exam'] !== '0000-00-00' ? $extraData['ujian_last_date_exam'] : null,
+            'last_certificate_number' => $participant->last_certificate_number ?? (! empty($extraData['ujian_last_certificate']) && $extraData['ujian_last_certificate'] !== '-' ? $extraData['ujian_last_certificate'] : ''),
+            'last_certificate_date' => null,
+            'dojo_name' => $participant->origin_dojo ?? $extraData['dojo_name'] ?? '',
+            'dojo_leader_name' => 'Pengurus Dojo '.($participant->origin_dojo ?? $extraData['dojo_name'] ?? ''),
+            'dojo_leader_position' => 'Ketua Dojo',
+            'exam_fee' => 'Rp. 150.000,-',
+            'extra_fields' => [],
             'start_date' => $event->start_date?->format('Y-m-d'),
             'end_date' => $event->end_date?->format('Y-m-d'),
             'location' => $event->place,
@@ -172,7 +229,7 @@ class EventRegistrationFormController extends Controller
                     'tanggal' => '2024-12-15',
                 ],
             ] : []),
-            'sign_place' => 'Mojokerto',
+            'sign_place' => $event->isUkt() ? 'Surabaya' : 'Mojokerto',
             'sign_date' => now()->format('Y-m-d'),
             'applicant_name' => $participant->name,
             'signature_data' => null,
@@ -198,6 +255,9 @@ class EventRegistrationFormController extends Controller
                 'end_date' => $event->end_date?->format('d M Y'),
                 'place' => $event->place,
                 'organizer' => $event->organizer,
+                'event_type' => $event->event_type ?? 'penataran',
+                'event_type_label' => $event->event_type_label,
+                'is_ukt' => $event->isUkt(),
             ],
             'participant' => [
                 'id' => $participant->id,
@@ -211,7 +271,10 @@ class EventRegistrationFormController extends Controller
             ],
             'form' => $formData,
             'initialData' => $formData,
-            'formTypeInfo' => $resolved,
+            'formTypeInfo' => [
+                ...$resolved,
+                'is_kenshi' => $resolved['form_type'] === 'KENSHI',
+            ],
             'lampiranLabel' => $resolved['lampiran_label'],
             'waiverLampiranLabel' => $resolved['waiver_lampiran_label'],
             'photoRequirements' => $resolved['photo_requirements'],
@@ -236,26 +299,36 @@ class EventRegistrationFormController extends Controller
             ->where('participant_id', $participant->id)
             ->first();
 
+        $isKenshi = $request->input('form_type') === 'KENSHI' || $event->isUkt();
+
         $validated = $request->validate([
             'participant_id' => 'nullable|integer',
-            'form_type' => 'required|string|in:PELATIH,PENGUJI,WASIT',
-            'penataran_level' => 'required|string|in:Daerah,Nasional',
+            'form_type' => 'required|string|in:PELATIH,PENGUJI,WASIT,KENSHI',
+            'penataran_level' => 'nullable|string|max:50',
+            'target_level' => 'nullable|string|max:50',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
             'location' => 'nullable|string|max:255',
             'full_name' => 'required|string|max:255',
-            'birth_place' => 'required|string|max:100',
-            'birth_date' => 'required|date',
+            'birth_place' => $isKenshi ? 'nullable|string|max:100' : 'required|string|max:100',
+            'birth_date' => $isKenshi ? 'nullable|date' : 'required|date',
             'kenshi_id_number' => 'required|string|max:50',
             'dan_level' => 'required|string|max:30',
             'home_address' => 'required|string|max:1000',
-            'phone_number' => 'required|string|max:50',
+            'phone_number' => $isKenshi ? 'nullable|string|max:50' : 'required|string|max:50',
             'email' => 'nullable|email|max:150',
             'occupation' => 'nullable|string|max:150',
             'occupation_address' => 'nullable|string|max:1000',
             'occupation_phone' => 'nullable|string|max:50',
             'emergency_address' => 'nullable|string|max:1000',
-            'emergency_phone' => 'required|string|max:50',
+            'emergency_phone' => $isKenshi ? 'nullable|string|max:50' : 'required|string|max:50',
+            'last_exam_date' => 'nullable|date',
+            'last_certificate_number' => 'nullable|string|max:100',
+            'last_certificate_date' => 'nullable|date',
+            'dojo_name' => 'nullable|string|max:255',
+            'dojo_leader_name' => 'nullable|string|max:255',
+            'dojo_leader_position' => 'nullable|string|max:255',
+            'exam_fee' => 'nullable|string|max:100',
             'gasnas_records' => 'nullable|array',
             'gasnas_records.*.nomor' => 'nullable|string|max:100',
             'gasnas_records.*.tanggal' => 'nullable|string|max:50',
@@ -267,7 +340,8 @@ class EventRegistrationFormController extends Controller
             'sign_date' => 'required|date',
             'applicant_name' => 'required|string|max:255',
             'signature_data' => 'nullable|string',
-            'waiver_agreed' => 'required|accepted',
+            'waiver_agreed' => $isKenshi ? 'nullable|boolean' : 'required|accepted',
+            'extra_fields' => 'nullable|array',
         ], [
             'full_name.required' => 'Nama lengkap pemohon wajib diisi.',
             'kenshi_id_number.required' => 'Nomor Induk Kenshi (NIK) wajib diisi.',
@@ -304,7 +378,16 @@ class EventRegistrationFormController extends Controller
         $formValues = [
             'event_participant_id' => $enrollment?->id,
             'form_type' => $validated['form_type'],
-            'penataran_level' => $validated['penataran_level'],
+            'penataran_level' => $validated['penataran_level'] ?? ($isKenshi ? 'Kyu' : 'Daerah'),
+            'target_level' => $validated['target_level'] ?? $validated['penataran_level'] ?? null,
+            'last_exam_date' => $validated['last_exam_date'] ?? null,
+            'last_certificate_number' => $validated['last_certificate_number'] ?? null,
+            'last_certificate_date' => $validated['last_certificate_date'] ?? null,
+            'dojo_name' => $validated['dojo_name'] ?? null,
+            'dojo_leader_name' => $validated['dojo_leader_name'] ?? null,
+            'dojo_leader_position' => $validated['dojo_leader_position'] ?? null,
+            'exam_fee' => $validated['exam_fee'] ?? null,
+            'extra_fields' => $validated['extra_fields'] ?? null,
             'start_date' => $validated['start_date'] ?? $event->start_date,
             'end_date' => $validated['end_date'] ?? $event->end_date,
             'location' => $validated['location'] ?? $event->place,
@@ -323,7 +406,7 @@ class EventRegistrationFormController extends Controller
             'emergency_phone' => $validated['emergency_phone'] ?? null,
             'gasnas_records' => $filteredGasnas,
             'certificate_records' => $filteredCertificates,
-            'sign_place' => $validated['sign_place'] ?? 'Mojokerto',
+            'sign_place' => $validated['sign_place'] ?? ($event->isUkt() ? 'Surabaya' : 'Mojokerto'),
             'sign_date' => $validated['sign_date'] ?? now()->format('Y-m-d'),
             'applicant_name' => $validated['applicant_name'] ?? $validated['full_name'],
             'signature_data' => $signatureData,
@@ -376,7 +459,7 @@ class EventRegistrationFormController extends Controller
         }
 
         return redirect()->route('event.registration-form', $event->slug)
-            ->with('success', 'Formulir pendaftaran dan surat pernyataan berhasil disimpan dan diserahkan.');
+            ->with('success', 'Formulir pendaftaran berhasil disimpan dan diserahkan.');
     }
 
     /**
@@ -399,8 +482,8 @@ class EventRegistrationFormController extends Controller
 
         $request->validate([
             'file' => 'required|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:10240',
-            'form_type' => 'nullable|string|in:PELATIH,PENGUJI,WASIT',
-            'penataran_level' => 'nullable|string|in:Daerah,Nasional',
+            'form_type' => 'nullable|string|in:PELATIH,PENGUJI,WASIT,KENSHI',
+            'penataran_level' => 'nullable|string|max:50',
             'verified' => 'nullable|boolean',
             'auto_verify' => 'nullable|boolean',
             'notes' => 'nullable|string|max:500',

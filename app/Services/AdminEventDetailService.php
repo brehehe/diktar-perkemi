@@ -36,6 +36,7 @@ class AdminEventDetailService
         private readonly EventDocumentGenerator $documentGenerator,
         private readonly EventAssessmentService $assessmentService,
         private readonly EventPracticalExamService $practicalExamService,
+        private readonly EventKenshiExamService $kenshiExamService,
         private readonly EventFinanceAnalysisService $financeAnalysis,
         private readonly EventFinanceNarrativeService $financeNarrative,
     ) {}
@@ -784,12 +785,18 @@ class AdminEventDetailService
 
         $assessmentData = $this->assessmentService->getEventAssessmentData($event);
         $practicalExamData = $this->practicalExamService->getEventPracticalExamData($event);
+        $kenshiExamData = $this->kenshiExamService->supportsEvent($event)
+            ? $this->kenshiExamService->eventData($event)
+            : null;
         $stats['total_finances'] = $event->finances()->count();
         $stats['total_realisations'] = $event->activityRecords()->where('kind', 'realisation')->count();
         $stats['total_documentations'] = $event->activityRecords()->where('kind', 'documentation')->count();
         $stats['total_staff'] = $event->staff()->count();
 
         $user = request()->user();
+        if ($kenshiExamData !== null) {
+            $kenshiExamData['can_update'] = $user ? $user->can('update', $event) : false;
+        }
         $canManageStaff = $user ? $user->can('manageStaff', $event) : false;
         $canViewFinance = $user ? $user->can('viewFinance', $event) : false;
         $canManageFinance = $user ? $user->can('manageFinance', $event) : false;
@@ -854,6 +861,7 @@ class AdminEventDetailService
                 'id' => $event->id,
                 'name' => $event->name,
                 'slug' => $event->slug,
+                'event_type' => $event->event_type,
                 'description' => $event->description,
                 'start_date' => $event->start_date?->format('Y-m-d'),
                 'end_date' => $event->end_date?->format('Y-m-d'),
@@ -948,6 +956,7 @@ class AdminEventDetailService
             'publishedMaterials' => $publishedMaterials,
             'assessmentData' => $assessmentData,
             'practicalExamData' => $practicalExamData,
+            'kenshiExamData' => $kenshiExamData,
             'finances' => $finances,
             'financeAnalysis' => $financeAnalysis,
             'financeCategories' => FinanceCategory::query()

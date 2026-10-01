@@ -6,6 +6,7 @@ import Tabs from '../../../Components/admin/Tabs';
 import StatGrid from '../../../Components/admin/StatGrid';
 import EventAssessmentTab from './Partials/EventAssessmentTab';
 import EventPracticalExamTab from './Partials/EventPracticalExamTab';
+import EventKenshiExamTab from './Partials/EventKenshiExamTab';
 import EventReportsTab from './Partials/EventReportsTab';
 import EventOverviewTab from './Partials/EventOverviewTab';
 import EventScheduleTab from './Partials/EventScheduleTab';
@@ -36,6 +37,7 @@ export default function Show(props) {
         stats = {},
         assessmentData = null,
         practicalExamData = null,
+        kenshiExamData = null,
         finances = [],
         financeAnalysis = null,
         financeCategories = [],
@@ -163,6 +165,22 @@ export default function Show(props) {
                     {/* TAB: UJIAN PRAKTIK (1 LEMBAR SELURUH PESERTA - 6 JALUR) */}
                     {activeTab === 'ujian-praktik' && (
                         <EventPracticalExamTab event={event} practicalExamData={practicalExamData} />
+                    )}
+
+                    {activeTab === 'kenshi-penilaian' && (
+                        <EventKenshiExamTab event={event} kenshiExamData={kenshiExamData} mode="technique" />
+                    )}
+
+                    {activeTab === 'kenshi-tabulasi' && (
+                        <EventKenshiExamTab event={event} kenshiExamData={kenshiExamData} mode="tabulation" />
+                    )}
+
+                    {activeTab === 'kenshi-hasil' && (
+                        <EventKenshiExamTab event={event} kenshiExamData={kenshiExamData} mode="results" />
+                    )}
+
+                    {activeTab === 'kenshi-laporan' && (
+                        <EventKenshiExamTab event={event} kenshiExamData={kenshiExamData} mode="report" />
                     )}
 
                     {/* TAB 4: ABSENSI (DEDICATED ATTENDANCE MANAGEMENT) */}

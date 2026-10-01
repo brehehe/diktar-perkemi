@@ -12,6 +12,8 @@ use App\Http\Controllers\Admin\EventCertificateController;
 use App\Http\Controllers\Admin\EventCertificateSignatureSettingController;
 use App\Http\Controllers\Admin\EventController;
 use App\Http\Controllers\Admin\EventDocumentNumberSettingController;
+use App\Http\Controllers\Admin\EventKenshiExamAssessmentController;
+use App\Http\Controllers\Admin\EventKenshiExamDocumentController;
 use App\Http\Controllers\Admin\EventPracticalExamController;
 use App\Http\Controllers\Admin\EventReferenceController;
 use App\Http\Controllers\Admin\EventReportController;
@@ -261,6 +263,12 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/event/{event}/ujian-praktik', [EventPracticalExamController::class, 'save'])->name('event.practical-exam.save');
         Route::post('/event/{event}/ujian-praktik/bulk', [EventPracticalExamController::class, 'saveBulk'])->name('event.practical-exam.bulk-save');
         Route::get('/event/{event}/ujian-praktik/export-excel', [EventPracticalExamController::class, 'exportExcel'])->name('event.practical-exam.export-excel');
+
+        Route::get('/event/{event}/dokumen-ujian-kenshi/{document}', [EventKenshiExamDocumentController::class, 'show'])
+            ->whereIn('document', ['penilaian-teknik', 'tabulasi-penilaian', 'laporan-hasil', 'laporan-kyu-dan'])
+            ->name('event.kenshi-exam-documents.show');
+        Route::post('/event/{event}/ujian-kenshi', [EventKenshiExamAssessmentController::class, 'store'])
+            ->name('event.kenshi-exam-assessments.store');
 
         // Event Modul & CBT Linking
         Route::post('/event/{event}/modul-pembelajaran', [EventController::class, 'attachLearningModule'])->name('event.learning-module.attach');

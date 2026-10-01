@@ -42,6 +42,7 @@ export default function useEventShowState({
     cbtCompletionStats = {},
     assessmentData = null,
     practicalExamData = null,
+    kenshiExamData = null,
     finances = [],
     financeAnalysis = null,
     activities = [],
@@ -69,6 +70,10 @@ export default function useEventShowState({
             'hasil-ujian',
             'penilaian',
             'ujian-praktik',
+            'kenshi-penilaian',
+            'kenshi-tabulasi',
+            'kenshi-hasil',
+            'kenshi-laporan',
             'absensi',
             'keuangan',
             'dokumentasi',
@@ -155,6 +160,8 @@ export default function useEventShowState({
         { id: 'materi', label: 'Materi' },
         { id: 'cbt', label: 'Ujian CBT' },
     ];
+    const isKenshiExamEvent = ['ukt', 'kenshi'].includes(event.event_type)
+        || tracks.some((track) => track.code?.startsWith('KYU-'));
 
     const tabs = [
         { id: 'ringkasan', label: 'Informasi', count: null },
@@ -165,6 +172,12 @@ export default function useEventShowState({
         { id: 'hasil-ujian', label: 'Hasil Ujian CBT', count: stats.total_exam_attempts ?? (examAttempts?.length || 0) },
         { id: 'penilaian', label: 'Penilaian Form Praktik', count: stats.total_assessments ?? (assessmentData?.stats?.total_assessed || 0) },
         { id: 'ujian-praktik', label: 'Ujian Praktik (1 Lembar)', count: stats.total_practical_exams ?? (practicalExamData?.stats?.total_assessed || 0) },
+        ...(isKenshiExamEvent ? [
+            { id: 'kenshi-penilaian', label: 'Penilaian Teknik Kenshi', count: kenshiExamData?.stats?.total_assessed || 0 },
+            { id: 'kenshi-tabulasi', label: 'Tabulasi Nilai Kenshi', count: kenshiExamData?.stats?.total_participants || 0 },
+            { id: 'kenshi-hasil', label: 'Hasil Ujian Kenshi', count: kenshiExamData?.stats?.total_assessed || 0 },
+            { id: 'kenshi-laporan', label: 'Laporan Kyu–Dan', count: kenshiExamData?.stats?.total_participants || 0 },
+        ] : []),
         { id: 'absensi', label: 'Absensi', count: stats.total_attendances || attendances.length },
         { id: 'keuangan', label: 'Keuangan', count: stats.total_finances ?? finances?.length },
         { id: 'dokumentasi', label: 'Event Dokumentasi', count: stats.total_documentations },

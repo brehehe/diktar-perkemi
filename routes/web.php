@@ -27,6 +27,7 @@ use App\Http\Controllers\Admin\ParticipantController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\QuestionBankController;
 use App\Http\Controllers\Admin\QuestionModuleController;
+use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\ShowcaseController;
 use App\Http\Controllers\Admin\SpeakerController;
@@ -135,6 +136,13 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/pengguna', [UserController::class, 'store'])->name('users.store');
         Route::patch('/pengguna/{user}/role', [UserController::class, 'updateRole'])->name('users.role');
         Route::patch('/pengguna/{user}/password', [UserController::class, 'updatePassword'])->name('users.password');
+
+        // Master Role (Peran)
+        Route::get('/role', [RoleController::class, 'index'])->name('roles.index');
+        Route::post('/role', [RoleController::class, 'store'])->name('roles.store');
+        Route::put('/role/{role}', [RoleController::class, 'update'])->name('roles.update');
+        Route::delete('/role/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+        Route::get('/roles', fn () => redirect()->route('admin.roles.index'));
 
         // Hak Akses (Permissions)
         Route::get('/hak-akses', [PermissionController::class, 'index'])->name('permissions.index');

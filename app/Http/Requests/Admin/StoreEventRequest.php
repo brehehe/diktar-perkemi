@@ -23,7 +23,12 @@ class StoreEventRequest extends FormRequest
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'place' => ['required', 'string', 'max:255'],
             'organizer' => ['required', 'string', 'max:255'],
-            'responsible_user_id' => ['nullable', Rule::exists('users', 'id')->where('role', 'Penyelenggara')],
+            'responsible_user_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->whereNotIn('role', [
+                    'Peserta', 'participant', 'Pelatih', 'coach', 'Penguji', 'examiner', 'Wasit', 'referee',
+                ]),
+            ],
             'duration_days' => ['nullable', 'string', 'max:50'],
             'total_effective_jp' => ['required', 'integer', 'min:1'],
             'total_schedule_jp' => ['required', 'integer', 'min:1'],

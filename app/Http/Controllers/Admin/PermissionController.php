@@ -25,6 +25,7 @@ class PermissionController extends Controller
             ->map(fn (Role $r) => [
                 'id' => $r->id,
                 'name' => $r->name,
+                'label' => $r->label,
                 'description' => $r->description,
                 'permission_ids' => $r->permissions->pluck('id')->toArray(),
             ]);

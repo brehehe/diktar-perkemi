@@ -5,6 +5,7 @@ import {
     BookOpen,
     Tags,
     Users,
+    Shield,
     ShieldCheck,
     History,
     Settings,
@@ -146,6 +147,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 title: 'Sistem & Pengaturan',
                 items: [
                     { name: 'Pengguna', href: '/admin/pengguna', icon: Users },
+                    { name: 'Master Role', href: '/admin/role', icon: Shield },
                     { name: 'Hak Akses', href: '/admin/hak-akses', icon: ShieldCheck },
                     { name: 'Master Log', href: '/admin/aktivitas', icon: History },
                     { name: 'Pengaturan Portal', href: '/admin/pengaturan', icon: Settings },

@@ -29,6 +29,7 @@ export default function Home({
     roles = [],
     hero_books = {},
 }) {
+    const { props } = usePage();
     const isProdas = useIsProdas();
     const user = props.auth?.user;
 

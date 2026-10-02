@@ -7,6 +7,7 @@ import Toast from '../Components/ui/Toast';
 import { useIsProdas } from '../Utils/isProdas';
 
 export default function PortalLayout({ children, title = '' }) {
+    const { props } = usePage();
     const isProdas = useIsProdas();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 

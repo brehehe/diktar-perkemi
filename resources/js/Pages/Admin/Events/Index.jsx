@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '../../../Layouts/AdminLayout';
 import PageHeader from '../../../Components/admin/PageHeader';
 import DataTable from '../../../Components/ui/DataTable';
@@ -23,8 +23,10 @@ import {
     Award,
     Sparkles,
 } from 'lucide-react';
+import { useIsProdas } from '../../../Utils/isProdas';
 
 export default function Index({ events, filters = {}, stats = {}, availableYears = [], canCreateEvent = false, canDeleteEvent = false }) {
+    const isProdas = useIsProdas();
     const [search, setSearch] = useState(filters.q || '');
     const [selectedStatus, setSelectedStatus] = useState(filters.status || '');
     const [selectedYear, setSelectedYear] = useState(filters.year || '');
@@ -206,15 +208,17 @@ export default function Index({ events, filters = {}, stats = {}, availableYears
 
     return (
         <AdminLayout>
-            <Head title="Manajemen Event Penataran PERKEMI" />
+            <Head title={isProdas ? 'Manajemen Event Gashuku & UKT PERKEMI' : 'Manajemen Event Penataran PERKEMI'} />
 
             <div className="space-y-6">
                 {/* Header Page */}
                 <PageHeader
-                    title="Event Penataran Shorinji Kempo"
-                    description="Kelola seluruh penyelenggaraan workshop, penataran kualifikasi, rundown sesi, pemateri, dan peserta berjenjang PERKEMI."
+                    title={isProdas ? 'Event Gashuku & UKT Shorinji Kempo' : 'Event Penataran Shorinji Kempo'}
+                    description={isProdas
+                        ? 'Kelola seluruh penyelenggaraan event gashuku dan ujian kenaikan tingkat (UKT), rundown sesi, penguji, dan peserta berjenjang PERKEMI.'
+                        : 'Kelola seluruh penyelenggaraan workshop, penataran kualifikasi, rundown sesi, pemateri, dan peserta berjenjang PERKEMI.'}
                     breadcrumbs={[
-                        { label: 'Event Penataran' },
+                        { label: isProdas ? 'Event Gashuku dan UKT' : 'Event Penataran' },
                     ]}
                     action={
                         <div className="flex items-center gap-2">
@@ -238,7 +242,7 @@ export default function Index({ events, filters = {}, stats = {}, availableYears
                         onSearchChange={setSearch}
                         onSearchSubmit={handleSearchSubmit}
                         searchPlaceholder="Cari nama event, tempat, atau penyelenggara…"
-                        searchLabel="Cari event penataran"
+                        searchLabel={isProdas ? 'Cari event Gashuku & UKT' : 'Cari event penataran'}
                         hasActiveFilters={Boolean(search || selectedStatus || selectedYear || selectedOrganizer)}
                         onReset={handleResetFilters}
                     >
@@ -276,8 +280,10 @@ export default function Index({ events, filters = {}, stats = {}, availableYears
                     columns={columns}
                     data={events.data}
                     pagination={events}
-                    emptyTitle="Belum Ada Event Penataran"
-                    emptyDescription="Belum ada data kegiatan workshop atau penataran yang sesuai filter."
+                    emptyTitle={isProdas ? 'Belum Ada Event Gashuku & UKT' : 'Belum Ada Event Penataran'}
+                    emptyDescription={isProdas
+                        ? 'Belum ada data kegiatan gashuku atau UKT yang sesuai filter.'
+                        : 'Belum ada data kegiatan workshop atau penataran yang sesuai filter.'}
                 />
             </div>
 
@@ -285,7 +291,7 @@ export default function Index({ events, filters = {}, stats = {}, availableYears
             <AlertDialog
                 isOpen={Boolean(deletingEvent)}
                 onClose={() => setDeletingEvent(null)}
-                title="Hapus Event Penataran?"
+                title={isProdas ? 'Hapus Event Gashuku & UKT?' : 'Hapus Event Penataran?'}
                 description={`Apakah Anda yakin ingin menghapus event "${deletingEvent?.name}"? Seluruh data rundown sesi, modul, dan pendaftaran peserta di dalamnya akan ikut dihapus.`}
                 confirmText={isDeleting ? 'Menghapus…' : 'Ya, Hapus Event'}
                 cancelText="Batal"

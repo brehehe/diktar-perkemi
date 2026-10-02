@@ -16,9 +16,11 @@ import {
     Award,
     Calendar,
 } from 'lucide-react';
+import { useIsProdas } from '../../Utils/isProdas';
 
 export default function MobileNavigationDrawer({ isOpen, onClose }) {
     const { url, props } = usePage();
+    const isProdas = useIsProdas();
     const user = props.auth?.user;
     const canRegister = props.portal?.can_register ?? !props.portal?.is_register_off;
     const panelRef = useRef(null);
@@ -57,8 +59,10 @@ export default function MobileNavigationDrawer({ isOpen, onClose }) {
 
     const navItems = [
         { label: 'Beranda', href: '/', icon: Home, exact: true },
-        { label: 'Koleksi Digital', href: '/koleksi', icon: Layers, matchPrefix: '/koleksi' },
-        { label: 'Kategori Materi', href: '/kategori', icon: Tag, matchPrefix: '/kategori' },
+        ...(!isProdas ? [
+            { label: 'Koleksi Digital', href: '/koleksi', icon: Layers, matchPrefix: '/koleksi' },
+            { label: 'Kategori Materi', href: '/kategori', icon: Tag, matchPrefix: '/kategori' },
+        ] : []),
         ...(user?.role === 'Pemateri' ? [{ label: 'Jadwal & Materi', href: '/pemateri/jadwal', icon: Calendar, matchPrefix: '/pemateri' }] : []),
         ...(user && user?.role !== 'Pemateri' ? [{ label: 'Event Saya', href: '/event-saya', icon: BookOpen, matchPrefixes: ['/event-saya', '/event/'] }] : []),
         ...(user?.role === 'Peserta' ? [{ label: 'Dokumen Kelulusan', href: '/sertifikat-saya', icon: Award, exact: true }] : []),
@@ -116,7 +120,7 @@ export default function MobileNavigationDrawer({ isOpen, onClose }) {
                             </div>
                             <div>
                                 <span id="mobile-navigation-title" className="font-serif font-bold text-base tracking-tight block text-white">
-                                    Pustaka Penataran
+                                    {isProdas ? 'Pustaka Pendidikan' : 'Pustaka Penataran'}
                                 </span>
                                 <span className="text-[10px] text-[#EAF5FF]/80 uppercase tracking-wider block font-sans">
                                     Portal Buku Digital PERKEMI
@@ -183,9 +187,11 @@ export default function MobileNavigationDrawer({ isOpen, onClose }) {
                             <div className="grid grid-cols-2 gap-1.5">
                                 {[
                                     { name: 'Peserta', slug: 'peserta' },
-                                    { name: 'Pelatih', slug: 'pelatih' },
-                                    { name: 'Penguji', slug: 'penguji' },
-                                    { name: 'Wasit', slug: 'wasit' },
+                                    ...(!isProdas ? [
+                                        { name: 'Pelatih', slug: 'pelatih' },
+                                        { name: 'Penguji', slug: 'penguji' },
+                                        { name: 'Wasit', slug: 'wasit' },
+                                    ] : []),
                                     { name: 'Pemateri', slug: 'pemateri' },
                                     { name: 'Penyelenggara', slug: 'penyelenggara' },
                                 ].map((role) => (

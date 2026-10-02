@@ -1,3 +1,4 @@
+import { usePage } from '@inertiajs/react';
 import Button from '../../../../Components/ui/Button';
 import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
@@ -6,8 +7,10 @@ import FileInput from '../../../../Components/ui/FileInput';
 import { Pencil, Plus, Trash2, Camera, Calendar } from 'lucide-react';
 import { dateLabel, Empty } from './EventReportsPageShared';
 import { useEventReportsPage } from './EventReportsPageContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventReportsActivityTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         sessions,
@@ -42,12 +45,12 @@ export default function EventReportsActivityTab() {
                         </span>
                     </div>
                     <h2 id="activity-title" className="mt-2 font-display text-2xl font-semibold text-[#0A3F82]">
-                        {activeTab === 'realisation' ? 'Realisasi Acara Penataran' : 'Dokumentasi Foto & Video Kegiatan'}
+                        {activeTab === 'realisation' ? (isProdas ? 'Realisasi Acara Gashuku & UKT' : 'Realisasi Acara Penataran') : 'Dokumentasi Foto & Video Kegiatan'}
                     </h2>
                     <p className="mt-1 text-sm text-[#6B7C93]">
                         {activeTab === 'realisation'
                             ? 'Catat pelaksanaan aktual acara, evaluasi sesi rundown, dan kendala lapangan.'
-                            : 'Input nama & jenis kegiatan serta upload foto dan video bukti kegiatan penataran.'}
+                            : (isProdas ? 'Input nama & jenis kegiatan serta upload foto dan video bukti kegiatan Gashuku & UKT.' : 'Input nama & jenis kegiatan serta upload foto dan video bukti kegiatan penataran.')}
                     </p>
                 </div>
             </div>

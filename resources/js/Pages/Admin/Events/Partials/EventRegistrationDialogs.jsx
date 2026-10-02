@@ -8,8 +8,10 @@ import Checkbox from '../../../../Components/ui/Checkbox';
 import FileInput from '../../../../Components/ui/FileInput';
 import { FileText, List, Check, Printer, CheckCircle2, Download, Upload } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventRegistrationDialogs() {
+    const isProdas = useIsProdas();
     const {
         event,
         selectedFormForModal,
@@ -706,19 +708,43 @@ export default function EventRegistrationDialogs() {
                                 value={adminUploadFormType}
                                 onChange={(e) => setAdminUploadFormType(e.target.value)}
                             >
-                                <option value="PELATIH">Pelatih</option>
-                                <option value="PENGUJI">Penguji</option>
-                                <option value="WASIT">Wasit</option>
+                                {isProdas ? (
+                                    <option value="KENSHI">Formulir Permohonan Kenshi (UKT)</option>
+                                ) : (
+                                    <>
+                                        <option value="PELATIH">Pelatih</option>
+                                        <option value="PENGUJI">Penguji</option>
+                                        <option value="WASIT">Wasit</option>
+                                    </>
+                                )}
                             </Select>
                         </FormField>
 
-                        <FormField label="Tingkatan Penataran" required>
+                        <FormField label={isProdas ? 'Tingkatan Ujian (Kyu / Dan)' : 'Tingkatan Penataran'} required>
                             <Select
                                 value={adminUploadPenataranLevel}
                                 onChange={(e) => setAdminUploadPenataranLevel(e.target.value)}
                             >
-                                <option value="Daerah">Daerah</option>
-                                <option value="Nasional">Nasional</option>
+                                {isProdas ? (
+                                    <>
+                                        <option value="Kyu 8">Kyu 8</option>
+                                        <option value="Kyu 7">Kyu 7</option>
+                                        <option value="Kyu 6">Kyu 6</option>
+                                        <option value="Kyu 5">Kyu 5</option>
+                                        <option value="Kyu 4">Kyu 4</option>
+                                        <option value="Kyu 3">Kyu 3</option>
+                                        <option value="Kyu 2">Kyu 2</option>
+                                        <option value="Kyu 1">Kyu 1</option>
+                                        <option value="I-DAN">I-DAN</option>
+                                        <option value="II-DAN">II-DAN</option>
+                                        <option value="III-DAN">III-DAN</option>
+                                    </>
+                                ) : (
+                                    <>
+                                        <option value="Daerah">Daerah</option>
+                                        <option value="Nasional">Nasional</option>
+                                    </>
+                                )}
                             </Select>
                         </FormField>
                     </div>

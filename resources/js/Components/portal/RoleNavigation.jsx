@@ -1,6 +1,7 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { Users, ArrowRight, Award, Shield, UserCheck, Mic, Calendar, BookmarkCheck } from 'lucide-react';
+import { useIsProdas } from '../../Utils/isProdas';
 
 const roleConfig = {
     peserta: {
@@ -49,7 +50,12 @@ const defaultConfig = {
 };
 
 export default function RoleNavigation({ roles = [] }) {
-    if (!roles || roles.length === 0) return null;
+    const isProdas = useIsProdas();
+    const filteredRoles = isProdas
+        ? roles.filter((r) => !['pelatih', 'penguji', 'wasit'].includes(r.slug?.toLowerCase()))
+        : roles;
+
+    if (!filteredRoles || filteredRoles.length === 0) return null;
 
     return (
         <section id="peran" className="space-y-6">
@@ -77,7 +83,7 @@ export default function RoleNavigation({ roles = [] }) {
 
             {/* 2-column grid for more content width per card */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {roles.map((role) => {
+                {filteredRoles.map((role) => {
                     const slug = role.slug || role.code;
                     const config = roleConfig[slug] || defaultConfig;
                     const { Icon, color, bg, border } = config;

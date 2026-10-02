@@ -1,5 +1,5 @@
 import React from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '../../../Layouts/AdminLayout';
 import PageHeader from '../../../Components/admin/PageHeader';
 import Button from '../../../Components/ui/Button';
@@ -8,8 +8,10 @@ import Input from '../../../Components/ui/Input';
 import Select from '../../../Components/ui/Select';
 import Textarea from '../../../Components/ui/Textarea';
 import { ArrowLeft, Save, Calendar, Clock } from 'lucide-react';
+import { useIsProdas } from '../../../Utils/isProdas';
 
 export default function Edit({ event = {}, organizers = [], canAssignOrganizer = false }) {
+    const isProdas = useIsProdas();
     const eventName = event.name || event.title || '';
     const eventPlace = event.place || event.location || '';
     const eventDuration = event.duration_days || event.duration_text || '';
@@ -31,7 +33,7 @@ export default function Edit({ event = {}, organizers = [], canAssignOrganizer =
         learning_method: event.learning_method || '',
         participant_quota: eventQuota,
         status: event.status || 'draft',
-        event_type: event.event_type || 'penataran',
+        event_type: event.event_type || (isProdas ? 'ukt' : 'penataran'),
         cover_image: eventBanner,
         banner_image: eventBanner,
     });
@@ -48,9 +50,11 @@ export default function Edit({ event = {}, organizers = [], canAssignOrganizer =
             <div className="mx-auto w-full max-w-full space-y-6">
                 <PageHeader
                     title="Edit Informasi Event"
-                    description="Perbarui informasi umum, tipe kegiatan (kenshi atau penataran), tanggal kegiatan, kuota, atau konfigurasi jam pelajaran."
+                    description={isProdas
+                        ? 'Perbarui informasi umum kegiatan Gashuku & UKT, tanggal kegiatan, kuota, atau konfigurasi jam pelajaran.'
+                        : 'Perbarui informasi umum, tipe kegiatan (kenshi atau penataran), tanggal kegiatan, kuota, atau konfigurasi jam pelajaran.'}
                     breadcrumbs={[
-                        { label: 'Event', href: '/admin/event' },
+                        { label: isProdas ? 'Event Gashuku dan UKT' : 'Event', href: '/admin/event' },
                         { label: eventName || 'Detail', href: `/admin/event/${event.id}` },
                         { label: 'Edit' },
                     ]}
@@ -76,8 +80,8 @@ export default function Edit({ event = {}, organizers = [], canAssignOrganizer =
                                 value={data.event_type}
                                 onChange={(e) => setData('event_type', e.target.value)}
                             >
-                                <option value="penataran">Penataran (Pelatih, Penguji, Wasit)</option>
-                                <option value="ukt">Gashuku & UKT (Kenshi)</option>
+                                {!isProdas && <option value="penataran">Penataran (Pelatih, Penguji, Wasit)</option>}
+                                <option value="ukt">{isProdas ? 'Event Gashuku & UKT (Kenshi)' : 'Gashuku & UKT (Kenshi)'}</option>
                             </Select>
                             <p className="mt-1 text-xs text-[#6B7C93]">
                                 {data.event_type === 'ukt'

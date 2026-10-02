@@ -4,14 +4,16 @@ import PortalHeader from '../Components/portal/PortalHeader';
 import PortalFooter from '../Components/portal/PortalFooter';
 import MobileNavigationDrawer from '../Components/portal/MobileNavigationDrawer';
 import Toast from '../Components/ui/Toast';
+import { useIsProdas } from '../Utils/isProdas';
 
 export default function PortalLayout({ children, title = '' }) {
-    const { props } = usePage();
+    const isProdas = useIsProdas();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+    const siteName = isProdas ? 'Pustaka Pendidikan' : 'Pustaka Penataran';
     const pageTitle = title
-        ? `${title} — Pustaka Penataran PERKEMI`
-        : 'Pustaka Penataran — Portal Buku Digital PERKEMI';
+        ? `${title} — ${siteName} PERKEMI`
+        : `${siteName} — Portal Buku Digital PERKEMI`;
 
     return (
         <div className="min-h-screen flex flex-col bg-[#F8FBFF] text-[#112743] font-sans antialiased selection:bg-[#EAF5FF] selection:text-[#0B63CE]">

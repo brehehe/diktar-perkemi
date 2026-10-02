@@ -2,8 +2,10 @@ import { Link } from '@inertiajs/react';
 import Button from '../../../../Components/ui/Button';
 import { Edit3, BookOpen, Plus, Trash2 } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventMaterialsTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         modules,
@@ -19,7 +21,7 @@ export default function EventMaterialsTab() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#DCE7F3]">
                 <div>
                     <h3 className="font-display font-bold text-sm text-[#0E2747]">
-                        Modul Kurikulum & Koleksi Buku Digital Penataran
+                        {isProdas ? 'Modul Kurikulum & Bahan Pembelajaran' : 'Modul Kurikulum & Koleksi Buku Digital Penataran'}
                     </h3>
                     <p className="text-xs text-[#6B7C93]">
                         Modul kurikulum event dan buku digital yang telah dihubungkan.

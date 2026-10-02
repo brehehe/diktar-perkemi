@@ -5,8 +5,10 @@ import Select from '../../../../Components/ui/Select';
 import Checkbox from '../../../../Components/ui/Checkbox';
 import { ExternalLink, UserCheck, Sparkles, Key } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventSpeakersTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         speakers,
@@ -22,7 +24,7 @@ export default function EventSpeakersTab() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#DCE7F3]">
                 <div>
                     <h3 className="font-display font-bold text-sm text-[#0E2747]">
-                        Dewan Guru & Instruktur Penataran
+                        {isProdas ? 'Dewan Guru & Instruktur Kegiatan' : 'Dewan Guru & Instruktur Penataran'}
                     </h3>
                     <p className="text-xs text-[#6B7C93]">
                         Pemateri internal PERKEMI dan narasumber eksternal pengampu materi kurikulum.

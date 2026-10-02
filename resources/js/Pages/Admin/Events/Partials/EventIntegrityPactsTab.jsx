@@ -1,10 +1,13 @@
+import { usePage } from '@inertiajs/react';
 import TableSurface from '../../../../Components/admin/TableSurface';
 import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
 import { FileText, FileCheck, ChevronLeft, ChevronRight, Search, Filter, Eye, Check, Printer, CheckCircle2, Download, Upload, FileEdit } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventIntegrityPactsTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         stats,
@@ -82,21 +85,23 @@ export default function EventIntegrityPactsTab() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <Select
-                        placeholder=""
-                        aria-label="Filter jalur pakta"
-                        value={pactTrackFilter}
-                        onChange={(e) => {
-                            setPactTrackFilter(e.target.value);
-                            setPactPage(1);
-                        }}
-                        className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
-                    >
-                        <option value="all">Semua Kategori Pakta</option>
-                        <option value="pelatih">Pakta Integritas Pelatih</option>
-                        <option value="penguji">Pakta Integritas Penguji</option>
-                        <option value="wasit">Pakta Integritas Wasit</option>
-                    </Select>
+                    {!isProdas && (
+                        <Select
+                            placeholder=""
+                            aria-label="Filter jalur pakta"
+                            value={pactTrackFilter}
+                            onChange={(e) => {
+                                setPactTrackFilter(e.target.value);
+                                pactTrackFilter !== e.target.value && setPactPage(1);
+                            }}
+                            className="rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2 text-xs font-medium text-[#112743] focus:border-[#0B63CE] focus:outline-none"
+                        >
+                            <option value="all">Semua Kategori Pakta</option>
+                            <option value="pelatih">Pakta Integritas Pelatih</option>
+                            <option value="penguji">Pakta Integritas Penguji</option>
+                            <option value="wasit">Pakta Integritas Wasit</option>
+                        </Select>
+                    )}
 
                     <Select
                         placeholder=""

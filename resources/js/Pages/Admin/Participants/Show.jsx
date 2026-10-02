@@ -4,6 +4,7 @@ import AdminLayout from '../../../Layouts/AdminLayout';
 import PageHeader from '../../../Components/admin/PageHeader';
 import Badge from '../../../Components/ui/Badge';
 import Tabs from '../../../Components/admin/Tabs';
+import { useIsProdas } from '../../../Utils/isProdas';
 
 const display = (value) => value === null || value === undefined || value === '' ? '—' : value;
 
@@ -18,6 +19,7 @@ function Detail({ label, value }) {
 
 export default function Show({ participant, enrolledEvents = [], matchingUser = null }) {
     const { url } = usePage();
+    const isProdas = useIsProdas();
     const activeTab = new URLSearchParams(url.split('?')[1] || '').get('tab') === 'event' ? 'event' : 'informasi';
     const baseUrl = `/admin/master/peserta/${participant.id}`;
 
@@ -105,19 +107,21 @@ export default function Show({ participant, enrolledEvents = [], matchingUser = 
                         </div>
                     </div>
 
-                    {/* Section Riwayat Sertifikasi */}
+                    {/* Section Riwayat Sertifikasi / Gashuku & UKT */}
                     <section aria-labelledby="participant-certifications" className="border border-[#DCE7F3] bg-white p-5 sm:p-6">
                         <div className="flex items-center justify-between pb-3 border-b border-[#DCE7F3]">
                             <div>
                                 <h2 id="participant-certifications" className="font-display text-lg font-bold text-[#0E2747]">
-                                    Riwayat Sertifikasi & Kualifikasi
+                                    {isProdas ? 'Riwayat Gashuku dan UKT' : 'Riwayat Sertifikasi & Kualifikasi'}
                                 </h2>
                                 <p className="text-sm text-[#6B7C93] mt-0.5">
-                                    Sertifikat dan lisensi kualifikasi yang pernah diikuti kenshi.
+                                    {isProdas
+                                        ? 'Riwayat kegiatan Gashuku dan Ujian Kenaikan Tingkat (UKT) yang pernah diikuti kenshi.'
+                                        : 'Sertifikat dan lisensi kualifikasi yang pernah diikuti kenshi.'}
                                 </p>
                             </div>
                             <span className="text-xs font-semibold px-2.5 py-1 rounded bg-[#EAF5FF] text-[#0B63CE] border border-[#0B63CE]/20">
-                                {participant.certifications_history?.length || 0} Sertifikasi Terdata
+                                {participant.certifications_history?.length || 0} {isProdas ? 'Kegiatan Terdata' : 'Sertifikasi Terdata'}
                             </span>
                         </div>
 
@@ -147,7 +151,9 @@ export default function Show({ participant, enrolledEvents = [], matchingUser = 
                             </div>
                         ) : (
                             <div className="py-6 text-center text-sm text-[#6B7C93]">
-                                Belum ada riwayat sertifikasi sebelumnya yang tercatat di sistem.
+                                {isProdas
+                                    ? 'Belum ada riwayat Gashuku dan UKT sebelumnya yang tercatat di sistem.'
+                                    : 'Belum ada riwayat sertifikasi sebelumnya yang tercatat di sistem.'}
                             </div>
                         )}
 

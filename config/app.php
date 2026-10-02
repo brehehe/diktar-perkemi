@@ -123,4 +123,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'is_prodas' => filter_var(env('IS_PRODAS', false), FILTER_VALIDATE_BOOLEAN),
+
 ];

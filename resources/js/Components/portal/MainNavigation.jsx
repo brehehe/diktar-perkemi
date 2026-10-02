@@ -1,12 +1,16 @@
 import { Link, usePage } from '@inertiajs/react';
+import { useIsProdas } from '../../Utils/isProdas';
 
 export default function MainNavigation({ className = '' }) {
     const { url, props } = usePage();
+    const isProdas = useIsProdas();
 
     const navItems = [
         { label: 'Beranda', href: '/', exact: true },
-        { label: 'Koleksi', href: '/koleksi', matchPrefix: '/koleksi' },
-        { label: 'Kategori', href: '/kategori', matchPrefix: '/kategori' },
+        ...(!isProdas ? [
+            { label: 'Koleksi', href: '/koleksi', matchPrefix: '/koleksi' },
+            { label: 'Kategori', href: '/kategori', matchPrefix: '/kategori' },
+        ] : []),
         ...(props.auth?.user?.role === 'Pemateri' ? [{ label: 'Jadwal & Materi', href: '/pemateri/jadwal', matchPrefix: '/pemateri' }] : []),
         ...(props.auth?.user && props.auth?.user?.role !== 'Pemateri' ? [{ label: 'Event Saya', href: '/event-saya', matchPrefixes: ['/event-saya', '/event/'] }] : []),
         ...(props.auth?.user?.role === 'Peserta' ? [{ label: 'Dokumen', href: '/sertifikat-saya', exact: true }] : []),

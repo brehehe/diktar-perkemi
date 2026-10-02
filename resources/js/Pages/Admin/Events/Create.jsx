@@ -1,5 +1,5 @@
 import React from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '../../../Layouts/AdminLayout';
 import PageHeader from '../../../Components/admin/PageHeader';
 import Button from '../../../Components/ui/Button';
@@ -8,8 +8,11 @@ import Input from '../../../Components/ui/Input';
 import Select from '../../../Components/ui/Select';
 import Textarea from '../../../Components/ui/Textarea';
 import { ArrowLeft, Save, Calendar, Info, Clock, MapPin, Building, Users } from 'lucide-react';
+import { useIsProdas } from '../../../Utils/isProdas';
 
 export default function Create({ organizers = [], canAssignOrganizer = true, currentOrganizer = null }) {
+    const isProdas = useIsProdas();
+
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         description: '',
@@ -25,7 +28,7 @@ export default function Create({ organizers = [], canAssignOrganizer = true, cur
         learning_method: '',
         participant_quota: '',
         status: 'draft',
-        event_type: 'penataran',
+        event_type: isProdas ? 'ukt' : 'penataran',
         cover_image: '',
         banner_image: '',
     });
@@ -37,14 +40,16 @@ export default function Create({ organizers = [], canAssignOrganizer = true, cur
 
     return (
         <AdminLayout>
-            <Head title="Tambah Event Baru" />
+            <Head title={isProdas ? 'Tambah Event Gashuku & UKT Baru' : 'Tambah Event Baru'} />
 
             <div className="mx-auto w-full max-w-full space-y-6">
                 <PageHeader
-                    title="Buat Event Baru"
-                    description="Daftarkan kegiatan penataran (pelatih/penguji/wasit) atau gashuku & UKT kenshi."
+                    title={isProdas ? 'Buat Event Gashuku & UKT' : 'Buat Event Baru'}
+                    description={isProdas
+                        ? 'Daftarkan kegiatan event gashuku & UKT kenshi.'
+                        : 'Daftarkan kegiatan penataran (pelatih/penguji/wasit) atau gashuku & UKT kenshi.'}
                     breadcrumbs={[
-                        { label: 'Event', href: '/admin/event' },
+                        { label: isProdas ? 'Event Gashuku dan UKT' : 'Event', href: '/admin/event' },
                         { label: 'Tambah Event' },
                     ]}
                     action={
@@ -69,8 +74,8 @@ export default function Create({ organizers = [], canAssignOrganizer = true, cur
                                 value={data.event_type}
                                 onChange={(e) => setData('event_type', e.target.value)}
                             >
-                                <option value="penataran">Penataran (Pelatih, Penguji, Wasit)</option>
-                                <option value="ukt">Gashuku & UKT (Kenshi)</option>
+                                {!isProdas && <option value="penataran">Penataran (Pelatih, Penguji, Wasit)</option>}
+                                <option value="ukt">{isProdas ? 'Event Gashuku & UKT (Kenshi)' : 'Gashuku & UKT (Kenshi)'}</option>
                             </Select>
                             <p className="mt-1 text-xs text-[#6B7C93]">
                                 {data.event_type === 'ukt'
@@ -83,7 +88,7 @@ export default function Create({ organizers = [], canAssignOrganizer = true, cur
                             <Input
                                 value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}
-                                placeholder="Contoh: Workshop Kualifikasi Pelatih & Wasit Shorinji Kempo 2026"
+                                placeholder={isProdas ? 'Contoh: Gashuku Wilayah & UKT Menuju Dan 2026' : 'Contoh: Workshop Kualifikasi Pelatih & Wasit Shorinji Kempo 2026'}
                                 required
                             />
                         </FormField>

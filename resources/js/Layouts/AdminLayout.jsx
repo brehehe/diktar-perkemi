@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import AdminSidebar from '../Components/admin/AdminSidebar';
 import AdminTopbar from '../Components/admin/AdminTopbar';
 import Toast from '../Components/ui/Toast';
+import { useIsProdas } from '../Utils/isProdas';
 
 export default function AdminLayout({ children, title, header }) {
+    const isProdas = useIsProdas();
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const mobileSidebarRef = useRef(null);
 
@@ -77,7 +79,7 @@ export default function AdminLayout({ children, title, header }) {
 
                     {/* Footer note */}
                     <footer className="py-4 px-6 border-t border-[#DCE7F3] text-center text-xs text-[#6B7C93] bg-white">
-                        Pustaka Penataran &copy; {new Date().getFullYear()} Persaudaraan Shorinji Kempo Indonesia (PERKEMI). Seluruh Hak Cipta Dilindungi.
+                        {isProdas ? 'Pustaka Pendidikan' : 'Pustaka Penataran'} &copy; {new Date().getFullYear()} Persaudaraan Shorinji Kempo Indonesia (PERKEMI). Seluruh Hak Cipta Dilindungi.
                     </footer>
                 </div>
             </div>

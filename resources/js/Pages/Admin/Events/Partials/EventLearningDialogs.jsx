@@ -10,8 +10,10 @@ import Combobox from '../../../../Components/ui/Combobox';
 import FileInput from '../../../../Components/ui/FileInput';
 import { Trash2, Upload, Camera } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventLearningDialogs() {
+    const isProdas = useIsProdas();
     const {
         event,
         availableMasterModules,
@@ -73,7 +75,9 @@ export default function EventLearningDialogs() {
                     setIsModuleModalOpen(false);
                     setEditingModule(null);
                 }}
-                title={editingModule ? 'Edit Modul Kurikulum Penataran' : 'Tambah Modul Kurikulum Penataran'}
+                title={isProdas
+                    ? (editingModule ? 'Edit Modul Kurikulum' : 'Tambah Modul Kurikulum')
+                    : (editingModule ? 'Edit Modul Kurikulum Penataran' : 'Tambah Modul Kurikulum Penataran')}
                 size="full"
                 footer={
                     <>

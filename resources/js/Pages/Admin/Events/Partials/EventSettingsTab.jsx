@@ -1,8 +1,10 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { Edit3, Check } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventSettingsTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         sessionsByDay,
@@ -19,7 +21,7 @@ export default function EventSettingsTab() {
             </div>
             <div className="space-y-1">
                 <h3 className="font-display font-bold text-sm text-[#0E2747]">
-                    Pengaturan Operasional Event Penataran
+                    {isProdas ? 'Pengaturan Operasional Event Gashuku & UKT' : 'Pengaturan Operasional Event Penataran'}
                 </h3>
                 <p className="text-xs text-[#6B7C93]">
                     Absensi QR per hari dan sesi serta standar kelulusan ujian.

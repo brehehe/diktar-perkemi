@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '../../../Layouts/AdminLayout';
 import PageHeader from '../../../Components/admin/PageHeader';
 import DataTable from '../../../Components/ui/DataTable';
@@ -10,8 +10,10 @@ import StatGrid from '../../../Components/admin/StatGrid';
 import TableToolbar from '../../../Components/admin/TableToolbar';
 import ParticipantDialogs from './Partials/ParticipantDialogs';
 import { GraduationCap, Plus, Edit3, Trash2, Award, Calendar, ChevronRight, UserCheck, CheckCircle, Upload, Download } from 'lucide-react';
+import { useIsProdas } from '../../../Utils/isProdas';
 
 export default function Index({ participants, filters = {}, stats = {}, availableTracks = [], events = [] }) {
+    const isProdas = useIsProdas();
     const [search, setSearch] = useState(filters.q || '');
     const [selectedDan, setSelectedDan] = useState(filters.dan_level || '');
     const [selectedOrigin, setSelectedOrigin] = useState(filters.origin || '');
@@ -226,7 +228,7 @@ export default function Index({ participants, filters = {}, stats = {}, availabl
             ),
         },
         {
-            header: 'Sertifikasi & Riwayat',
+            header: isProdas ? 'Riwayat Gashuku & UKT' : 'Sertifikasi & Riwayat',
             cell: (row) => (
                 <div className="text-xs space-y-1 max-w-[200px]">
                     {row.target_track ? (

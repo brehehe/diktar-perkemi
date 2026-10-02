@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import AdminLayout from '../../Layouts/AdminLayout';
 import PageHeader from '../../Components/admin/PageHeader';
 import Badge from '../../Components/ui/Badge';
@@ -17,6 +17,7 @@ import {
     History,
     Layers,
 } from 'lucide-react';
+import { useIsProdas } from '../../Utils/isProdas';
 
 export default function Dashboard({
     metrics,
@@ -25,6 +26,8 @@ export default function Dashboard({
     recent_materials = [],
     category_distribution = [],
 }) {
+    const isProdas = useIsProdas();
+
     const statCards = [
         {
             key: 'materials',
@@ -54,7 +57,7 @@ export default function Dashboard({
             key: 'users',
             label: 'Pengguna Terdaftar',
             value: metrics?.total_users ?? 0,
-            description: 'Kenshi, pelatih, wasit, dan admin',
+            description: isProdas ? 'Kenshi dan admin terdaftar' : 'Kenshi, pelatih, wasit, dan admin',
             icon: Users,
             tone: 'purple',
         },
@@ -91,11 +94,13 @@ export default function Dashboard({
         <AdminLayout title="Ringkasan Portal">
             <PageHeader
                 title="Ringkasan Portal"
-                description="Statistik komprehensif, alur kurasi materi, dan rekaman audit aktivitas Pustaka Penataran PERKEMI."
+                description={`Statistik komprehensif, alur kurasi materi, dan rekaman audit aktivitas ${isProdas ? 'Pustaka Pendidikan' : 'Pustaka Penataran'} PERKEMI.`}
                 action={
-                    <Button as={Link} href="/admin/koleksi/create" variant="primary" size="sm" icon={Plus}>
-                        Tambah Materi
-                    </Button>
+                    !isProdas ? (
+                        <Button as={Link} href="/admin/koleksi/create" variant="primary" size="sm" icon={Plus}>
+                            Tambah Materi
+                        </Button>
+                    ) : null
                 }
             />
 

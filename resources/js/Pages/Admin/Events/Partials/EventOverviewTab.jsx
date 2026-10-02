@@ -1,8 +1,10 @@
 import { Link } from '@inertiajs/react';
 import { Clock, ExternalLink, FileText, ChevronRight } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventOverviewTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         sessionsByDay,
@@ -19,7 +21,7 @@ export default function EventOverviewTab() {
                 <div className="bg-white rounded-xl border border-[#DCE7F3] p-6 shadow-xs space-y-4">
                     <h3 className="font-display font-bold text-sm text-[#0E2747] flex items-center gap-2">
                         <FileText className="w-4 h-4 text-[#0B63CE]" />
-                        Deskripsi & Konsep Penataran
+                        {isProdas ? 'Deskripsi & Konsep Acara' : 'Deskripsi & Konsep Penataran'}
                     </h3>
                     <p className="text-xs text-[#112743] leading-relaxed">
                         {event.description || 'Tidak ada deskripsi rinci untuk event ini.'}

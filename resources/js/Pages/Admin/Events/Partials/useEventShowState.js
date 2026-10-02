@@ -3,6 +3,7 @@ import { router, usePage } from '@inertiajs/react';
 import useEventReviewState from './useEventReviewState';
 import useEventDocumentState from './useEventDocumentState';
 import useEventManagementState from './useEventManagementState';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function useEventShowState({
     event,
@@ -53,6 +54,7 @@ export default function useEventShowState({
     reportSessions = [],
 }) {
     const isPortalAdmin = usePage().props.auth?.user?.is_admin;
+    const isProdas = useIsProdas();
     // Active tab state
     const [activeTab, setActiveTab] = useState(() => {
         if (typeof window === 'undefined') return 'ringkasan';
@@ -160,7 +162,8 @@ export default function useEventShowState({
         { id: 'materi', label: 'Materi' },
         { id: 'cbt', label: 'Ujian CBT' },
     ];
-    const isKenshiExamEvent = ['ukt', 'kenshi'].includes(event.event_type)
+    const isKenshiExamEvent = isProdas
+        || ['ukt', 'kenshi'].includes(event.event_type)
         || tracks.some((track) => track.code?.startsWith('KYU-'));
 
     const tabs = [
@@ -170,8 +173,10 @@ export default function useEventShowState({
         { id: 'formulir', label: 'Formulir Pendaftaran', count: stats.total_registration_forms ?? registrationForms.length },
         { id: 'pakta', label: 'Pakta Integritas', count: stats.total_integrity_pacts ?? (integrityPacts?.length || 0) },
         { id: 'hasil-ujian', label: 'Hasil Ujian CBT', count: stats.total_exam_attempts ?? (examAttempts?.length || 0) },
-        { id: 'penilaian', label: 'Penilaian Form Praktik', count: stats.total_assessments ?? (assessmentData?.stats?.total_assessed || 0) },
-        { id: 'ujian-praktik', label: 'Ujian Praktik (1 Lembar)', count: stats.total_practical_exams ?? (practicalExamData?.stats?.total_assessed || 0) },
+        ...(!isProdas ? [
+            { id: 'penilaian', label: 'Penilaian Form Praktik', count: stats.total_assessments ?? (assessmentData?.stats?.total_assessed || 0) },
+            { id: 'ujian-praktik', label: 'Ujian Praktik (1 Lembar)', count: stats.total_practical_exams ?? (practicalExamData?.stats?.total_assessed || 0) },
+        ] : []),
         ...(isKenshiExamEvent ? [
             { id: 'kenshi-penilaian', label: 'Penilaian Teknik Kenshi', count: kenshiExamData?.stats?.total_assessed || 0 },
             { id: 'kenshi-tabulasi', label: 'Tabulasi Nilai Kenshi', count: kenshiExamData?.stats?.total_participants || 0 },
@@ -181,7 +186,7 @@ export default function useEventShowState({
         { id: 'absensi', label: 'Absensi', count: stats.total_attendances || attendances.length },
         { id: 'keuangan', label: 'Keuangan', count: stats.total_finances ?? finances?.length },
         { id: 'dokumentasi', label: 'Event Dokumentasi', count: stats.total_documentations },
-        { id: 'realisasi', label: 'Realisasi Acara', count: stats.total_realisations },
+        { id: 'realisasi', label: isProdas ? 'Realisasi Acara Gashuku & UKT' : 'Realisasi Acara', count: stats.total_realisations },
         { id: 'petugas', label: 'Penugasan Kluster Petugas', count: stats.total_staff },
         { id: 'rekap-laporan', label: 'Rekap & Ekspor Laporan', count: null },
         { id: 'pemateri', label: 'Pemateri', count: stats.total_speakers },

@@ -27,15 +27,20 @@ import {
     Camera,
     ClipboardCheck,
 } from 'lucide-react';
+import { useIsProdas } from '../../Utils/isProdas';
 
 export default function AdminSidebar({ isMobile = false, onClose }) {
     const { url, props } = usePage();
+    const isProdas = useIsProdas();
     const role = props.auth?.user?.role;
     const isPortalAdmin = props.auth?.user?.is_admin;
     const isDiktar = role === 'Diktar';
     const isPenyelenggara = role === 'Penyelenggara';
     const isCoordinator = role === 'Koordinator Acara' || role === 'Koordinator Jadwal';
     const isReportingStaff = ['Bendahara', 'Sie Acara', 'Dokumentasi'].includes(role);
+
+    const eventPenataranLabel = isProdas ? 'Event Gashuku dan UKT' : 'Event Penataran';
+    const realisasiAcaraLabel = isProdas ? 'Realisasi Acara Gashuku & UKT' : 'Realisasi Acara Penataran';
 
     const masterItems = [
         {
@@ -94,16 +99,18 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
             {
                 title: 'Landing Page & Pustaka',
                 items: [
-                    {
-                        name: 'Koleksi Digital',
-                        href: '/admin/koleksi',
-                        icon: BookOpen,
-                    },
-                    {
-                        name: 'Kategori',
-                        href: '/admin/kategori',
-                        icon: Tags,
-                    },
+                    ...(!isProdas ? [
+                        {
+                            name: 'Koleksi Digital',
+                            href: '/admin/koleksi',
+                            icon: BookOpen,
+                        },
+                        {
+                            name: 'Kategori',
+                            href: '/admin/kategori',
+                            icon: Tags,
+                        },
+                    ] : []),
                     {
                         name: 'Showcase Beranda',
                         href: '/admin/showcase',
@@ -112,10 +119,10 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 ],
             },
             {
-                title: 'Event Penataran',
+                title: eventPenataranLabel,
                 items: [
                     {
-                        name: 'Event Penataran',
+                        name: eventPenataranLabel,
                         href: '/admin/event',
                         icon: Calendar,
                     },
@@ -127,7 +134,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                     { name: 'Referensi Event', href: '/admin/referensi-event', icon: Layers },
                     { name: 'Keuangan', href: '/admin/keuangan', icon: Wallet },
                     { name: 'Event Dokumentasi', href: '/admin/dokumentasi', icon: Camera },
-                    { name: 'Realisasi Acara Penataran', href: '/admin/realisasi-acara', icon: ClipboardCheck },
+                    { name: realisasiAcaraLabel, href: '/admin/realisasi-acara', icon: ClipboardCheck },
                     { name: 'Penugasan Kluster Petugas', href: '/admin/kluster-petugas', icon: UserCheck },
                 ],
             },
@@ -160,10 +167,10 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 ],
             },
             {
-                title: 'Event Penataran',
+                title: eventPenataranLabel,
                 items: [
                     {
-                        name: 'Event Penataran',
+                        name: eventPenataranLabel,
                         href: '/admin/event',
                         icon: Calendar,
                     },
@@ -175,7 +182,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                     { name: 'Referensi Event', href: '/admin/referensi-event', icon: Layers },
                     { name: 'Keuangan', href: '/admin/keuangan', icon: Wallet },
                     { name: 'Event Dokumentasi', href: '/admin/dokumentasi', icon: Camera },
-                    { name: 'Realisasi Acara Penataran', href: '/admin/realisasi-acara', icon: ClipboardCheck },
+                    { name: realisasiAcaraLabel, href: '/admin/realisasi-acara', icon: ClipboardCheck },
                     { name: 'Penugasan Kluster Petugas', href: '/admin/kluster-petugas', icon: UserCheck },
                 ],
             },
@@ -201,7 +208,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 title: 'Kegiatan Event',
                 items: [
                     {
-                        name: 'Event Penataran',
+                        name: eventPenataranLabel,
                         href: '/admin/event',
                         icon: Calendar,
                     },
@@ -212,7 +219,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                     },
                     { name: 'Keuangan', href: '/admin/keuangan', icon: Wallet },
                     { name: 'Event Dokumentasi', href: '/admin/dokumentasi', icon: Camera },
-                    { name: 'Realisasi Acara Penataran', href: '/admin/realisasi-acara', icon: ClipboardCheck },
+                    { name: realisasiAcaraLabel, href: '/admin/realisasi-acara', icon: ClipboardCheck },
                     { name: 'Penugasan Kluster Petugas', href: '/admin/kluster-petugas', icon: UserCheck },
                 ],
             },
@@ -243,7 +250,7 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                         icon: Clock,
                     },
                     {
-                        name: 'Event Penataran',
+                        name: eventPenataranLabel,
                         href: '/admin/event',
                         icon: Calendar,
                     },
@@ -268,9 +275,9 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 title: 'Menu Utama',
                 items: [
                     { name: 'Ringkasan', href: '/admin', icon: LayoutDashboard, exact: true },
-                    { name: 'Event Penataran', href: '/admin/event', icon: Calendar },
+                    { name: eventPenataranLabel, href: '/admin/event', icon: Calendar },
                     ...(role === 'Bendahara' ? [{ name: 'Keuangan', href: '/admin/keuangan', icon: Wallet }] : []),
-                    ...(role === 'Sie Acara' ? [{ name: 'Realisasi Acara Penataran', href: '/admin/realisasi-acara', icon: ClipboardCheck }, { name: 'Rundown Acara', href: '/admin/rundown', icon: Clock }] : []),
+                    ...(role === 'Sie Acara' ? [{ name: realisasiAcaraLabel, href: '/admin/realisasi-acara', icon: ClipboardCheck }, { name: 'Rundown Acara', href: '/admin/rundown', icon: Clock }] : []),
                     ...(role === 'Dokumentasi' ? [{ name: 'Event Dokumentasi', href: '/admin/dokumentasi', icon: Camera }] : []),
                 ],
             },
@@ -282,14 +289,14 @@ export default function AdminSidebar({ isMobile = false, onClose }) {
                 items: [
                     { name: 'Ringkasan', href: '/admin', icon: LayoutDashboard, exact: true },
                     { name: 'Rundown Acara', href: '/admin/rundown', icon: Clock },
-                    { name: 'Event Penataran', href: '/admin/event', icon: Calendar },
+                    { name: eventPenataranLabel, href: '/admin/event', icon: Calendar },
                 ],
             },
         ];
     }
 
     let brandAvatar = 'PP';
-    let brandTitle = 'Pustaka Penataran';
+    let brandTitle = isProdas ? 'Pustaka Pendidikan' : 'Pustaka Penataran';
     let brandSubtitle = `${role || 'Admin'} PERKEMI`;
 
     if (isDiktar) {

@@ -9,8 +9,10 @@ import TableToolbar from '../../../Components/admin/TableToolbar';
 import Tabs from '../../../Components/admin/Tabs';
 import TrackDialogs from './Partials/TrackDialogs';
 import { Compass, Layers, Plus, Edit3, Trash2, Upload, Download } from 'lucide-react';
+import { useIsProdas } from '../../../Utils/isProdas';
 
 export default function Tracks({ tracks = [], legends = [], events = [], filters = {} }) {
+    const isProdas = useIsProdas();
     const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
     const [activeTab, setActiveTab] = useState(filters.tab || urlParams.get('tab') || 'jalur');
     const [search, setSearch] = useState(filters.q || '');
@@ -257,7 +259,9 @@ export default function Tracks({ tracks = [], legends = [], events = [], filters
             <div className="space-y-6">
                 <PageHeader
                     title="Master Jalur Peserta & Legenda Singkatan"
-                    description="Kelola standarisasi kode jalur kualifikasi penataran (Pelatih, Penguji, Wasit) dan glosarium singkatan institusional."
+                    description={isProdas
+                        ? 'Kelola standarisasi kode jalur kualifikasi pendidikan dan glosarium singkatan institusional.'
+                        : 'Kelola standarisasi kode jalur kualifikasi penataran (Pelatih, Penguji, Wasit) dan glosarium singkatan institusional.'}
                     breadcrumbs={[
                         { label: 'Event', href: '/admin/event' },
                         { label: 'Jalur & Legenda' },

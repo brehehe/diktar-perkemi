@@ -7,8 +7,10 @@ import FileInput from '../../../../Components/ui/FileInput';
 import IntegrityPactDocument from '../../../../Components/IntegrityPactDocument';
 import { FileText, Check, Printer, CheckCircle2, Download, Upload } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventPactDialogs() {
+    const isProdas = useIsProdas();
     const {
         selectedPactForModal,
         setSelectedPactForModal,
@@ -183,9 +185,15 @@ export default function EventPactDialogs() {
                             value={adminUploadPactType}
                             onChange={(e) => setAdminUploadPactType(e.target.value)}
                         >
-                            <option value="pelatih">Pakta Integritas Pelatih</option>
-                            <option value="penguji">Pakta Integritas Penguji</option>
-                            <option value="wasit">Pakta Integritas Wasit</option>
+                            {isProdas ? (
+                                <option value="kenshi">Pakta Integritas Kenshi / Peserta</option>
+                            ) : (
+                                <>
+                                    <option value="pelatih">Pakta Integritas Pelatih</option>
+                                    <option value="penguji">Pakta Integritas Penguji</option>
+                                    <option value="wasit">Pakta Integritas Wasit</option>
+                                </>
+                            )}
                         </Select>
                     </FormField>
 

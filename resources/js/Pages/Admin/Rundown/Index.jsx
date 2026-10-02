@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import {
     Calendar,
@@ -36,6 +36,7 @@ import TableSurface from '@/Components/admin/TableSurface';
 import { RundownContext } from './Partials/RundownContext';
 import RundownSessionsTable from './Partials/RundownSessionsTable';
 import RundownDialogs from './Partials/RundownDialogs';
+import { useIsProdas } from '@/Utils/isProdas';
 
 export default function RundownIndex({
     event,
@@ -54,6 +55,7 @@ export default function RundownIndex({
     arrivalSession,
     auth,
 }) {
+    const isProdas = useIsProdas();
     const currentEventId = selectedEventId || event?.id;
 
     // Day selection state
@@ -403,7 +405,9 @@ export default function RundownIndex({
                     <Calendar className="w-12 h-12 text-[#6B7C93] mx-auto mb-4" />
                     <h2 className="text-lg font-bold text-[#0E2747]">Tidak Ada Event Ditemukan</h2>
                     <p className="text-sm text-[#6B7C93] mt-2">
-                        Belum ada data event penataran yang tersedia di sistem. Buat event penataran terlebih dahulu.
+                        {isProdas
+                            ? 'Belum ada data event Gashuku & UKT yang tersedia di sistem. Buat event Gashuku & UKT terlebih dahulu.'
+                            : 'Belum ada data event penataran yang tersedia di sistem. Buat event penataran terlebih dahulu.'}
                     </p>
                     <div className="mt-6">
                         <Link href="/admin/event/create">
@@ -519,7 +523,7 @@ export default function RundownIndex({
                             <div className="flex items-center justify-between text-xs">
                                 <label htmlFor="event-filter-select" className="font-bold text-[#0E2747] flex items-center gap-1.5">
                                     <Filter className="w-3.5 h-3.5 text-[#0B63CE]" />
-                                    <span>Pilih Event Penataran:</span>
+                                    <span>{isProdas ? 'Pilih Event Gashuku & UKT:' : 'Pilih Event Penataran:'}</span>
                                 </label>
                                 <span className="text-[11px] text-[#6B7C93]">{availableEvents.length} Event</span>
                             </div>

@@ -1,10 +1,13 @@
+import { usePage } from '@inertiajs/react';
 import TableSurface from '../../../../Components/admin/TableSurface';
 import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
 import { FileText, FileCheck, ChevronLeft, ChevronRight, Search, Filter, Eye, Check, Printer, CheckCircle2, Download, Upload, FileEdit } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventRegistrationFormsTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         stats,
@@ -32,7 +35,7 @@ export default function EventRegistrationFormsTab() {
         handleVerifyForm,
     } = useEventShow();
 
-    const isUkt = event?.event_type === 'ukt';
+    const isUkt = isProdas || event?.event_type === 'ukt';
 
     return (
         <div className="space-y-6">

@@ -9,8 +9,11 @@ function initInertia() {
         return;
     }
 
+    const isProdas = (typeof window !== 'undefined' && Boolean(window.__IS_PRODAS__)) || import.meta.env.VITE_IS_PRODAS === 'true';
+    const siteTitle = isProdas ? 'Pustaka Pendidikan' : 'Pustaka Penataran';
+
     createInertiaApp({
-        title: (title) => (title ? `${title} — Pustaka Penataran` : 'Pustaka Penataran'),
+        title: (title) => (title ? `${title} — ${siteTitle}` : siteTitle),
         resolve: (name) => {
             const page = pages[`./Pages/${name}.jsx`];
             if (!page) {

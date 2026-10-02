@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Search } from 'lucide-react';
 import QuickFilter from './QuickFilter';
+import { useIsProdas } from '../../Utils/isProdas';
 
 export default function HeroSearch({ initialQuery = '', className = '', align = 'center' }) {
+    const isProdas = useIsProdas();
     const [query, setQuery] = useState(initialQuery);
 
     const handleSearch = (e) => {
@@ -47,9 +49,11 @@ export default function HeroSearch({ initialQuery = '', className = '', align = 
             </form>
 
             {/* Quick Filters */}
-            <div className={`flex ${isLeft ? 'justify-start' : 'justify-center'}`}>
-                <QuickFilter align={align} />
-            </div>
+            {!isProdas && (
+                <div className={`flex ${isLeft ? 'justify-start' : 'justify-center'}`}>
+                    <QuickFilter align={align} />
+                </div>
+            )}
         </div>
     );
 }

@@ -1,8 +1,10 @@
 import Button from '../../../../Components/ui/Button';
 import { Plus, Trash2, List } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventCbtTab() {
+    const isProdas = useIsProdas();
     const {
         cbtPackages,
         setIsCbtPackageModalOpen,
@@ -47,7 +49,7 @@ export default function EventCbtTab() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#DCE7F3]">
                 <div>
                     <h3 className="font-display font-bold text-sm text-[#0E2747]">
-                        Master Paket Ujian CBT Penataran
+                        {isProdas ? 'Master Paket Ujian CBT' : 'Master Paket Ujian CBT Penataran'}
                     </h3>
                     <p className="text-xs text-[#6B7C93]">
                         Kelola paket soal ujian, batas durasi, passing grade, dan pantau rekap pengerjaan peserta.

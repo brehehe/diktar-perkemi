@@ -10,6 +10,7 @@ import LatestCollectionList from '../../Components/portal/LatestCollectionList';
 import RoleNavigation from '../../Components/portal/RoleNavigation';
 import PortalStats from '../../Components/portal/PortalStats';
 import Button from '../../Components/ui/Button';
+import { useIsProdas } from '../../Utils/isProdas';
 import {
     BookOpen,
     ArrowRight,
@@ -28,7 +29,7 @@ export default function Home({
     roles = [],
     hero_books = {},
 }) {
-    const { props } = usePage();
+    const isProdas = useIsProdas();
     const user = props.auth?.user;
 
     return (
@@ -93,8 +94,9 @@ export default function Home({
 
                                 {/* Subheadline */}
                                 <p className="text-sm sm:text-base text-[#4A6482] max-w-xl leading-relaxed">
-                                    Akses buku digital, modul penataran, dan bahan ajar pemateri dalam satu portal terintegrasi.
-                                    Dirancang untuk mendukung proses belajar, pengembangan kompetensi, dan penyelenggaraan penataran PERKEMI.
+                                    {isProdas
+                                        ? 'Akses modul pendidikan, bahan ajar, dan panduan kenshi dalam satu portal terintegrasi. Dirancang untuk mendukung proses belajar dan pembinaan teknik PERKEMI.'
+                                        : 'Akses buku digital, modul penataran, dan bahan ajar pemateri dalam satu portal terintegrasi. Dirancang untuk mendukung proses belajar, pengembangan kompetensi, dan penyelenggaraan penataran PERKEMI.'}
                                 </p>
                             </div>
 
@@ -105,11 +107,19 @@ export default function Home({
 
                             {/* CTA Buttons */}
                             <div className="flex flex-wrap items-center gap-3 pt-1">
-                                <Link href="/koleksi">
-                                    <Button variant="primary" size="lg" icon={ArrowRight}>
-                                        Jelajahi Koleksi
-                                    </Button>
-                                </Link>
+                                {!isProdas ? (
+                                    <Link href="/koleksi">
+                                        <Button variant="primary" size="lg" icon={ArrowRight}>
+                                            Jelajahi Koleksi
+                                        </Button>
+                                    </Link>
+                                ) : (
+                                    <Link href="/untuk">
+                                        <Button variant="primary" size="lg" icon={ArrowRight}>
+                                            Materi Berdasarkan Peran
+                                        </Button>
+                                    </Link>
+                                )}
                                 <a href="#cara-menggunakan">
                                     <Button variant="secondary" size="lg">
                                         Cara Menggunakan
@@ -136,13 +146,13 @@ export default function Home({
                  ═══════════════════════════════════════════════════════════ */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-20">
                 {/* 3. KOLEKSI UNGGULAN */}
-                <FeaturedCollection materials={featured_materials} />
+                {!isProdas && <FeaturedCollection materials={featured_materials} />}
 
                 {/* 4. KATEGORI MATERI */}
-                <CategoryNavigation categories={categories} />
+                {!isProdas && <CategoryNavigation categories={categories} />}
 
                 {/* 5. KOLEKSI TERBARU */}
-                <LatestCollectionList materials={latest_materials} />
+                {!isProdas && <LatestCollectionList materials={latest_materials} />}
 
                 {/* 6. MATERI BERDASARKAN PERAN */}
                 <RoleNavigation roles={roles} />
@@ -158,7 +168,9 @@ export default function Home({
                             Tiga Langkah Mengakses Materi
                         </h2>
                         <p className="text-sm text-[#6B7C93] leading-relaxed">
-                            Dirancang untuk kenyamanan membaca mandiri maupun kebutuhan penataran tatap muka.
+                            {isProdas
+                                ? 'Dirancang untuk kenyamanan membaca mandiri maupun kebutuhan pendidikan tatap muka.'
+                                : 'Dirancang untuk kenyamanan membaca mandiri maupun kebutuhan penataran tatap muka.'}
                         </p>
                     </div>
 
@@ -175,7 +187,9 @@ export default function Home({
                             {
                                 step: '02',
                                 title: 'Cari atau Pilih Materi',
-                                desc: 'Gunakan fitur pencarian cepat, filter kategori bidang, atau telusuri modul berdasarkan peran seperti Wasit, Pelatih, atau Penguji.',
+                                desc: isProdas
+                                    ? 'Gunakan fitur pencarian cepat atau telusuri materi dan modul pembelajaran sesuai peran dan jenjang kenshi.'
+                                    : 'Gunakan fitur pencarian cepat, filter kategori bidang, atau telusuri modul berdasarkan peran seperti Wasit, Pelatih, atau Penguji.',
                                 color: '#0E9F6E',
                                 bg: '#F0FDF4',
                                 border: '#B2F2BB',
@@ -183,7 +197,9 @@ export default function Home({
                             {
                                 step: '03',
                                 title: 'Baca atau Gunakan Materi',
-                                desc: 'Buka materi dan buku digital langsung melalui peramban atau gunakan dokumen sesuai kebutuhan penataran Anda.',
+                                desc: isProdas
+                                    ? 'Buka materi dan buku digital langsung melalui peramban atau gunakan dokumen sesuai kebutuhan pendidikan dan evaluasi Anda.'
+                                    : 'Buka materi dan buku digital langsung melalui peramban atau gunakan dokumen sesuai kebutuhan penataran Anda.',
                                 color: '#7B5BF0',
                                 bg: '#F3EDFF',
                                 border: '#D0BFFF',

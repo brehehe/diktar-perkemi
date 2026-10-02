@@ -8,8 +8,10 @@ import { FileSpreadsheet, Pencil, Plus, Tags, Trash2, Shield } from 'lucide-reac
 import { useState } from 'react';
 import { CATEGORY_LABELS, rupiah, dateLabel, Metric, Empty } from './EventReportsPageShared';
 import { useEventReportsPage } from './EventReportsPageContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventReportsFinanceTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         finances,
@@ -45,7 +47,7 @@ export default function EventReportsFinanceTab() {
                         </span>
                     </div>
                     <h2 id="finance-title" className="mt-2 font-display text-2xl font-semibold text-[#0A3F82]">
-                        Laporan Keuangan Kegiatan Penataran
+                        {isProdas ? 'Laporan Keuangan Kegiatan Gashuku & UKT' : 'Laporan Keuangan Kegiatan Penataran'}
                     </h2>
                     <p className="mt-1 text-sm text-[#6B7C93]">
                         Catat pemasukan dan pengeluaran, unggah bukti transaksi, lalu lihat analisis otomatis berdasarkan data yang tercatat.

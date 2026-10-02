@@ -1,8 +1,10 @@
 import EventReportExportCards from '../../../../Components/admin/EventReportExportCards';
 import { Metric } from './EventReportsPageShared';
 import { useEventReportsPage } from './EventReportsPageContext';
+import { useIsProdas } from '../../../../Utils/isProdas';
 
 export default function EventReportsExportsTab() {
+    const isProdas = useIsProdas();
     const {
         event,
         outcomesSummary,
@@ -16,7 +18,9 @@ export default function EventReportsExportsTab() {
                     Rekap Hasil, Kedisiplinan & Ekspor Excel
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm text-[#6B7C93]">
-                    Ekspor resmi seluruh data kegiatan penataran sesuai format baku PB PERKEMI.
+                    {isProdas
+                        ? 'Ekspor resmi seluruh data kegiatan Gashuku & UKT sesuai format baku PB PERKEMI.'
+                        : 'Ekspor resmi seluruh data kegiatan penataran sesuai format baku PB PERKEMI.'}
                 </p>
             </div>
 

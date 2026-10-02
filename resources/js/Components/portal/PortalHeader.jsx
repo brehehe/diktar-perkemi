@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import Button from '../ui/Button';
 import MainNavigation from './MainNavigation';
+import { useIsProdas } from '../../Utils/isProdas';
 
 export default function PortalHeader({ onOpenMobileMenu }) {
     const { props } = usePage();
+    const isProdas = useIsProdas();
     const user = props.auth?.user;
     const canRegister = props.portal?.can_register ?? !props.portal?.is_register_off;
     const [isScrolled, setIsScrolled] = useState(false);
@@ -151,7 +153,7 @@ export default function PortalHeader({ onOpenMobileMenu }) {
                         </span>
                         <span className="min-w-0">
                             <span className="block truncate font-serif text-[17px] font-bold leading-tight tracking-tight text-[#0E2747] transition-colors duration-150 group-hover:text-[#0B63CE] motion-reduce:transition-none sm:text-lg">
-                                Pustaka Penataran
+                                {isProdas ? 'Pustaka Pendidikan' : 'Pustaka Penataran'}
                             </span>
                             <span className="hidden truncate text-[10px] font-semibold uppercase leading-tight tracking-[0.14em] text-[#6B7C93] sm:block">
                                 Portal Buku Digital PERKEMI
@@ -164,52 +166,54 @@ export default function PortalHeader({ onOpenMobileMenu }) {
                     </div>
 
                     <div className="ml-auto flex shrink-0 items-center gap-2">
-                        <div ref={searchPanelRef} className="relative hidden xl:block">
-                            <button
-                                ref={searchTriggerRef}
-                                type="button"
-                                onClick={toggleSearch}
-                                className="inline-flex size-10 items-center justify-center rounded-md text-[#6B7C93] transition-colors hover:bg-[#EAF5FF] hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
-                                aria-label={searchOpen ? 'Tutup pencarian' : 'Buka pencarian koleksi'}
-                                aria-expanded={searchOpen}
-                                aria-controls="portal-search-panel"
-                            >
-                                {searchOpen ? <X className="size-[18px]" aria-hidden="true" /> : <Search className="size-[18px]" aria-hidden="true" />}
-                            </button>
-
-                            {searchOpen && (
-                                <div
-                                    id="portal-search-panel"
-                                    className="absolute right-0 top-full z-50 mt-3 w-80 rounded-lg border border-[#DCE7F3] bg-white p-4 shadow-[0_12px_32px_rgba(14,39,71,0.14)]"
+                        {!isProdas && (
+                            <div ref={searchPanelRef} className="relative hidden xl:block">
+                                <button
+                                    ref={searchTriggerRef}
+                                    type="button"
+                                    onClick={toggleSearch}
+                                    className="inline-flex size-10 items-center justify-center rounded-md text-[#6B7C93] transition-colors hover:bg-[#EAF5FF] hover:text-[#0B63CE] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
+                                    aria-label={searchOpen ? 'Tutup pencarian' : 'Buka pencarian koleksi'}
+                                    aria-expanded={searchOpen}
+                                    aria-controls="portal-search-panel"
                                 >
-                                    <form role="search" onSubmit={handleQuickSearch}>
-                                        <label htmlFor="portal-quick-search" className="mb-2 block text-xs font-semibold text-[#112743]">
-                                            Cari koleksi digital
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                ref={searchInputRef}
-                                                id="portal-quick-search"
-                                                name="search"
-                                                type="search"
-                                                value={quickSearch}
-                                                onChange={(event) => setQuickSearch(event.target.value)}
-                                                placeholder="Judul, kode, atau kata kunci…"
-                                                autoComplete="off"
-                                                className="min-h-11 w-full rounded-md border border-[#DCE7F3] bg-[#F8FBFF] py-2 pl-3 pr-12 text-sm text-[#112743] placeholder:text-[#6B7C93] focus:border-[#0B63CE] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]/20"
-                                            />
-                                            <button
-                                                type="submit"
-                                                className="absolute right-1 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-md bg-[#0B63CE] text-white transition-colors hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
-                                                aria-label="Cari koleksi"
-                                            >
-                                                <Search className="size-4" aria-hidden="true" />
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-                        </div>
+                                    {searchOpen ? <X className="size-[18px]" aria-hidden="true" /> : <Search className="size-[18px]" aria-hidden="true" />}
+                                </button>
+
+                                {searchOpen && (
+                                    <div
+                                        id="portal-search-panel"
+                                        className="absolute right-0 top-full z-50 mt-3 w-80 rounded-lg border border-[#DCE7F3] bg-white p-4 shadow-[0_12px_32px_rgba(14,39,71,0.14)]"
+                                    >
+                                        <form role="search" onSubmit={handleQuickSearch}>
+                                            <label htmlFor="portal-quick-search" className="mb-2 block text-xs font-semibold text-[#112743]">
+                                                Cari koleksi digital
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    ref={searchInputRef}
+                                                    id="portal-quick-search"
+                                                    name="search"
+                                                    type="search"
+                                                    value={quickSearch}
+                                                    onChange={(event) => setQuickSearch(event.target.value)}
+                                                    placeholder="Judul, kode, atau kata kunci…"
+                                                    autoComplete="off"
+                                                    className="min-h-11 w-full rounded-md border border-[#DCE7F3] bg-[#F8FBFF] py-2 pl-3 pr-12 text-sm text-[#112743] placeholder:text-[#6B7C93] focus:border-[#0B63CE] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]/20"
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    className="absolute right-1 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-md bg-[#0B63CE] text-white transition-colors hover:bg-[#0A3F82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B63CE] motion-reduce:transition-none"
+                                                    aria-label="Cari koleksi"
+                                                >
+                                                    <Search className="size-4" aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <div className="hidden items-center gap-2 md:flex">
                             {user ? (

@@ -56,10 +56,12 @@ class HandleInertiaRequests extends Middleware
                 'info' => fn () => $request->session()->get('info'),
             ],
             'portal' => [
-                'name' => config('app.name', 'Pustaka Penataran'),
+                'name' => (config('app.is_prodas') || filter_var(env('IS_PRODAS', false), FILTER_VALIDATE_BOOLEAN)) ? 'Pustaka Pendidikan' : config('app.name', 'Pustaka Penataran'),
                 'is_register_off' => Setting::isRegistrationOff(),
                 'can_register' => ! Setting::isRegistrationOff(),
+                'is_prodas' => (bool) (config('app.is_prodas') || filter_var(env('IS_PRODAS', false), FILTER_VALIDATE_BOOLEAN)),
             ],
+            'is_prodas' => (bool) (config('app.is_prodas') || filter_var(env('IS_PRODAS', false), FILTER_VALIDATE_BOOLEAN)),
         ];
     }
 }

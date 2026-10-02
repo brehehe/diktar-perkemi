@@ -1,5 +1,6 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import PortalLayout from '../../../Layouts/PortalLayout';
+import { useIsProdas } from '../../../Utils/isProdas';
 import {
     Users,
     ArrowRight,
@@ -22,9 +23,14 @@ const roleIcons = {
 };
 
 export default function RolesIndex({ roles = [], total_roles = 6 }) {
+    const isProdas = useIsProdas();
+    const filteredRoles = isProdas
+        ? roles.filter((r) => !['pelatih', 'penguji', 'wasit'].includes(r.slug?.toLowerCase()))
+        : roles;
+
     return (
         <PortalLayout title="Untuk Peran Anda">
-            <Head title="Katalog Berdasarkan Peran — Pustaka Penataran PERKEMI" />
+            <Head title={`Katalog Berdasarkan Peran — ${isProdas ? 'Pustaka Pendidikan' : 'Pustaka Penataran'} PERKEMI`} />
 
             {/* Header Banner */}
             <div className="bg-[#0E2747] text-white border-b-2 border-[#0B63CE] py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
@@ -39,7 +45,7 @@ export default function RolesIndex({ roles = [], total_roles = 6 }) {
                         </h1>
                         <p className="text-sm sm:text-base text-[#EAF5FF]/80 leading-relaxed max-w-2xl">
                             Temukan kurikulum, pedoman teknis, bahan ajar, dan instrumen evaluasi yang dirancang khusus
-                            untuk mendukung tanggung jawab dan pengembangan kenshi di setiap jenjang penataran.
+                            untuk mendukung tanggung jawab dan pengembangan kenshi di setiap jenjang {isProdas ? 'pendidikan' : 'penataran'}.
                         </p>
                     </div>
                 </div>
@@ -49,7 +55,7 @@ export default function RolesIndex({ roles = [], total_roles = 6 }) {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
                 {/* Roles Table / Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {roles.map((r) => {
+                    {filteredRoles.map((r) => {
                         const Icon = roleIcons[r.slug] || Users;
                         const roleColor = r.color || '#0B63CE';
 

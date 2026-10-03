@@ -32,6 +32,8 @@ class Surabaya2026UktSeeder extends Seeder
 
     public const JSON_PARTICIPANTS = 'database/seeders/data/ukt_jatim_sby.json';
 
+    public const JSON_MANDATE_PARTICIPANTS = 'database/seeders/data/ukt_jatim_sby_mandate_participants.json';
+
     public const MANDATE_PDF = 'public/pdf/109 MANDAT JATIM - KOTA SURABAYA, 03-04 OKT 2026.pdf';
 
     public function run(): void
@@ -180,6 +182,7 @@ class Surabaya2026UktSeeder extends Seeder
                 ['level' => 'KYU 2', 'count' => 9],
                 ['level' => 'KYU 1', 'count' => 4],
             ],
+            'participants' => $this->surabayaMandateParticipants(),
             'home_assignments' => $this->surabayaHomeAssignments(),
             'signatory_name' => 'Laksdya TNI (Purn) Prof. Dr. Agus Setiadji, S.A.P, M.A',
             'signatory_title' => 'Pengurus Besar PERKEMI',
@@ -196,6 +199,36 @@ class Surabaya2026UktSeeder extends Seeder
         }
 
         $mandate->save();
+    }
+
+    /**
+     * @return array<int, array{number: int, name: string, nik: string, gender: string, age: string, level: string, dojo: string, branch: string, status: string, notes: string}>
+     */
+    private function surabayaMandateParticipants(): array
+    {
+        $payload = json_decode(
+            file_get_contents(base_path(self::JSON_MANDATE_PARTICIPANTS)),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        return array_map(static function (array $record): array {
+            [$number, $name, $nik, $gender, $age, $level, $dojo, $branch] = $record;
+
+            return [
+                'number' => $number,
+                'name' => $name,
+                'nik' => $nik,
+                'gender' => $gender,
+                'age' => $age,
+                'level' => $level,
+                'dojo' => $dojo,
+                'branch' => $branch,
+                'status' => 'approved',
+                'notes' => 'Lunas iuran per Okt 2026',
+            ];
+        }, $payload['records']);
     }
 
     /**

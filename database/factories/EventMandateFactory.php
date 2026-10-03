@@ -40,6 +40,20 @@ class EventMandateFactory extends Factory
             'participant_summary' => [
                 ['level' => 'KYU 1', 'count' => 10],
             ],
+            'participants' => [
+                [
+                    'number' => 1,
+                    'name' => fake()->name(),
+                    'nik' => '26.3.13.01.24.002',
+                    'gender' => 'Female',
+                    'age' => '12.5',
+                    'level' => '1 KYU',
+                    'dojo' => 'Perak Surabaya',
+                    'branch' => 'Surabaya Kota',
+                    'status' => 'approved',
+                    'notes' => 'Lunas iuran.',
+                ],
+            ],
             'home_assignments' => [
                 ['level' => 'KYU 1', 'questions' => [fake()->sentence()]],
             ],

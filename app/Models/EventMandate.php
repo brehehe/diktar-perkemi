@@ -30,6 +30,7 @@ class EventMandate extends Model
         'examiners',
         'provisions',
         'participant_summary',
+        'participants',
         'home_assignments',
         'signatory_name',
         'signatory_title',
@@ -52,6 +53,7 @@ class EventMandate extends Model
             'examiners' => 'array',
             'provisions' => 'array',
             'participant_summary' => 'array',
+            'participants' => 'array',
             'home_assignments' => 'array',
             'document_size' => 'integer',
         ];

@@ -3,8 +3,10 @@
 use App\Models\Event;
 use App\Models\EventMandate;
 use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -39,6 +41,20 @@ test('event detail exposes mandate information in Prodas mode', function () {
         'event_id' => $this->event->id,
         'letter_number' => '109/MDT-PB/X/2026',
         'participant_total' => 65,
+        'participants' => [
+            [
+                'number' => 1,
+                'name' => 'Beverly Tabhita Nepa Fay',
+                'nik' => '26.3.13.01.24.002',
+                'gender' => 'Female',
+                'age' => '8.08',
+                'level' => '8 KYU',
+                'dojo' => 'Perak Surabaya',
+                'branch' => 'Surabaya Kota',
+                'status' => 'approved',
+                'notes' => 'Lunas iuran per Okt 2026',
+            ],
+        ],
         'document_path' => null,
     ]);
 
@@ -48,8 +64,49 @@ test('event detail exposes mandate information in Prodas mode', function () {
         ->component('Admin/Events/Show')
         ->where('mandate.letter_number', '109/MDT-PB/X/2026')
         ->where('mandate.participant_total', 65)
+        ->has('mandate.participants', 1)
+        ->where('mandate.participants.0.name', 'Beverly Tabhita Nepa Fay')
+        ->where('mandate.participants.0.nik', '26.3.13.01.24.002')
+        ->where('mandate.participants.0.level', '8 KYU')
         ->where('mandate.can_update', true)
     );
+});
+
+test('Surabaya mandate snapshot contains all 65 approved participants from the PDF', function () {
+    $snapshot = json_decode(
+        file_get_contents(database_path('seeders/data/ukt_jatim_sby_mandate_participants.json')),
+        true,
+        512,
+        JSON_THROW_ON_ERROR,
+    );
+
+    expect($snapshot['records'])
+        ->toHaveCount(65)
+        ->and($snapshot['records'][0])->toBe([1, 'Beverly Tabhita Nepa Fay', '26.3.13.01.24.002', 'Female', '8.08', '8 KYU', 'Perak Surabaya', 'Surabaya Kota'])
+        ->and($snapshot['records'][64])->toBe([65, 'Novita Sari', '17.2.13.12.01.007', 'Female', '20.59', '1 KYU', 'POLRES Tuban', 'Tuban Kab.']);
+});
+
+test('participant migration backfills an existing online Surabaya mandate', function () {
+    $this->event->update([
+        'slug' => 'gashuku-dan-ujian-kenaikan-tingkat-kota-surabaya-ke-3-tahun-2026',
+    ]);
+    $mandate = EventMandate::factory()->create([
+        'event_id' => $this->event->id,
+        'participant_total' => null,
+        'participants' => null,
+    ]);
+    Schema::table('event_mandates', function (Blueprint $table) {
+        $table->dropColumn('participants');
+    });
+    $migration = require database_path('migrations/2026_10_03_105238_add_participants_to_event_mandates_table.php');
+
+    $migration->up();
+
+    $mandate->refresh();
+    expect($mandate->participant_total)->toBe(65)
+        ->and($mandate->participants)->toHaveCount(65)
+        ->and($mandate->participants[0]['name'])->toBe('Beverly Tabhita Nepa Fay')
+        ->and($mandate->participants[64]['name'])->toBe('Novita Sari');
 });
 
 test('admin can save mandate information and upload a private PDF proof', function () {

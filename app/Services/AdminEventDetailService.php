@@ -872,6 +872,7 @@ class AdminEventDetailService
             'examiners' => $mandate->examiners ?? [],
             'provisions' => $mandate->provisions ?? [],
             'participant_summary' => $mandate->participant_summary ?? [],
+            'participants' => $mandate->participants ?? [],
             'home_assignments' => $mandate->home_assignments ?? [],
             'signatory_name' => $mandate->signatory_name,
             'signatory_title' => $mandate->signatory_title,

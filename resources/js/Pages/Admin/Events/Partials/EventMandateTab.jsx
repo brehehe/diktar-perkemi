@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import {
     Award,
@@ -10,6 +10,7 @@ import {
     MapPin,
     Pencil,
     Plus,
+    Search,
     ShieldCheck,
     Trash2,
     UserRoundCheck,
@@ -40,6 +41,7 @@ const emptyMandate = {
     examiners: [],
     provisions: [],
     participant_summary: [],
+    participants: [],
     home_assignments: [],
     signatory_name: '',
     signatory_title: '',
@@ -77,6 +79,7 @@ export default function EventMandateTab() {
         examiners: mandate?.examiners || [],
         provisions: mandate?.provisions || [],
         participant_summary: mandate?.participant_summary || [],
+        participants: mandate?.participants || [],
         home_assignments: mandate?.home_assignments || [],
         document: null,
         _method: 'put',
@@ -318,6 +321,8 @@ export default function EventMandateTab() {
                 </Card>
             </div>
 
+            <MandateParticipantList participants={mandate.participants || []} />
+
             <Card>
                 <CardHeader title="Dasar dan Ketentuan Mandat" description="Ringkasan butir resmi yang perlu dipenuhi penyelenggara, penguji, dan peserta." />
                 <CardContent className="grid gap-6 lg:grid-cols-2">
@@ -370,6 +375,141 @@ export default function EventMandateTab() {
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+function MandateParticipantList({ participants }) {
+    const [search, setSearch] = useState('');
+    const [level, setLevel] = useState('all');
+    const [showAll, setShowAll] = useState(false);
+    const levels = useMemo(() => (
+        [...new Set(participants.map((participant) => participant.level).filter(Boolean))]
+            .sort((first, second) => Number.parseInt(second, 10) - Number.parseInt(first, 10))
+    ), [participants]);
+    const filteredParticipants = useMemo(() => {
+        const normalizedSearch = search.trim().toLocaleLowerCase('id-ID');
+
+        return participants.filter((participant) => {
+            const matchesLevel = level === 'all' || participant.level === level;
+            const searchableText = [participant.name, participant.nik, participant.dojo, participant.branch]
+                .filter(Boolean)
+                .join(' ')
+                .toLocaleLowerCase('id-ID');
+
+            return matchesLevel && (!normalizedSearch || searchableText.includes(normalizedSearch));
+        });
+    }, [level, participants, search]);
+    const visibleParticipants = showAll ? filteredParticipants : filteredParticipants.slice(0, 20);
+
+    return (
+        <Card>
+            <CardHeader
+                title="Daftar Peserta Resmi Mandat"
+                description="Snapshot 65 peserta yang tercantum pada lampiran surat. Daftar ini terpisah dari data peserta operasional event."
+            />
+            <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
+                    <Input
+                        label="Cari peserta"
+                        icon={Search}
+                        type="search"
+                        value={search}
+                        onChange={(change) => {
+                            setSearch(change.target.value);
+                            setShowAll(false);
+                        }}
+                        placeholder="Nama, NIK, dojo, atau cabang"
+                    />
+                    <div>
+                        <label htmlFor="mandate-participant-level" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#112743]">
+                            Tingkat tujuan
+                        </label>
+                        <select
+                            id="mandate-participant-level"
+                            value={level}
+                            onChange={(change) => {
+                                setLevel(change.target.value);
+                                setShowAll(false);
+                            }}
+                            className="min-h-11 w-full rounded-lg border border-[#DCE7F3] bg-white px-3.5 py-2 text-sm text-[#112743] transition-colors duration-150 hover:border-[#0B63CE]/50 focus:border-[#0B63CE] focus:outline-none focus:ring-3 focus:ring-[#0B63CE]/20 motion-reduce:transition-none"
+                        >
+                            <option value="all">Semua tingkat</option>
+                            {levels.map((participantLevel) => <option key={participantLevel} value={participantLevel}>{participantLevel}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <p aria-live="polite" className="font-semibold text-[#112743]">
+                        Menampilkan {visibleParticipants.length} dari {filteredParticipants.length} peserta
+                    </p>
+                    <p className="text-[#6B7C93]">Status dan keterangan mengikuti lampiran PDF.</p>
+                </div>
+
+                {visibleParticipants.length > 0 ? (
+                    <>
+                        <div className="grid gap-3 lg:hidden">
+                            {visibleParticipants.map((participant) => (
+                                <article key={participant.nik} className="rounded-xl border border-[#DCE7F3] bg-[#F8FBFF] p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-display font-bold leading-6 text-[#0E2747]">{participant.number}. {participant.name}</p>
+                                            <p className="mt-1 break-all font-mono text-xs text-[#596F88]">NIK {participant.nik}</p>
+                                        </div>
+                                        <span className="shrink-0 rounded-full bg-[#EAF5FF] px-2.5 py-1 text-xs font-bold text-[#0B63CE]">{participant.level}</span>
+                                    </div>
+                                    <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                        <div><dt className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Gender / usia</dt><dd className="mt-1 font-medium text-[#112743]">{participant.gender} · {participant.age} tahun</dd></div>
+                                        <div><dt className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Status</dt><dd className="mt-1 font-semibold text-emerald-700">{participant.status === 'approved' ? 'Disetujui PB' : participant.status || 'Belum dicatat'}</dd></div>
+                                        <div className="col-span-2"><dt className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Dojo / cabang</dt><dd className="mt-1 font-medium leading-6 text-[#112743]">{participant.dojo} · {participant.branch}</dd></div>
+                                        <div className="col-span-2"><dt className="text-xs font-semibold uppercase tracking-wider text-[#6B7C93]">Keterangan</dt><dd className="mt-1 leading-6 text-[#596F88]">{participant.notes || '—'}</dd></div>
+                                    </dl>
+                                </article>
+                            ))}
+                        </div>
+
+                        <div className="hidden overflow-x-auto rounded-xl border border-[#DCE7F3] lg:block">
+                            <table className="min-w-[960px] w-full border-collapse text-left text-sm">
+                                <thead className="bg-[#F1F7FD] text-xs font-semibold uppercase tracking-wider text-[#596F88]">
+                                    <tr>
+                                        <th scope="col" className="px-4 py-3">No.</th>
+                                        <th scope="col" className="px-4 py-3">Peserta / NIK</th>
+                                        <th scope="col" className="px-4 py-3">Gender / usia</th>
+                                        <th scope="col" className="px-4 py-3">Ujian</th>
+                                        <th scope="col" className="px-4 py-3">Dojo / cabang</th>
+                                        <th scope="col" className="px-4 py-3">Status / keterangan</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#DCE7F3] bg-white">
+                                    {visibleParticipants.map((participant) => (
+                                        <tr key={participant.nik} className="align-top hover:bg-[#F8FBFF]">
+                                            <td className="px-4 py-3 font-bold tabular-nums text-[#0B63CE]">{participant.number}</td>
+                                            <td className="px-4 py-3"><p className="font-semibold text-[#112743]">{participant.name}</p><p className="mt-1 font-mono text-xs text-[#6B7C93]">{participant.nik}</p></td>
+                                            <td className="px-4 py-3 text-[#596F88]">{participant.gender}<p className="mt-1 text-xs">{participant.age} tahun</p></td>
+                                            <td className="px-4 py-3"><span className="rounded-full bg-[#EAF5FF] px-2.5 py-1 text-xs font-bold text-[#0B63CE]">{participant.level}</span></td>
+                                            <td className="px-4 py-3"><p className="font-medium text-[#112743]">{participant.dojo}</p><p className="mt-1 text-xs text-[#6B7C93]">{participant.branch}</p></td>
+                                            <td className="px-4 py-3"><p className="font-semibold text-emerald-700">{participant.status === 'approved' ? 'Disetujui PB' : participant.status || 'Belum dicatat'}</p><p className="mt-1 text-xs leading-5 text-[#6B7C93]">{participant.notes || '—'}</p></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {!showAll && filteredParticipants.length > visibleParticipants.length && (
+                            <div className="flex justify-center">
+                                <Button type="button" variant="outline" onClick={() => setShowAll(true)}>
+                                    Tampilkan Semua {filteredParticipants.length} Peserta
+                                </Button>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="rounded-xl border border-dashed border-[#B8D8F5] bg-[#F8FBFF] px-4 py-10 text-center text-sm text-[#596F88]">
+                        Tidak ada peserta yang cocok dengan pencarian atau filter tingkat.
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 

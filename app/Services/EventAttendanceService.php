@@ -154,7 +154,11 @@ class EventAttendanceService
         $examSessions = EventSession::query()
             ->where('event_id', $event->id)
             ->where('cbt_exam_package_id', $package->id)
-            ->get(['id', 'day_number', 'attendance_setting', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open', 'requires_attendance_before_cbt', 'session_type_code', 'topic']);
+            ->orderBy('day_number')
+            ->orderBy('start_time')
+            ->get(['id', 'day_number', 'start_time', 'track_codes', 'attendance_setting', 'attendance_open_at', 'attendance_close_at', 'is_attendance_open', 'requires_attendance_before_cbt', 'session_type_code', 'topic'])
+            ->filter(fn (EventSession $session) => empty($session->track_codes)
+                || in_array($enrollment->track_code, $session->track_codes, true));
 
         $linkedRequirementId = $event->linkedCbtPackages()
             ->where('cbt_exam_packages.id', $package->id)
@@ -169,6 +173,7 @@ class EventAttendanceService
 
         // Sesi yang mewajibkan absensi sebelum CBT sesuai setting sesi di rundown
         $requiredSessionIds = $examSessions
+            ->take(1)
             ->filter(fn (EventSession $s) => ((bool) $s->requires_attendance_before_cbt || $s->session_type_code === 'UJIAN')
                 && ! in_array($s->attendance_setting, ['none', 'disabled'], true))
             ->pluck('id');

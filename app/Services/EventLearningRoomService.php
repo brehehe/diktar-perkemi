@@ -280,12 +280,6 @@ class EventLearningRoomService
             ]);
 
         // 2. My CBT Exams (filtered by participant track with accessibility rules)
-        $participantSessionPackageIds = $sessions
-            ->pluck('cbt_exam_package_id')
-            ->filter()
-            ->unique()
-            ->all();
-
         $allPackages = $event->cbtPackages
             ->concat($event->linkedCbtPackages)
             ->concat($allEventSessions->pluck('cbtPackage')->filter())
@@ -345,8 +339,10 @@ class EventLearningRoomService
                 return $packageMatchesTrack($pkg);
             })
             ->values()
-            ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $isAdminOrOrganizer) {
+            ->map(function ($pkg) use ($attemptsByPackage, $attendedSessionIds, $event, $isAdminOrOrganizer, $sessions) {
                 $userAttempts = $attemptsByPackage->get($pkg->id, collect());
+                $examSession = $sessions->first(fn (EventSession $session) => $session->session_type_code === 'UJIAN'
+                    && $session->cbt_exam_package_id === $pkg->id);
 
                 $attemptsCount = $userAttempts->whereIn('status', CbtExamAttempt::TERMINAL_STATUSES)->count();
                 $lastAttempt = $userAttempts->sortByDesc('id')->first();
@@ -354,8 +350,7 @@ class EventLearningRoomService
 
                 // Check attendance prerequisite
                 $attendanceReqSessionId = $pkg->pivot?->requires_attendance_session_id;
-                $missingExamSession = $event->sessions->first(fn (EventSession $session) => $session->cbt_exam_package_id === $pkg->id
-                    && ((bool) $session->requires_attendance_before_cbt || $session->session_type_code === 'UJIAN')
+                $missingExamSession = collect([$examSession])->filter()->first(fn (EventSession $session) => ((bool) $session->requires_attendance_before_cbt || $session->session_type_code === 'UJIAN')
                     && ! in_array($session->attendance_setting, ['none', 'disabled'], true)
                     && ! in_array($session->id, $attendedSessionIds, true));
                 $sessionPrereqMet = ! $missingExamSession;
@@ -443,6 +438,7 @@ class EventLearningRoomService
 
                 return [
                     'id' => $pkg->id,
+                    'entry_key' => "package-{$pkg->id}",
                     'title' => $pkg->title,
                     'code' => $pkg->code,
                     'description' => $pkg->description,
@@ -461,7 +457,14 @@ class EventLearningRoomService
                     'is_passed' => $pkg->result_display === 'hidden' ? null : $lastAttempt?->is_passed,
                     'attempt_status' => $lastAttempt?->status,
                     'attempt_history' => $attemptHistory,
-                    'is_session_exam' => (bool) ($attendanceReqSessionId || in_array($pkg->exam_type, ['module_eval', 'kuis', 'sesi'], true) || $event->sessions->contains('cbt_exam_package_id', $pkg->id)),
+                    'is_session_exam' => (bool) ($attendanceReqSessionId || in_array($pkg->exam_type, ['module_eval', 'kuis', 'sesi'], true) || $sessions->contains('cbt_exam_package_id', $pkg->id)),
+                    'is_rundown_only' => false,
+                    'session_id' => $examSession?->id,
+                    'session_day_number' => $examSession?->day_number,
+                    'session_date_label' => $examSession?->date?->locale('id')->translatedFormat('D, d M Y'),
+                    'session_time_slot' => $examSession?->time_slot,
+                    'session_room' => $examSession?->room,
+                    'session_track_codes' => $examSession?->track_codes ?? [],
                     'revision_method' => $pkg->revision_method,
                     'revision_deadline' => $pkg->revision_deadline?->format('d M Y, H:i'),
                     'revision_open' => ! $pkg->revision_deadline || now()->lte($pkg->revision_deadline),
@@ -477,8 +480,77 @@ class EventLearningRoomService
                 ];
             });
 
+        $packageSessionIds = $myCbtExams->pluck('session_id')->filter()->all();
+        $rundownExamEntries = $sessions
+            ->where('session_type_code', 'UJIAN')
+            ->reject(fn (EventSession $session) => in_array($session->id, $packageSessionIds, true))
+            ->map(function (EventSession $session) use ($event): array {
+                $sessionDate = $session->date
+                    ?? $event->start_date?->copy()->addDays($session->day_number - 1);
+                $examState = match (true) {
+                    $session->status === 'cancelled' => 'ditutup',
+                    $session->status === 'completed', $sessionDate?->isPast() && ! $sessionDate->isToday() => 'selesai',
+                    $sessionDate?->isFuture() && ! $sessionDate->isToday() => 'akan_datang',
+                    default => 'tersedia',
+                };
+
+                return [
+                    'id' => "session-{$session->id}",
+                    'entry_key' => "session-{$session->id}",
+                    'title' => $session->topic,
+                    'code' => $session->session_number,
+                    'description' => $session->subtopic,
+                    'exam_type' => 'practical',
+                    'exam_type_label' => $session->method ?: 'Ujian Langsung',
+                    'duration_minutes' => null,
+                    'passing_score' => null,
+                    'attempts_allowed' => null,
+                    'attempts_count' => 0,
+                    'status' => $session->status,
+                    'exam_state' => $examState,
+                    'is_accessible' => false,
+                    'access_denied_reason' => null,
+                    'has_attempt' => false,
+                    'last_score' => null,
+                    'is_passed' => null,
+                    'attempt_status' => null,
+                    'attempt_history' => [],
+                    'is_session_exam' => true,
+                    'is_rundown_only' => true,
+                    'session_id' => $session->id,
+                    'session_day_number' => $session->day_number,
+                    'session_date_label' => $sessionDate?->locale('id')->translatedFormat('D, d M Y'),
+                    'session_time_slot' => $session->time_slot,
+                    'session_room' => $session->room,
+                    'session_track_codes' => $session->track_codes ?? [],
+                    'revision_method' => null,
+                    'revision_deadline' => null,
+                    'revision_open' => false,
+                    'revision_attempt_id' => null,
+                    'revision_status' => null,
+                    'revision_reader_url' => null,
+                    'revision_upload_url' => null,
+                    'last_attempt_at' => null,
+                    'instructions' => null,
+                    'exam_url' => null,
+                ];
+            });
+
+        $myCbtExams = $myCbtExams
+            ->concat($rundownExamEntries)
+            ->sortBy(fn (array $exam) => sprintf(
+                '%010d|%s|%s',
+                $exam['session_day_number'] ?? PHP_INT_MAX,
+                $exam['session_time_slot'] ?? '99:99',
+                $exam['entry_key'],
+            ))
+            ->values();
+
         $myCbtExamsById = $myCbtExams->keyBy('id');
         $activeSessionExam = $activeSession?->cbt_exam_package_id ? $myCbtExamsById->get($activeSession->cbt_exam_package_id) : null;
+        if ($activeSessionExam && $activeSessionExam['session_id'] && $activeSessionExam['session_id'] !== $activeSession->id) {
+            $activeSessionExam = null;
+        }
 
         // Calculate exam grade summary for participant
         $completedExams = $myCbtExams->filter(fn ($pkg) => ! empty($pkg['has_attempt']) && $pkg['exam_state'] === 'selesai');
@@ -608,6 +680,9 @@ class EventLearningRoomService
             'scheduleDays' => $scheduleDays,
             'sessions' => $sessions->map(function (EventSession $s) use ($canAccessSessionContent, $event, $eventReaderUrl, $attendedSessionIds, $myCbtExamsById, $resolveSessionAttendanceMeta) {
                 $sExam = $s->cbt_exam_package_id ? $myCbtExamsById->get($s->cbt_exam_package_id) : null;
+                if ($sExam && $sExam['session_id'] && $sExam['session_id'] !== $s->id) {
+                    $sExam = null;
+                }
                 $attendanceMeta = $resolveSessionAttendanceMeta($s);
                 $sHasMaterial = (bool) ($s->material_id || $s->learning_module_id || ($s->module && ($s->module->material_id || $s->module->source_file_path || $s->module->source_url)));
                 $sHasExam = (bool) ($s->cbt_exam_package_id || $s->session_type_code === 'UJIAN' || $sExam);

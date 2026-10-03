@@ -13,6 +13,7 @@ use App\Models\Participant;
 use App\Models\QuestionBank;
 use App\Models\User;
 use App\Services\EventAttendanceScheduleService;
+use App\Services\EventAttendanceService;
 use App\Services\EventLearningRoomService;
 use App\Services\QrCodeService;
 use Database\Seeders\EventManagementSeeder;
@@ -1461,4 +1462,144 @@ test('session CBT exam matches participant track and is locked after completion'
                 && collect($sList)->firstWhere('id', $session->id)['cbt_has_attempt'] === true
             )
         );
+});
+
+test('participant exam list includes track CBT and shared rundown exam as separate entries', function () {
+    $event = Event::firstOrFail();
+    $participant = Participant::where('user_id', $this->participantUser->id)->firstOrFail();
+    $eventParticipant = EventParticipant::where('event_id', $event->id)
+        ->where('participant_id', $participant->id)
+        ->firstOrFail();
+    $trackCode = $eventParticipant->track_code;
+
+    $trackPackage = CbtExamPackage::create([
+        'event_id' => $event->id,
+        'code' => 'CBT-TRACK-RUNDOWN-SYNC',
+        'title' => 'Ujian Teori Sesuai Jalur',
+        'exam_type' => 'theory',
+        'duration_minutes' => 45,
+        'passing_score' => 75,
+        'attempts_allowed' => 1,
+        'status' => 'open',
+        'target_tracks' => [$trackCode],
+    ]);
+    $differentTrackPackage = CbtExamPackage::create([
+        'event_id' => $event->id,
+        'code' => 'CBT-OTHER-RUNDOWN-SYNC',
+        'title' => 'Paket Jalur Lain',
+        'exam_type' => 'theory',
+        'duration_minutes' => 45,
+        'passing_score' => 75,
+        'attempts_allowed' => 1,
+        'status' => 'open',
+        'target_tracks' => ['OTHER_TRACK'],
+    ]);
+
+    $trackSession = $event->sessions()->create([
+        'day_number' => 1,
+        'date' => $event->start_date,
+        'start_time' => '15:00',
+        'end_time' => '16:00',
+        'session_number' => 'SYNC-D1-TRACK',
+        'duration_jp' => 1,
+        'session_type_code' => 'UJIAN',
+        'topic' => 'Ujian CBT Jalur Peserta',
+        'method' => 'Computer Based Test',
+        'track_codes' => [$trackCode],
+        'status' => 'scheduled',
+        'attendance_setting' => 'none',
+        'cbt_exam_package_id' => $trackPackage->id,
+    ]);
+    $sharedSession = $event->sessions()->create([
+        'day_number' => 2,
+        'date' => $event->start_date->copy()->addDay(),
+        'start_time' => '08:00',
+        'end_time' => '09:00',
+        'session_number' => 'SYNC-D2-ALL',
+        'duration_jp' => 1,
+        'session_type_code' => 'UJIAN',
+        'topic' => 'Ujian Teknik Terpadu',
+        'subtopic' => 'Asesmen praktik untuk seluruh jalur peserta.',
+        'method' => 'Asesmen Praktik',
+        'room' => 'Hall Utama',
+        'track_codes' => [$trackCode, 'OTHER_TRACK'],
+        'status' => 'scheduled',
+        'attendance_setting' => 'check_in',
+        'cbt_exam_package_id' => $differentTrackPackage->id,
+    ]);
+
+    $examEntries = collect(app(EventLearningRoomService::class)
+        ->data($this->participantUser, $event->slug)['myCbtExams']);
+    $trackExam = $examEntries->firstWhere('id', $trackPackage->id);
+    $sharedRundownExam = $examEntries->firstWhere('entry_key', "session-{$sharedSession->id}");
+
+    expect($trackExam)->not->toBeNull()
+        ->and($trackExam['session_id'])->toBe($trackSession->id)
+        ->and($sharedRundownExam)->not->toBeNull()
+        ->and($sharedRundownExam['title'])->toBe('Ujian Teknik Terpadu')
+        ->and($sharedRundownExam['session_day_number'])->toBe(2)
+        ->and($sharedRundownExam['is_rundown_only'])->toBeTrue()
+        ->and($sharedRundownExam['exam_url'])->toBeNull()
+        ->and($examEntries->firstWhere('id', $differentTrackPackage->id))->toBeNull();
+});
+
+test('reused CBT package only requires attendance from its first matching rundown session', function () {
+    $event = Event::firstOrFail();
+    $participant = Participant::where('user_id', $this->participantUser->id)->firstOrFail();
+    $eventParticipant = EventParticipant::where('event_id', $event->id)
+        ->where('participant_id', $participant->id)
+        ->firstOrFail();
+    $package = CbtExamPackage::create([
+        'event_id' => $event->id,
+        'code' => 'CBT-REUSED-RUNDOWN',
+        'title' => 'Ujian dengan Paket Digunakan Ulang',
+        'exam_type' => 'theory',
+        'duration_minutes' => 45,
+        'passing_score' => 75,
+        'attempts_allowed' => 1,
+        'status' => 'open',
+        'target_tracks' => [$eventParticipant->track_code],
+    ]);
+    $firstSession = $event->sessions()->create([
+        'day_number' => 1,
+        'date' => $event->start_date,
+        'start_time' => '15:00',
+        'end_time' => '16:00',
+        'session_number' => 'REUSED-D1',
+        'duration_jp' => 1,
+        'session_type_code' => 'UJIAN',
+        'topic' => 'Ujian CBT Hari Pertama',
+        'track_codes' => [$eventParticipant->track_code],
+        'status' => 'scheduled',
+        'attendance_setting' => 'check_in',
+        'cbt_exam_package_id' => $package->id,
+    ]);
+    $event->sessions()->create([
+        'day_number' => 2,
+        'date' => $event->start_date->copy()->addDay(),
+        'start_time' => '08:00',
+        'end_time' => '09:00',
+        'session_number' => 'REUSED-D2',
+        'duration_jp' => 1,
+        'session_type_code' => 'UJIAN',
+        'topic' => 'Ujian Rundown Hari Kedua',
+        'track_codes' => [$eventParticipant->track_code],
+        'status' => 'scheduled',
+        'attendance_setting' => 'check_in',
+        'cbt_exam_package_id' => $package->id,
+    ]);
+    EventAttendance::create([
+        'event_id' => $event->id,
+        'event_session_id' => $firstSession->id,
+        'participant_id' => $participant->id,
+        'attendance_type' => 'check_in',
+        'status' => 'present',
+        'checked_in_at' => now(),
+        'method' => 'qr_scan',
+        'recorded_by' => $this->participantUser->id,
+    ]);
+
+    expect(fn () => app(EventAttendanceService::class)
+        ->ensureExamAttendance($event, $eventParticipant, $package))
+        ->not->toThrow(Throwable::class);
 });

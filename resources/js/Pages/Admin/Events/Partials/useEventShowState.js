@@ -52,6 +52,7 @@ export default function useEventShowState({
     reportPermissions = {},
     outcomesSummary = {},
     reportSessions = [],
+    mandate = null,
 }) {
     const isPortalAdmin = usePage().props.auth?.user?.is_admin;
     const isProdas = useIsProdas();
@@ -63,7 +64,7 @@ export default function useEventShowState({
         if (requested === 'finance') return 'keuangan';
         if (requested === 'documentation') return 'dokumentasi';
         if (requested === 'staff') return 'petugas';
-        return [
+        const availableTabs = [
             'ringkasan',
             'rundown',
             'peserta',
@@ -93,7 +94,13 @@ export default function useEventShowState({
             'modul_cbt',
             'materi',
             'cbt',
-        ].includes(requested) ? requested : 'ringkasan';
+        ];
+
+        if (isProdas) {
+            availableTabs.push('mandat');
+        }
+
+        return availableTabs.includes(requested) ? requested : 'ringkasan';
     });
     useEffect(() => {
         const url = new URL(window.location.href);
@@ -168,6 +175,7 @@ export default function useEventShowState({
 
     const tabs = [
         { id: 'ringkasan', label: 'Informasi', count: null },
+        ...(isProdas ? [{ id: 'mandat', label: 'Mandat', count: mandate?.document_url ? 1 : null }] : []),
         { id: 'rundown', label: 'Rundown & Sesi', count: stats.total_sessions },
         { id: 'peserta', label: 'Peserta', count: stats.total_participants },
         { id: 'formulir', label: 'Formulir Pendaftaran', count: stats.total_registration_forms ?? registrationForms.length },
@@ -529,6 +537,7 @@ export default function useEventShowState({
         sessionTypes,
         legends,
         publishedMaterials,
+        mandate,
         stats,
         documentNumberLabels,
         documentNumberDefaults,

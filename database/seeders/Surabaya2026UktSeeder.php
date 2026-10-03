@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\CbtExamPackage;
 use App\Models\CbtQuestion;
 use App\Models\Event;
+use App\Models\EventMandate;
 use App\Models\EventParticipant;
 use App\Models\EventRegistrationForm;
 use App\Models\EventRoom;
@@ -31,6 +32,8 @@ class Surabaya2026UktSeeder extends Seeder
 
     public const JSON_PARTICIPANTS = 'database/seeders/data/ukt_jatim_sby.json';
 
+    public const MANDATE_PDF = 'public/pdf/109 MANDAT JATIM - KOTA SURABAYA, 03-04 OKT 2026.pdf';
+
     public function run(): void
     {
         $this->command->info('Memulai Seeder: '.self::EVENT_NAME);
@@ -53,28 +56,31 @@ class Surabaya2026UktSeeder extends Seeder
         // 3. Buat / Update Event Utama UKT Surabaya 2026
         $event = $this->seedEvent($admin);
 
-        // 4. Buat Ruangan Pelaksanaan Event
+        // 4. Hubungkan informasi dan bukti Surat Mandat PB PERKEMI
+        $this->seedMandate($event);
+
+        // 5. Buat Ruangan Pelaksanaan Event
         $rooms = $this->seedRooms($event);
 
-        // 5. Buat Pembicara / Penguji
+        // 6. Buat Pembicara / Penguji
         $speakers = $this->seedSpeakers($event);
 
-        // 6. Buat Participant Tracks (KYU 8 sampai KYU 1)
+        // 7. Buat Participant Tracks (KYU 8 sampai KYU 1)
         $tracks = $this->seedParticipantTracks($event);
 
-        // 7. Import Bank Soal dari Excel (8 Modul, 1600 Soal)
+        // 8. Import Bank Soal dari Excel (8 Modul, 1600 Soal)
         $modules = $this->seedQuestionModulesAndBank($event, $admin);
 
-        // 8. Buat Paket Ujian CBT (8 Paket untuk tiap Kyu, quota default 50 soal)
+        // 9. Buat Paket Ujian CBT (8 Paket untuk tiap Kyu, quota default 50 soal)
         $cbtPackages = $this->seedCbtPackages($event, $tracks, $modules);
 
-        // 9. Buat Rundown Sesi Acara (Sabtu 3 Okt & Minggu 4 Okt 2026)
+        // 10. Buat Rundown Sesi Acara (Sabtu 3 Okt & Minggu 4 Okt 2026)
         $this->seedSessions($event, $rooms, $speakers, $cbtPackages);
 
-        // 10. Import 73 Peserta dari SIM Perkemi API Cache
+        // 11. Import 73 Peserta dari SIM Perkemi API Cache
         $this->seedParticipants($event, $tracks);
 
-        $this->command->info('Seeder Selesai! Event, Bank Soal (1600 soal), 8 Paket CBT, Rundown, dan 73 Peserta UKT berhasil dipasang.');
+        $this->command->info('Seeder Selesai! Event, Surat Mandat, Bank Soal (1600 soal), 8 Paket CBT, Rundown, dan 73 Peserta UKT berhasil dipasang.');
     }
 
     private function seedSessionTypes(): void
@@ -128,6 +134,87 @@ class Surabaya2026UktSeeder extends Seeder
         return $event;
     }
 
+    private function seedMandate(Event $event): void
+    {
+        $pdfPath = base_path(self::MANDATE_PDF);
+
+        $mandate = EventMandate::query()->firstOrNew(['event_id' => $event->id]);
+        $mandate->fill([
+            'letter_number' => '109/MDT-PB/X/2026',
+            'title' => 'Surat Mandat Penguji Pemantapan Teknik & UKT',
+            'event_name' => 'Pemantapan Teknik dan Ujian Kenaikan Tingkat Kota Surabaya Ke-3 Tahun 2026',
+            'source_references' => [
+                'Surat PERKEMI Pengurus Provinsi Jawa Timur No. 049/JATIM-KU/IX/2026 tanggal 22 September 2026',
+                'Rekomendasi Komisi Diktar PB PERKEMI No. 125/Diktar.PB/IX/2026 tanggal 23 September 2026',
+            ],
+            'issued_place' => 'Jakarta',
+            'issued_at' => Carbon::parse('2026-10-02'),
+            'valid_from' => Carbon::parse('2026-10-03'),
+            'valid_until' => Carbon::parse('2026-10-04'),
+            'venue' => 'Lapangan Futsal UBAYA Sport Center',
+            'address' => 'Jl. Kaliwaru I No. 31, Kali Rungkut, Surabaya',
+            'province' => 'Jawa Timur',
+            'exam_scope' => 'Ujian Kenaikan Tingkat menuju KYU VIII sampai dengan KYU II.',
+            'participant_total' => 65,
+            'examiners' => [
+                ['name' => 'Y. Bernard Laisina', 'rank' => 'DAN V'],
+                ['name' => 'Dr. Ihyan Amri, Sp.B.', 'rank' => 'DAN IV'],
+                ['name' => 'Maulana Sarip Bathik', 'rank' => 'DAN IV'],
+                ['name' => 'Arya Setyanto Wicaksono, S.Si, M.Pd.', 'rank' => 'DAN IV'],
+            ],
+            'provisions' => [
+                'Memenuhi setiap ketentuan administrasi dan teknis ujian yang berlaku.',
+                'Setiap kenshi wajib lunas iuran sampai dengan Oktober 2026 untuk mengikuti kegiatan PERKEMI.',
+                'Peserta hanya yang tercantum dan telah divalidasi PB PERKEMI; dilarang menambahkan peserta yang belum terdaftar dan divalidasi pengurus.',
+                'Hasil ujian wajib dilaporkan melalui F-28, Examination Report WSKO, dan foto kegiatan bertimestamp paling lambat 7 hari kalender setelah pelaksanaan.',
+                'Surat mandat hanya berlaku pada tanggal dan tempat yang tercantum.',
+                'Mandat dilaksanakan dengan penuh rasa tanggung jawab.',
+            ],
+            'participant_summary' => [
+                ['level' => 'KYU 8', 'count' => 3],
+                ['level' => 'KYU 7', 'count' => 2],
+                ['level' => 'KYU 6', 'count' => 13],
+                ['level' => 'KYU 5', 'count' => 8],
+                ['level' => 'KYU 4', 'count' => 10],
+                ['level' => 'KYU 3', 'count' => 16],
+                ['level' => 'KYU 2', 'count' => 9],
+                ['level' => 'KYU 1', 'count' => 4],
+            ],
+            'home_assignments' => $this->surabayaHomeAssignments(),
+            'signatory_name' => 'Laksdya TNI (Purn) Prof. Dr. Agus Setiadji, S.A.P, M.A',
+            'signatory_title' => 'Pengurus Besar PERKEMI',
+        ]);
+
+        if (! filled($mandate->document_path) && file_exists($pdfPath)) {
+            $mandate->fill([
+                'document_disk' => 'public_path',
+                'document_path' => str_replace('public/', '', self::MANDATE_PDF),
+                'document_original_name' => basename($pdfPath),
+                'document_mime' => 'application/pdf',
+                'document_size' => filesize($pdfPath),
+            ]);
+        }
+
+        $mandate->save();
+    }
+
+    /**
+     * @return array<int, array{level: string, questions: array<int, string>}>
+     */
+    private function surabayaHomeAssignments(): array
+    {
+        return [
+            ['level' => 'KYU 8', 'questions' => ['Kenapa Anda ingin mempelajari Shorinji Kempo?', 'Sebutkan perilaku dasar seorang Kenshi!']],
+            ['level' => 'KYU 7', 'questions' => ['Apa yang menjadi tujuan Doshin So (Kaiso) mendirikan Shorinji Kempo?', 'Bagaimanakah kualitas manusia ideal yang dibangun oleh Shorinji Kempo?']],
+            ['level' => 'KYU 6', 'questions' => ['Kenapa Anda ingin mempelajari Shorinji Kempo?', 'Sebutkan perilaku dasar seorang Kenshi!']],
+            ['level' => 'KYU 5', 'questions' => ['Apa yang dimaksud dengan kekuatan sejati yang sesungguhnya?', 'Jelaskan Shu shu ko ju (bertahan diutamakan, menyerang kemudian)!']],
+            ['level' => 'KYU 4', 'questions' => ['Kenapa Anda belajar Shorinji Kempo?', 'Jelaskan Ken zen ichinyo (kesatuan ken dengan zen)!', 'Jelaskan Kiai, Kisei, dan Kiryoku.']],
+            ['level' => 'KYU 3', 'questions' => ['Apa yang menjadi tujuan Doshin So (Kaiso) mendirikan Shorinji Kempo?', 'Jelaskan Fusatsu katsujin!', 'Jelaskan Go ju ittai!']],
+            ['level' => 'KYU 2', 'questions' => ['Apa itu Shorinji Kempo?', 'Jelaskan Kumite shutai!', 'Jelaskan lima faktor atau prinsip serangan (atemi)!']],
+            ['level' => 'KYU 1', 'questions' => ["Apa itu Ma'ai dan jelaskan jarak untuk menyerang serta bertahan!", 'Jelaskan Riki ai funi!', 'Sebutkan dan jelaskan proses dasar dalam pelatihan!']],
+        ];
+    }
+
     /**
      * @return array<string, EventRoom>
      */
@@ -167,10 +254,34 @@ class Surabaya2026UktSeeder extends Seeder
                 'bio' => 'Panitia Pelaksana Gashuku & Ujian Kenaikan Tingkat Kota Surabaya Ke-3 Tahun 2026.',
             ],
             'penguji_tokuhon' => [
-                'name' => 'Sp. Ihyan',
+                'name' => 'Dr. Ihyan Amri',
+                'title_degree' => 'Sp.B.',
+                'dan_rank' => 'IV-DAN',
                 'position' => 'Penguji & Pemateri Tokuhon',
                 'organization' => 'Pengprov PERKEMI Jawa Timur',
                 'bio' => 'Senior Shorinji Kempo, Penguji UKT dan Pemateri Pembekalan Tokuhon Peserta Ujian & Gashuku.',
+            ],
+            'penguji_bernard' => [
+                'name' => 'Y. Bernard Laisina',
+                'dan_rank' => 'V-DAN',
+                'position' => 'Penguji Mandat PB PERKEMI',
+                'organization' => 'PB PERKEMI',
+                'bio' => 'Penguji resmi berdasarkan Surat Mandat PB PERKEMI No. 109/MDT-PB/X/2026.',
+            ],
+            'penguji_maulana' => [
+                'name' => 'Maulana Sarip Bathik',
+                'dan_rank' => 'IV-DAN',
+                'position' => 'Penguji Mandat PB PERKEMI',
+                'organization' => 'PB PERKEMI',
+                'bio' => 'Penguji resmi berdasarkan Surat Mandat PB PERKEMI No. 109/MDT-PB/X/2026.',
+            ],
+            'penguji_arya' => [
+                'name' => 'Arya Setyanto Wicaksono',
+                'title_degree' => 'S.Si, M.Pd.',
+                'dan_rank' => 'IV-DAN',
+                'position' => 'Penguji Mandat PB PERKEMI',
+                'organization' => 'PB PERKEMI',
+                'bio' => 'Penguji resmi berdasarkan Surat Mandat PB PERKEMI No. 109/MDT-PB/X/2026.',
             ],
             'tim_penguji' => [
                 'name' => 'Tim Dewan Penguji UKT Jatim & Sby',

@@ -25,6 +25,7 @@ import EventCertificatesTab from './Partials/EventCertificatesTab';
 import EventExamRevisionsTab from './Partials/EventExamRevisionsTab';
 import EventLegendsTab from './Partials/EventLegendsTab';
 import EventDocumentsTab from './Partials/EventDocumentsTab';
+import EventMandateTab from './Partials/EventMandateTab';
 import EventSettingsTab from './Partials/EventSettingsTab';
 import EventShowDialogs from './Partials/EventShowDialogs';
 import { EventShowContext } from './Partials/EventShowContext';
@@ -136,6 +137,8 @@ export default function Show(props) {
 
                     {/* TAB 1: RINGKASAN */}
                     {activeTab === 'ringkasan' && <EventOverviewTab />}
+
+                    {activeTab === 'mandat' && <EventMandateTab />}
 
                     {/* TAB 2: RUNDOWN & SESI */}
                     {activeTab === 'rundown' && <EventScheduleTab />}

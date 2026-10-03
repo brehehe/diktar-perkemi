@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\EventController;
 use App\Http\Controllers\Admin\EventDocumentNumberSettingController;
 use App\Http\Controllers\Admin\EventKenshiExamAssessmentController;
 use App\Http\Controllers\Admin\EventKenshiExamDocumentController;
+use App\Http\Controllers\Admin\EventMandateController;
 use App\Http\Controllers\Admin\EventPracticalExamController;
 use App\Http\Controllers\Admin\EventReferenceController;
 use App\Http\Controllers\Admin\EventReportController;
@@ -165,6 +166,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/event/{event}', [EventController::class, 'show'])->name('event.show');
         Route::get('/event/{event}/edit', [EventController::class, 'edit'])->name('event.edit');
         Route::put('/event/{event}', [EventController::class, 'update'])->name('event.update');
+        Route::put('/event/{event}/mandat', [EventMandateController::class, 'update'])->name('event.mandate.update');
+        Route::get('/event/{event}/mandat/dokumen', [EventMandateController::class, 'document'])->name('event.mandate.document');
+        Route::delete('/event/{event}/mandat/dokumen', [EventMandateController::class, 'destroyDocument'])->name('event.mandate.document.destroy');
         Route::put('/event/{event}/nomor-dokumen', [EventDocumentNumberSettingController::class, 'update'])->name('event.document-numbers.update');
         Route::post('/event/{event}/pengaturan-ttd', [EventCertificateSignatureSettingController::class, 'update'])->name('event.certificate-signatures.update');
         Route::delete('/event/{event}/pengaturan-ttd/signature', [EventCertificateSignatureSettingController::class, 'destroySignature'])->name('event.certificate-signatures.destroy-signature');

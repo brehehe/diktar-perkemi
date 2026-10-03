@@ -48,6 +48,7 @@ class AdminEventDetailService
     {
         $event->load([
             'responsibleUser',
+            'mandate.uploader:id,name',
             'rooms' => fn ($query) => $query->withCount('sessions'),
             'modules.speaker',
             'modules.material',
@@ -848,6 +849,49 @@ class AdminEventDetailService
             'late_count' => $event->attendances()->where('status', 'late')->count(),
         ];
 
+        $mandate = config('app.is_prodas') ? $event->mandate : null;
+        $mandatePayload = $mandate ? [
+            'id' => $mandate->id,
+            'letter_number' => $mandate->letter_number,
+            'title' => $mandate->title,
+            'event_name' => $mandate->event_name,
+            'source_references' => $mandate->source_references ?? [],
+            'issued_place' => $mandate->issued_place,
+            'issued_at' => $mandate->issued_at?->format('Y-m-d'),
+            'issued_at_formatted' => $mandate->issued_at?->locale('id')->translatedFormat('d F Y'),
+            'valid_from' => $mandate->valid_from?->format('Y-m-d'),
+            'valid_until' => $mandate->valid_until?->format('Y-m-d'),
+            'validity_formatted' => $mandate->valid_from && $mandate->valid_until
+                ? $mandate->valid_from->locale('id')->translatedFormat('d F Y').' – '.$mandate->valid_until->locale('id')->translatedFormat('d F Y')
+                : null,
+            'venue' => $mandate->venue,
+            'address' => $mandate->address,
+            'province' => $mandate->province,
+            'exam_scope' => $mandate->exam_scope,
+            'participant_total' => $mandate->participant_total,
+            'examiners' => $mandate->examiners ?? [],
+            'provisions' => $mandate->provisions ?? [],
+            'participant_summary' => $mandate->participant_summary ?? [],
+            'home_assignments' => $mandate->home_assignments ?? [],
+            'signatory_name' => $mandate->signatory_name,
+            'signatory_title' => $mandate->signatory_title,
+            'document_name' => $mandate->document_original_name,
+            'document_mime' => $mandate->document_mime,
+            'document_size' => $mandate->document_size,
+            'document_size_formatted' => $mandate->document_size
+                ? number_format($mandate->document_size / 1024, 1, ',', '.').' KB'
+                : null,
+            'document_url' => $mandate->document_path
+                ? route('admin.event.mandate.document', $event)
+                : null,
+            'document_download_url' => $mandate->document_path
+                ? route('admin.event.mandate.document', ['event' => $event, 'download' => 1])
+                : null,
+            'uploaded_by' => $mandate->uploader?->name,
+            'updated_at' => $mandate->updated_at?->locale('id')->translatedFormat('d M Y, H:i'),
+            'can_update' => $user ? $user->can('update', $event) : false,
+        ] : null;
+
         return [
             'documentNumberLabels' => EventDocumentGenerator::NUMBER_LABELS,
             'documentNumberDefaults' => $this->documentGenerator->adminNumberSettings(),
@@ -890,6 +934,7 @@ class AdminEventDetailService
                 'requirements_checklist' => $event->requirements_checklist ?? [],
                 'access_roles' => $event->access_roles ?? ['Pelatih', 'Penguji', 'Wasit'],
                 'total_days' => $event->total_days,
+                'can_update' => $user ? $user->can('update', $event) : false,
             ],
             'modules' => $event->modules->map(fn (EventModule $m) => [
                 'id' => $m->id,
@@ -986,6 +1031,7 @@ class AdminEventDetailService
                 'label' => $session->topic.' · '.($session->date?->format('d M Y') ?? 'Tanggal belum diatur'),
             ]),
             'outcomesSummary' => $outcomesSummary,
+            'mandate' => $mandatePayload,
             'stats' => $stats,
         ];
 

@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserPasswordRequest;
 use App\Http\Requests\Admin\UpdateUserRoleRequest;
 use App\Models\ActivityLog;
+use App\Models\Role;
 use App\Models\Speaker;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -24,7 +25,10 @@ class UserController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = User::query()->with(['speaker', 'speakers'])->latest('created_at');
+        $query = User::query()
+            ->with(['speaker', 'speakers'])
+            ->whereNotIn('role', ['Peserta', 'participant'])
+            ->latest('created_at');
 
         if ($request->filled('q')) {
             $search = trim((string) $request->input('q'));
@@ -58,7 +62,14 @@ class UserController extends Controller
             ];
         });
 
-        $roles = ['Peserta', 'Pelatih', 'Penguji', 'Wasit', 'Pemateri', 'Koordinator Acara', 'Penyelenggara', 'Bendahara', 'Sie Acara', 'Dokumentasi', 'Diktar', 'Admin'];
+        $defaultRoles = ['Pelatih', 'Penguji', 'Wasit', 'Pemateri', 'Koordinator Acara', 'Penyelenggara', 'Bendahara', 'Sie Acara', 'Dokumentasi', 'Diktar', 'Admin'];
+        $dbRoles = Role::whereNotIn('name', ['participant', 'peserta'])
+            ->whereNotIn('label', ['Peserta', 'Peserta Penataran'])
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Role $r) => $r->label ?: $r->name)
+            ->toArray();
+        $roles = array_values(array_unique(array_filter(array_merge($defaultRoles, $dbRoles))));
 
         return Inertia::render('Admin/Users/Index', [
             'users' => $users,

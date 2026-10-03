@@ -144,14 +144,15 @@ class EventController extends Controller
      */
     public function create(Request $request): Response
     {
+        $excludedRoles = ['Peserta', 'participant', 'Pelatih', 'coach', 'Penguji', 'examiner', 'Wasit', 'referee'];
         $canAssignOrganizer = $request->user()->role !== 'Penyelenggara';
 
         return Inertia::render('Admin/Events/Create', [
             'organizers' => $canAssignOrganizer
-                ? User::where('role', 'Penyelenggara')->orderBy('name')->get(['id', 'name', 'email'])
+                ? User::whereNotIn('role', $excludedRoles)->orderBy('name')->get(['id', 'name', 'email', 'role'])
                 : [],
             'canAssignOrganizer' => $canAssignOrganizer,
-            'currentOrganizer' => $canAssignOrganizer ? null : $request->user()->only(['id', 'name', 'email']),
+            'currentOrganizer' => $canAssignOrganizer ? null : $request->user()->only(['id', 'name', 'email', 'role']),
         ]);
     }
 
@@ -246,8 +247,16 @@ class EventController extends Controller
      */
     public function edit(Event $event): Response
     {
+        $excludedRoles = ['Peserta', 'participant', 'Pelatih', 'coach', 'Penguji', 'examiner', 'Wasit', 'referee'];
+        $organizers = User::whereNotIn('role', $excludedRoles)
+            ->when($event->responsible_user_id, function ($q) use ($event) {
+                $q->orWhere('id', $event->responsible_user_id);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role']);
+
         return Inertia::render('Admin/Events/Edit', [
-            'organizers' => User::where('role', 'Penyelenggara')->orderBy('name')->get(['id', 'name', 'email']),
+            'organizers' => $organizers,
             'canAssignOrganizer' => auth()->user()->role !== 'Penyelenggara',
             'event' => [
                 'id' => $event->id,

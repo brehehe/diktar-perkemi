@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Role;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -22,10 +23,16 @@ class StoreUserRequest extends FormRequest
      */
     public function rules(): array
     {
+        $validRoles = array_values(array_unique(array_filter(array_merge(
+            ['Peserta', 'Pelatih', 'Penguji', 'Wasit', 'Pemateri', 'Penyelenggara', 'Bendahara', 'Sie Acara', 'Dokumentasi', 'Diktar', 'Admin', 'Koordinator Acara'],
+            Role::pluck('label')->all(),
+            Role::pluck('name')->all(),
+        ))));
+
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'role' => ['required', 'string', 'in:Peserta,Pelatih,Penguji,Wasit,Pemateri,Penyelenggara,Bendahara,Sie Acara,Dokumentasi,Diktar,Admin,Koordinator Acara'],
+            'role' => ['required', 'string', 'in:'.implode(',', $validRoles)],
             'is_supervisor' => ['nullable', 'boolean'],
             'password' => ['required', 'string', 'min:8'],
         ];

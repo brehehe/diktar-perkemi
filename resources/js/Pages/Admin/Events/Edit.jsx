@@ -127,7 +127,11 @@ export default function Edit({ event = {}, organizers = [], canAssignOrganizer =
                         {canAssignOrganizer ? <FormField label="Penanggung Jawab" error={errors.responsible_user_id}>
                             <Select value={data.responsible_user_id} onChange={(e) => setData('responsible_user_id', e.target.value)}>
                                 <option value="">Belum ditetapkan</option>
-                                {organizers.map((user) => <option key={user.id} value={user.id}>{user.name} ({user.email})</option>)}
+                                {organizers.map((user) => (
+                                    <option key={user.id} value={user.id}>
+                                        {user.name} ({user.role ? `${user.role} • ` : ''}{user.email})
+                                    </option>
+                                ))}
                             </Select>
                         </FormField> : <p className="text-sm text-[#6B7C93]">Penanggung jawab: {organizers.find((user) => user.id === Number(data.responsible_user_id))?.name || 'Belum ditetapkan'}</p>}
 

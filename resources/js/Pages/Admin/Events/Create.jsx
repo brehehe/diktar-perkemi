@@ -126,7 +126,11 @@ export default function Create({ organizers = [], canAssignOrganizer = true, cur
                             {canAssignOrganizer ? (
                                 <Select value={data.responsible_user_id} onChange={(e) => setData('responsible_user_id', e.target.value)}>
                                     <option value="">Belum ditetapkan</option>
-                                    {organizers.map((user) => <option key={user.id} value={user.id}>{user.name} ({user.email})</option>)}
+                                    {organizers.map((user) => (
+                                        <option key={user.id} value={user.id}>
+                                            {user.name} ({user.role ? `${user.role} • ` : ''}{user.email})
+                                        </option>
+                                    ))}
                                 </Select>
                             ) : (
                                 <div className="min-h-11 rounded-lg border border-[#DCE7F3] bg-[#F8FBFF] px-3 py-2.5 text-sm text-[#112743]">

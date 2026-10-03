@@ -136,7 +136,7 @@ export default function Index({ roles = [], permissions = [] }) {
                                                     key={r.id}
                                                     className="px-3 py-3 font-semibold text-center min-w-[100px] text-[#112743]"
                                                 >
-                                                    {r.name}
+                                                    {r.label || r.name}
                                                 </th>
                                             ))}
                                         </tr>

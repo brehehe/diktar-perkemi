@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useForm, router } from '@inertiajs/react';
+import { useForm, router, Link } from '@inertiajs/react';
 import AdminLayout from '../../../Layouts/AdminLayout';
 import PageHeader from '../../../Components/admin/PageHeader';
 import DataTable from '../../../Components/ui/DataTable';
@@ -23,12 +23,14 @@ export default function Index({
     const [search, setSearch] = useState(filters.q || '');
     const [selectedRole, setSelectedRole] = useState(filters.role || '');
 
+    const defaultRole = roles[0] || 'Pelatih';
+
     // State for Create User Modal
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const createForm = useForm({
         name: '',
         email: '',
-        role: 'Peserta',
+        role: defaultRole,
         is_supervisor: false,
         password: '',
     });
@@ -36,7 +38,7 @@ export default function Index({
     // State for Change Role Dialog
     const [roleTargetUser, setRoleTargetUser] = useState(null);
     const roleForm = useForm({
-        role: 'Peserta',
+        role: defaultRole,
         is_supervisor: false,
     });
 
@@ -81,7 +83,7 @@ export default function Index({
         createForm.setData({
             name: '',
             email: '',
-            role: 'Peserta',
+            role: defaultRole,
             is_supervisor: false,
             password: '',
         });
@@ -239,13 +241,20 @@ export default function Index({
     return (
         <AdminLayout title="Kelola Pengguna Portal">
             <PageHeader
-                title="Pengguna & Kenshi"
-                description="Manajemen akun kenshi, penetapan peran resmi PERKEMI, dan hak akses portal."
+                title="Pengguna & Staf Portal"
+                description="Manajemen akun pengelola, pelatih, penguji, wasit, dan staf penataran PERKEMI. Akun peserta penataran dikelola terpisah di Master Data."
                 breadcrumbs={[{ label: 'Pengguna' }]}
                 action={
-                    <Button variant="primary" size="sm" icon={Plus} onClick={handleOpenCreate}>
-                        Tambah Pengguna
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Link href="/admin/master/peserta">
+                            <Button variant="secondary" size="sm" icon={ExternalLink}>
+                                Data Peserta
+                            </Button>
+                        </Link>
+                        <Button variant="primary" size="sm" icon={Plus} onClick={handleOpenCreate}>
+                            Tambah Pengguna
+                        </Button>
+                    </div>
                 }
             />
 

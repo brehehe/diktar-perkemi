@@ -55,7 +55,7 @@ class EventLearningRoomService
         // The event date range is authoritative. Stale sessions outside that range are not exposed.
         // Guarantee strict chronological order (from earliest/oldest to latest/newest).
         $allEventSessions = $event->sessions
-            ->filter(fn (EventSession $session) => $session->day_number >= 1 && $session->day_number <= $totalDays)
+            ->filter(fn (EventSession $session) => $session->day_number >= 1 && $session->day_number <= $totalDays && ! $session->is_hidden)
             ->sortBy([
                 ['day_number', 'asc'],
                 ['start_time', 'asc'],

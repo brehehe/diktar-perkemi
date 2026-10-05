@@ -1110,6 +1110,135 @@ test('participant can take an event exam using questions selected from the maste
     ]);
 });
 
+test('participant receives and is graded on only the configured number of CBT questions', function () {
+    $event = Event::firstOrFail();
+    $participant = Participant::firstOrFail();
+    $package = CbtExamPackage::where('code', 'CBT-KEMPO-2026')->firstOrFail();
+    $package->update([
+        'total_questions' => 2,
+        'randomize_questions' => false,
+    ]);
+    $examSession = $event->sessions()->where('cbt_exam_package_id', $package->id)->firstOrFail();
+    EventAttendance::create([
+        'event_id' => $event->id,
+        'event_session_id' => $examSession->id,
+        'participant_id' => $participant->id,
+        'attendance_type' => 'check_in',
+        'status' => 'present',
+        'checked_in_at' => now(),
+        'method' => 'qr_scan',
+        'recorded_by' => $this->participantUser->id,
+    ]);
+
+    $this->actingAs($this->participantUser)
+        ->get("/event/{$event->slug}/cbt/{$package->code}")
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Event/CbtExam')
+            ->has('questions', 2)
+        );
+
+    $attempt = CbtExamAttempt::where('cbt_exam_package_id', $package->id)->firstOrFail();
+    $assignedQuestions = $package->questions()->whereIn('id', $attempt->question_order)->get();
+    $unassignedQuestion = $package->questions()->whereNotIn('id', $attempt->question_order)->firstOrFail();
+    $answers = $assignedQuestions
+        ->mapWithKeys(fn ($question) => [(string) $question->id => $question->correct_answer])
+        ->put((string) $unassignedQuestion->id, $unassignedQuestion->correct_answer)
+        ->all();
+
+    $this->post("/event/{$event->slug}/cbt/{$package->code}/submit", [
+        'answers' => $answers,
+    ])->assertRedirect("/event/{$event->slug}/ruang-belajar");
+
+    $attempt->refresh();
+    expect($attempt->question_order)->toHaveCount(2)
+        ->and((float) $attempt->total_score)->toBe(100.0)
+        ->and(array_keys($attempt->answers))->toBe($attempt->question_order);
+});
+
+test('opening an oversized CBT attempt keeps answered questions and trims unanswered questions to the configured limit', function () {
+    $event = Event::firstOrFail();
+    $participant = Participant::firstOrFail();
+    $package = CbtExamPackage::where('code', 'CBT-KEMPO-2026')->firstOrFail();
+    $package->update([
+        'total_questions' => 3,
+        'randomize_questions' => false,
+    ]);
+    $questions = $package->questions()->orderBy('sort_order')->take(4)->get();
+    $examSession = $event->sessions()->where('cbt_exam_package_id', $package->id)->firstOrFail();
+    EventAttendance::create([
+        'event_id' => $event->id,
+        'event_session_id' => $examSession->id,
+        'participant_id' => $participant->id,
+        'attendance_type' => 'check_in',
+        'status' => 'present',
+        'checked_in_at' => now(),
+        'method' => 'qr_scan',
+        'recorded_by' => $this->participantUser->id,
+    ]);
+    $attempt = CbtExamAttempt::create([
+        'cbt_exam_package_id' => $package->id,
+        'event_id' => $event->id,
+        'participant_id' => $participant->id,
+        'user_id' => $this->participantUser->id,
+        'attempt_number' => 1,
+        'started_at' => now(),
+        'status' => 'in_progress',
+        'answers' => [
+            (string) $questions[3]->id => 'A',
+            (string) $questions[1]->id => 'B',
+        ],
+        'question_order' => $questions->modelKeys(),
+        'option_order' => $questions->mapWithKeys(fn ($question) => [(string) $question->id => ['A', 'B', 'C', 'D']])->all(),
+    ]);
+    $expectedQuestionOrder = [
+        $questions[1]->id,
+        $questions[3]->id,
+        $questions[0]->id,
+    ];
+
+    $this->actingAs($this->participantUser)
+        ->get("/event/{$event->slug}/cbt/{$package->code}")
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('questions', 3)
+            ->where('questions.0.id', $expectedQuestionOrder[0])
+            ->where('questions.1.id', $expectedQuestionOrder[1])
+            ->where('questions.2.id', $expectedQuestionOrder[2])
+        );
+
+    $attempt->refresh();
+    expect($attempt->question_order)->toBe($expectedQuestionOrder)
+        ->and(array_keys($attempt->answers))->toEqualCanonicalizing([$questions[3]->id, $questions[1]->id])
+        ->and(array_keys($attempt->option_order))->toEqualCanonicalizing($expectedQuestionOrder);
+});
+
+test('participant receives 404 and no attempt when opening a CBT package for another track', function () {
+    $event = Event::firstOrFail();
+    $participant = Participant::firstOrFail();
+    $eventParticipant = EventParticipant::where('event_id', $event->id)
+        ->where('participant_id', $participant->id)
+        ->firstOrFail();
+    $package = CbtExamPackage::create([
+        'event_id' => $event->id,
+        'title' => 'Ujian Jalur Kyu Lain',
+        'code' => 'CBT-OTHER-KYU-DIRECT-ACCESS',
+        'exam_type' => 'theory',
+        'duration_minutes' => 60,
+        'passing_score' => 70,
+        'attempts_allowed' => 1,
+        'status' => 'open',
+        'target_tracks' => [$eventParticipant->track_code.'-LAIN'],
+    ]);
+
+    $this->actingAs($this->participantUser)
+        ->get("/event/{$event->slug}/cbt/{$package->code}")
+        ->assertNotFound();
+
+    $this->assertDatabaseMissing('cbt_exam_attempts', [
+        'cbt_exam_package_id' => $package->id,
+        'participant_id' => $participant->id,
+    ]);
+});
+
 test('CBT exam locks randomized question and option order deterministically once at attempt start', function () {
     $event = Event::first();
     $module = LearningModule::firstOrFail();
@@ -1179,6 +1308,15 @@ test('CBT exam locks randomized question and option order deterministically once
     expect($attempt->answers)->toBe([(string) $firstQId => 'B'])
         ->and($attempt->question_order)->toBe($lockedQuestionOrder)
         ->and($attempt->option_order)->toBe($lockedOptionOrder);
+
+    $this->actingAs($this->participantUser)
+        ->get("/event/{$event->slug}/cbt/{$package->code}")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('questions.0.id', $lockedQuestionOrder[0])
+            ->where('questions.1.id', $lockedQuestionOrder[1])
+        );
+
+    expect($attempt->fresh()->question_order)->toBe($lockedQuestionOrder);
 });
 
 test('participant exam is automatically submitted when beacon request is sent on page exit', function () {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Events\NormalizeCbtExamAttemptQuestions;
 use App\Actions\Events\SubmitCbtExam;
 use App\Http\Requests\StoreCbtProctoringEventRequest;
 use App\Http\Requests\SubmitExamRevisionRequest;
@@ -28,6 +29,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -39,6 +41,7 @@ class EventPortalController extends Controller
     public function __construct(
         private readonly EventAttendanceService $attendanceService,
         private readonly EventLearningRoomService $learningRoom,
+        private readonly NormalizeCbtExamAttemptQuestions $normalizeCbtExamAttemptQuestions,
         private readonly SubmitCbtExam $submitCbtExam,
     ) {}
 
@@ -91,15 +94,29 @@ class EventPortalController extends Controller
         return $normalized;
     }
 
-    protected function eventPackage(Event $event, string $code): CbtExamPackage
+    protected function eventPackage(Event $event, EventParticipant $eventParticipant, string $code): CbtExamPackage
     {
-        return CbtExamPackage::where('code', $code)
+        $package = CbtExamPackage::where('code', $code)
             ->where(function ($query) use ($event) {
                 $query->where('event_id', $event->id)
                     ->orWhereHas('events', fn ($events) => $events->whereKey($event->id))
                     ->orWhereHas('sessions', fn ($sessions) => $sessions->where('event_id', $event->id));
             })
             ->firstOrFail();
+
+        $targetTracks = collect($package->target_tracks ?? [])
+            ->map(fn (mixed $track): string => mb_strtolower(trim((string) $track)))
+            ->all();
+        $participantTrack = mb_strtolower(trim((string) $eventParticipant->track_code));
+
+        abort_unless(
+            $targetTracks === []
+            || in_array('all', $targetTracks, true)
+            || in_array($participantTrack, $targetTracks, true),
+            404,
+        );
+
+        return $package;
     }
 
     public function index(Request $request): Response|RedirectResponse
@@ -616,7 +633,7 @@ class EventPortalController extends Controller
                 ->with('error', 'Anda harus terdaftar pada event ini untuk mengikuti ujian.');
         }
 
-        $package = $this->eventPackage($event, $packageCode);
+        $package = $this->eventPackage($event, $eventParticipant, $packageCode);
         if ($request->header('X-Inertia')) {
             try {
                 $this->attendanceService->ensureExamAttendance($event, $eventParticipant, $package);
@@ -680,21 +697,14 @@ class EventPortalController extends Controller
         $examQuestions = $this->examQuestions($package);
 
         // Ensure attempt has a persistent deterministic question and option order locked once at start
+        $attempt = $this->normalizeCbtExamAttemptQuestions->handle($attempt, $package, $examQuestions);
         $questionOrder = $attempt->question_order;
         $optionOrder = $attempt->option_order ?? [];
         $needsOrderUpdate = false;
 
-        if (empty($questionOrder) || ! is_array($questionOrder)) {
-            $questionIds = $examQuestions->pluck('id');
-            $questionOrder = $package->randomize_questions
-                ? $questionIds->shuffle()->values()->all()
-                : $questionIds->values()->all();
-            $needsOrderUpdate = true;
-        }
-
         if (empty($optionOrder) || ! is_array($optionOrder)) {
             $optionOrder = [];
-            foreach ($examQuestions as $q) {
+            foreach ($attempt->orderedQuestions($examQuestions) as $q) {
                 $normalized = $this->normalizeQuestionOptions($q->options);
                 $keys = collect($normalized)->pluck('key');
                 $optionOrder[(string) $q->id] = $package->randomize_answers
@@ -712,11 +722,7 @@ class EventPortalController extends Controller
             $attempt->refresh();
         }
 
-        // Sort questions strictly by the attempt's locked question order
-        $questionOrderMap = array_flip($questionOrder);
-        $examQuestions = $examQuestions
-            ->sortBy(fn ($q) => $questionOrderMap[$q->id] ?? 999999)
-            ->values();
+        $examQuestions = $attempt->orderedQuestions($examQuestions);
 
         $displayLetters = range('A', 'Z');
         $questions = $examQuestions
@@ -806,8 +812,9 @@ class EventPortalController extends Controller
         string $packageCode
     ): JsonResponse {
         $event = Event::where('slug', $slug)->firstOrFail();
-        [$participant] = $this->attendanceService->resolveParticipant($request->user(), $event);
-        $package = $this->eventPackage($event, $packageCode);
+        [$participant, $eventParticipant] = $this->attendanceService->resolveParticipant($request->user(), $event);
+        abort_unless($participant && $eventParticipant, 404);
+        $package = $this->eventPackage($event, $eventParticipant, $packageCode);
         $attempt = CbtExamAttempt::where('cbt_exam_package_id', $package->id)
             ->where('event_id', $event->id)
             ->where('participant_id', $participant->id)
@@ -924,7 +931,7 @@ class EventPortalController extends Controller
         $event = Event::where('slug', $slug)->firstOrFail();
         [$participant, $eventParticipant] = $this->attendanceService->resolveParticipant($request->user(), $event);
 
-        if (! $participant) {
+        if (! $participant || ! $eventParticipant) {
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json(['error' => 'Otorisasi gagal.'], 403);
             }
@@ -932,7 +939,7 @@ class EventPortalController extends Controller
             return back()->with('error', 'Otorisasi gagal.');
         }
 
-        $package = $this->eventPackage($event, $packageCode);
+        $package = $this->eventPackage($event, $eventParticipant, $packageCode);
         $this->attendanceService->ensureExamAttendance($event, $eventParticipant, $package);
 
         $validated = $request->validate([
@@ -966,7 +973,14 @@ class EventPortalController extends Controller
             }
 
             $answers = is_array($attempt->answers) ? $attempt->answers : [];
+            $assignedQuestionMap = array_fill_keys(array_map('strval', $attempt->question_order ?? []), true);
             foreach ($incomingBatch as $qId => $val) {
+                if (! isset($assignedQuestionMap[(string) $qId])) {
+                    throw ValidationException::withMessages([
+                        'answers' => 'Jawaban memuat soal yang tidak termasuk dalam paket ujian peserta.',
+                    ]);
+                }
+
                 if ($val === null || $val === '') {
                     unset($answers[(string) $qId]);
                 } else {
@@ -1019,7 +1033,7 @@ class EventPortalController extends Controller
         $event = Event::where('slug', $slug)->firstOrFail();
         [$participant, $eventParticipant] = $this->attendanceService->resolveParticipant($request->user(), $event);
 
-        if (! $participant) {
+        if (! $participant || ! $eventParticipant) {
             if ($request->wantsJson() || $request->has('beacon')) {
                 return response()->json(['error' => 'Otorisasi gagal.'], 403);
             }
@@ -1027,7 +1041,7 @@ class EventPortalController extends Controller
             return redirect()->route('event.learning-room', $slug)->with('error', 'Otorisasi gagal.');
         }
 
-        $package = $this->eventPackage($event, $packageCode);
+        $package = $this->eventPackage($event, $eventParticipant, $packageCode);
         $this->attendanceService->ensureExamAttendance($event, $eventParticipant, $package);
 
         $questions = $this->examQuestions($package);

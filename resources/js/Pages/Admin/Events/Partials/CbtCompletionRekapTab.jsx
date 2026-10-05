@@ -100,13 +100,13 @@ export default function CbtCompletionRekapTab({
             );
         }
 
-        const isSubmitted = testData.status === 'submitted';
+        const isTerminal = testData.is_terminal;
         const isPassed = testData.is_passed;
 
         return (
-            <div className="space-y-0.5">
+            <div className="min-w-0 space-y-1 whitespace-normal [overflow-wrap:anywhere]">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                    {isSubmitted ? (
+                    {isTerminal ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
                             <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                             Selesai
@@ -118,7 +118,7 @@ export default function CbtCompletionRekapTab({
                         </span>
                     )}
                     {testData.score !== null && (
-                        <span className={`font-mono text-xs font-bold ${isPassed ? 'text-emerald-700' : 'text-slate-800'}`}>
+                        <span className={`font-mono text-xs font-bold tabular-nums ${testData.score_is_provisional ? 'text-blue-700' : isPassed ? 'text-emerald-700' : 'text-slate-800'}`}>
                             {Number(testData.score).toFixed(1)}
                         </span>
                     )}
@@ -128,8 +128,13 @@ export default function CbtCompletionRekapTab({
                         </span>
                     )}
                 </div>
+                {testData.score_is_provisional && (
+                    <div className="text-[10px] font-medium leading-4 text-blue-700">
+                        Nilai sementara dari jawaban tersimpan
+                    </div>
+                )}
                 {testData.latest_submitted_at && (
-                    <div className="text-[10px] text-[#6B7C93]">
+                    <div className="text-[10px] text-[#6B7C93] [overflow-wrap:anywhere]">
                         {testData.latest_submitted_at}
                     </div>
                 )}
@@ -414,7 +419,7 @@ export default function CbtCompletionRekapTab({
             {/* Table of CBT Completion Status */}
             <div className="rounded-xl border border-[#DCE7F3] bg-white shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="min-w-[1080px] w-full table-auto text-left text-xs">
                         <thead className="border-b border-[#DCE7F3] bg-[#F8FBFF] font-semibold text-[#112743]">
                             <tr>
                                 <th className="py-3 px-4 w-12 text-center">No</th>
@@ -441,12 +446,12 @@ export default function CbtCompletionRekapTab({
                                     return (
                                         <tr key={item.participant_id} className="hover:bg-[#F8FBFF] transition-colors">
                                             <td className="py-3 px-4 text-center font-mono text-[#6B7C93]">{globalIdx}</td>
-                                            <td className="py-3 px-4">
-                                                <div className="font-semibold text-[#0E2747]">{item.participant_name}</div>
-                                                <div className="flex items-center gap-2 font-mono text-[11px] text-[#6B7C93] mt-0.5">
-                                                    <span>{item.kenshi_id_number}</span>
+                                            <td className="min-w-52 py-3 px-4 whitespace-normal [overflow-wrap:anywhere]">
+                                                <div className="font-semibold text-[#0E2747] [overflow-wrap:anywhere]">{item.participant_name}</div>
+                                                <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-[#6B7C93] whitespace-normal [overflow-wrap:anywhere]">
+                                                    <span className="[overflow-wrap:anywhere]">{item.kenshi_id_number}</span>
                                                     <span>•</span>
-                                                    <span>{item.origin_dojo}</span>
+                                                    <span className="[overflow-wrap:anywhere]">{item.origin_dojo}</span>
                                                     {item.tingkat && item.tingkat !== '-' && (
                                                         <>
                                                             <span>•</span>
@@ -459,7 +464,7 @@ export default function CbtCompletionRekapTab({
                                                 <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold border ${getTrackBadgeClass(item.track_code)}`}>
                                                     {item.track_code}
                                                 </span>
-                                                <div className="text-[10px] text-[#6B7C93] mt-0.5">
+                                                <div className="mt-0.5 whitespace-normal text-[10px] text-[#6B7C93] [overflow-wrap:anywhere]">
                                                     {item.track_name}
                                                 </div>
                                             </td>
@@ -470,7 +475,7 @@ export default function CbtCompletionRekapTab({
                                                 {renderTestCell(item.quiz, 'Kuis Formatif')}
                                             </td>
                                             <td className="py-3 px-4">
-                                                {renderTestCell(item.post_test, 'Post-Test')}
+                                                {renderTestCell(item.post_test, 'Post-Test / Teori')}
                                             </td>
                                             <td className="py-3 px-4">
                                                 {renderCompletionBadge(item)}

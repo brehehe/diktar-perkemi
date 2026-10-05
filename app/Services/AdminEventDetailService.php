@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Actions\Events\CalculateCbtExamAttemptScore;
 use App\Http\Controllers\EventIntegrityPactController;
 use App\Http\Controllers\EventRegistrationFormController;
 use App\Models\CbtExamAttempt;
@@ -39,6 +40,7 @@ class AdminEventDetailService
         private readonly EventKenshiExamService $kenshiExamService,
         private readonly EventFinanceAnalysisService $financeAnalysis,
         private readonly EventFinanceNarrativeService $financeNarrative,
+        private readonly CalculateCbtExamAttemptScore $calculateCbtExamAttemptScore,
     ) {}
 
     /**
@@ -108,6 +110,7 @@ class AdminEventDetailService
                     'module_code' => $s->module_code,
                     'status' => $s->status,
                     'status_label' => $s->status_label,
+                    'is_hidden' => (bool) $s->is_hidden,
                     'attendance_setting' => $s->attendance_setting ?? 'check_in',
                     'session_type_code' => $s->session_type_code,
                     'is_attendance_open' => $s->isAttendanceActive(),
@@ -591,14 +594,24 @@ class AdminEventDetailService
         });
 
         // All CBT Exam attempts for this event
-        $rawExamAttempts = CbtExamAttempt::with(['participant.eventParticipants.track', 'package', 'session'])
+        $rawExamAttempts = CbtExamAttempt::with([
+            'participant.eventParticipants.track',
+            'package.questions',
+            'package.bankQuestions',
+            'session',
+        ])
             ->where('event_id', $event->id)
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
             ->get();
 
-        $examAttemptsPayload = $rawExamAttempts->map(function (CbtExamAttempt $attempt) use ($event) {
+        $attemptScores = $rawExamAttempts->mapWithKeys(fn (CbtExamAttempt $attempt): array => [
+            $attempt->id => $this->calculateCbtExamAttemptScore->handle($attempt),
+        ]);
+
+        $examAttemptsPayload = $rawExamAttempts->map(function (CbtExamAttempt $attempt) use ($attemptScores, $event) {
             $ep = $attempt->participant?->eventParticipants->firstWhere('event_id', $event->id);
+            $score = $attemptScores->get($attempt->id);
 
             return [
                 'id' => $attempt->id,
@@ -614,27 +627,35 @@ class AdminEventDetailService
                 'exam_type' => $attempt->package?->exam_type ?? 'exam',
                 'exam_type_label' => $attempt->package?->exam_type_label ?? 'Ujian',
                 'attempt_number' => $attempt->attempt_number,
-                'score' => $attempt->total_score !== null ? (float) $attempt->total_score : 0.0,
+                'score' => $score['score'],
+                'official_score' => $score['official_score'],
+                'calculated_score' => $score['calculated_score'],
+                'score_is_provisional' => $score['score_is_provisional'],
                 'passing_score' => (float) ($attempt->package?->passing_score ?? 70),
                 'is_passed' => (bool) $attempt->is_passed,
+                'calculated_is_passed' => $score['calculated_is_passed'],
+                'is_terminal' => $score['is_terminal'],
                 'status' => $attempt->status,
                 'started_at' => $attempt->started_at?->format('d M Y, H:i'),
                 'submitted_at' => $attempt->submitted_at?->format('d M Y, H:i'),
                 'duration_minutes' => ($attempt->started_at && $attempt->submitted_at) ? $attempt->started_at->diffInMinutes($attempt->submitted_at) : null,
-                'total_answered' => is_array($attempt->answers) ? count($attempt->answers) : 0,
+                'total_answered' => $score['total_answered'],
+                'total_questions' => $score['total_questions'],
             ];
         });
 
         // CBT Completion Matrix per participant
         $attemptsByParticipant = $rawExamAttempts->groupBy('participant_id');
 
-        $formatTestStatus = function ($attempts) {
+        $formatTestStatus = function ($attempts) use ($attemptScores) {
             if ($attempts->isEmpty()) {
                 return [
                     'has_attempted' => false,
                     'status' => 'unattempted',
                     'status_label' => 'Belum',
+                    'is_terminal' => false,
                     'score' => null,
+                    'score_is_provisional' => false,
                     'passing_score' => null,
                     'is_passed' => false,
                     'attempt_count' => 0,
@@ -644,14 +665,18 @@ class AdminEventDetailService
                 ];
             }
 
-            $best = $attempts->sortByDesc('total_score')->first();
+            $best = $attempts->sortByDesc(fn (CbtExamAttempt $attempt): float => $attemptScores->get($attempt->id)['score'])->first();
             $latest = $attempts->sortByDesc('id')->first();
+            $bestScore = $attemptScores->get($best->id);
+            $latestScore = $attemptScores->get($latest->id);
 
             return [
                 'has_attempted' => true,
                 'status' => $latest->status,
-                'status_label' => $latest->status === 'submitted' ? 'Selesai' : 'Sedang Ujian',
-                'score' => $best->total_score !== null ? (float) $best->total_score : 0.0,
+                'status_label' => $latestScore['is_terminal'] ? 'Selesai' : 'Sedang Ujian',
+                'is_terminal' => $latestScore['is_terminal'],
+                'score' => $bestScore['score'],
+                'score_is_provisional' => $bestScore['score_is_provisional'],
                 'passing_score' => (float) ($latest->package?->passing_score ?? 70),
                 'is_passed' => $attempts->contains('is_passed', true),
                 'attempt_count' => $attempts->count(),
@@ -685,7 +710,11 @@ class AdminEventDetailService
                 $code = $a->package?->code ?? '';
                 $title = strtolower($a->package?->title ?? '');
 
-                return $type === 'post_test' || str_contains($code, 'POST') || str_contains($title, 'post-test');
+                return in_array($type, ['post_test', 'theory'], true)
+                    || str_contains($code, 'POST')
+                    || str_contains($code, 'UKT')
+                    || str_contains($title, 'post-test')
+                    || str_contains($title, 'ujian teori');
             });
 
             $pre = $formatTestStatus($preAttempts);
@@ -753,8 +782,13 @@ class AdminEventDetailService
             'verified_integrity_pacts' => $integrityPactsPayload->where('status', 'verified')->count(),
             'unfilled_integrity_pacts' => $integrityPactsPayload->where('status', 'unfilled')->count(),
             'total_exam_attempts' => $examAttemptsPayload->count(),
+            'completed_exam_attempts' => $examAttemptsPayload->where('is_terminal', true)->count(),
+            'in_progress_exam_attempts' => $examAttemptsPayload->where('is_terminal', false)->count(),
             'passed_exam_attempts' => $examAttemptsPayload->where('is_passed', true)->count(),
-            'failed_exam_attempts' => $examAttemptsPayload->where('is_passed', false)->count(),
+            'failed_exam_attempts' => $examAttemptsPayload
+                ->where('is_terminal', true)
+                ->where('is_passed', false)
+                ->count(),
             'dual_participants' => $event->eventParticipants->filter(fn ($p) => $p->track?->is_dual_track)->count(),
             'rotation_a1' => $event->eventParticipants->where('rotation_group', 'A1')->count(),
             'rotation_a2' => $event->eventParticipants->where('rotation_group', 'A2')->count(),

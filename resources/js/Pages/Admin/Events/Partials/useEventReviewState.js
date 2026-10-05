@@ -172,7 +172,7 @@ export default function useEventReviewState({ event, registrationForms, integrit
     };
 
     // CBT Exam Sub-tab ('rekap' | 'riwayat')
-    const [cbtSubTab, setCbtSubTab] = useState('rekap');
+    const [cbtSubTab, setCbtSubTab] = useState('riwayat');
 
     // CBT Exam Attempts states
     const [examSearch, setExamSearch] = useState('');
@@ -203,8 +203,8 @@ export default function useEventReviewState({ event, registrationForms, integrit
 
             const matchesStatus = examStatusFilter === 'all' ||
                 (examStatusFilter === 'passed' && att.is_passed) ||
-                (examStatusFilter === 'failed' && !att.is_passed && att.status === 'submitted') ||
-                (examStatusFilter === 'in_progress' && att.status !== 'submitted');
+                (examStatusFilter === 'failed' && !att.is_passed && att.is_terminal) ||
+                (examStatusFilter === 'in_progress' && !att.is_terminal);
 
             return matchesSearch && matchesPackage && matchesTrack && matchesStatus;
         });

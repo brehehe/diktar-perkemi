@@ -61,6 +61,10 @@ class SaveEventSessionRequest extends FormRequest
             }
         }
 
+        if ($this->has('is_hidden')) {
+            $merge['is_hidden'] = filter_var($this->input('is_hidden'), FILTER_VALIDATE_BOOLEAN);
+        }
+
         if (! empty($merge)) {
             $this->merge($merge);
         }
@@ -116,6 +120,7 @@ class SaveEventSessionRequest extends FormRequest
             ],
             'cbt_exam_package_id' => ['nullable', 'exists:cbt_exam_packages,id'],
             'requires_attendance_before_cbt' => ['nullable', 'boolean'],
+            'is_hidden' => ['nullable', 'boolean'],
         ];
     }
 }

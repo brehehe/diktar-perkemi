@@ -109,6 +109,7 @@ export default function useEventManagementState({ event, sessionTypes, selectedD
         material_id: '',
         cbt_exam_package_id: '',
         requires_attendance_before_cbt: true,
+        is_hidden: false,
     });
 
     // 1b. Reschedule / Molor Form
@@ -528,8 +529,15 @@ export default function useEventManagementState({ event, sessionTypes, selectedD
             material_id: session.material_id || '',
             cbt_exam_package_id: session.cbt_exam_package_id || '',
             requires_attendance_before_cbt: session.requires_attendance_before_cbt !== undefined ? Boolean(session.requires_attendance_before_cbt) : true,
+            is_hidden: Boolean(session.is_hidden),
         });
         setIsSessionModalOpen(true);
+    };
+
+    const handleToggleHidden = (session) => {
+        router.patch(`/admin/event/${event.id}/sesi/${session.id}/toggle-hidden`, {}, {
+            preserveScroll: true,
+        });
     };
 
     const openRescheduleModal = (session) => {
@@ -754,6 +762,7 @@ export default function useEventManagementState({ event, sessionTypes, selectedD
         handleDeleteCbtPackage,
         handleSaveQuestion,
         openEditSessionModal,
+        handleToggleHidden,
         openRescheduleModal,
         handleQuickShift,
         handleSaveReschedule,

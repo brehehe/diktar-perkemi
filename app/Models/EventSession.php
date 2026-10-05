@@ -39,6 +39,7 @@ class EventSession extends Model
         'learning_module_id',
         'cbt_exam_package_id',
         'requires_attendance_before_cbt',
+        'is_hidden',
     ];
 
     protected function casts(): array
@@ -52,6 +53,7 @@ class EventSession extends Model
             'attendance_open_at' => 'datetime',
             'attendance_close_at' => 'datetime',
             'requires_attendance_before_cbt' => 'boolean',
+            'is_hidden' => 'boolean',
         ];
     }
 

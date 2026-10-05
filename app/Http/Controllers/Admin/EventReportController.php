@@ -623,6 +623,13 @@ class EventReportController extends Controller
         return $exporter->outcomes($event);
     }
 
+    public function exportExamAttempts(Event $event, EventReportExportService $exporter): BinaryFileResponse
+    {
+        Gate::authorize('viewReport', $event);
+
+        return $exporter->examAttempts($event);
+    }
+
     public function exportCompleteness(Event $event, EventReportExportService $exporter): BinaryFileResponse
     {
         Gate::authorize('viewReport', $event);

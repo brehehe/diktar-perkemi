@@ -462,6 +462,21 @@ export default function RundownDialogs() {
                             </p>
                         </div>
                     </FormField>
+
+                    <div className="pt-3 border-t border-[#DCE7F3] bg-amber-50/50 p-3 rounded-xl border">
+                        <label className="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-[#0E2747]">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(sessionForm.data.is_hidden)}
+                                onChange={(e) => sessionForm.setData('is_hidden', e.target.checked)}
+                                className="h-4 w-4 rounded border-[#DCE7F3] text-[#0B63CE] focus:ring-[#0B63CE]"
+                            />
+                            <span>Sembunyikan sesi ini dari rundown peserta (Ruang Belajar)</span>
+                        </label>
+                        <p className="text-[11px] text-[#6B7C93] ml-6 mt-0.5">
+                            Jika dicentang, sesi ini hanya terlihat di panel admin dan tidak akan ditampilkan kepada peserta pada halaman Ruang Belajar.
+                        </p>
+                    </div>
                 </form>
             </Modal>
 

@@ -3,11 +3,12 @@ import Input from '../../../../Components/ui/Input';
 import Select from '../../../../Components/ui/Select';
 import Button from '../../../../Components/ui/Button';
 import CbtCompletionRekapTab from './CbtCompletionRekapTab';
-import { Clock, Users, FileCheck, Trash2, ChevronLeft, ChevronRight, Search, Filter, Eye, X, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Clock, Users, FileCheck, FileSpreadsheet, Trash2, ChevronLeft, ChevronRight, Search, Filter, Eye, X, CheckCircle2, RotateCcw } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
 
 export default function EventExamResultsTab() {
     const {
+        event,
         tracks,
         stats,
         examAttempts,
@@ -37,6 +38,9 @@ export default function EventExamResultsTab() {
         setCompleteExamTarget,
         setDeleteExamTarget,
     } = useEventShow();
+
+    const completedExamAttempts = (examAttempts || []).filter((attempt) => attempt.is_terminal);
+    const passedExamAttempts = completedExamAttempts.filter((attempt) => attempt.is_passed);
 
     return (
         <div className="space-y-6">
@@ -78,12 +82,24 @@ export default function EventExamResultsTab() {
                         </span>
                     </button>
                 </div>
-                <div className="text-xs text-[#6B7C93]">
-                    {cbtSubTab === 'rekap' ? (
-                        <span>Status pengerjaan Pre-Test, Kuis, & Post-Test seluruh {cbtCompletionStats?.total_participants ?? 0} peserta</span>
-                    ) : (
-                        <span>Log pengerjaan CBT ({stats.total_exam_attempts ?? 0} percobaan tersimpan)</span>
-                    )}
+                <div className="flex max-w-full flex-col items-start gap-2 sm:max-w-md sm:items-end">
+                    <div className="whitespace-normal text-xs text-[#6B7C93] [overflow-wrap:anywhere] sm:text-right">
+                        {cbtSubTab === 'rekap' ? (
+                            <span>Status pengerjaan Pre-Test, Kuis, & Post-Test seluruh {cbtCompletionStats?.total_participants ?? 0} peserta</span>
+                        ) : (
+                            <span>Log pengerjaan CBT ({stats.total_exam_attempts ?? 0} percobaan tersimpan)</span>
+                        )}
+                    </div>
+                    <Button
+                        as="a"
+                        href={`/admin/event/${event.id}/laporan/export/hasil-ujian-cbt`}
+                        download
+                        size="sm"
+                        variant="secondary"
+                        icon={<FileSpreadsheet className="h-4 w-4 text-emerald-600" aria-hidden="true" />}
+                    >
+                        Export Excel Hasil Ujian
+                    </Button>
                 </div>
             </div>
 
@@ -104,7 +120,7 @@ export default function EventExamResultsTab() {
             ) : (
                 <div className="space-y-6">
                     {/* Summary / Stats Cards */}
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl border border-[#DCE7F3] bg-white p-4 shadow-xs">
                     <p className="text-xs font-medium text-[#6B7C93]">Total Percobaan Ujian</p>
                     <p className="mt-1 font-display text-2xl font-bold text-[#0E2747]">
@@ -115,25 +131,25 @@ export default function EventExamResultsTab() {
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-xs">
                     <p className="text-xs font-medium text-emerald-700">Lulus Ujian</p>
                     <p className="mt-1 font-display text-2xl font-bold text-emerald-900">
-                        {stats.passed_exam_attempts ?? (examAttempts?.filter(e => e.is_passed).length || 0)}
+                        {stats.passed_exam_attempts ?? passedExamAttempts.length}
                     </p>
                     <p className="mt-1 text-[11px] text-emerald-600">Nilai mencapai passing grade</p>
                 </div>
                 <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-xs">
                     <p className="text-xs font-medium text-rose-700">Belum Lulus</p>
                     <p className="mt-1 font-display text-2xl font-bold text-rose-900">
-                        {stats.failed_exam_attempts ?? (examAttempts?.filter(e => !e.is_passed && e.status === 'submitted').length || 0)}
+                        {stats.failed_exam_attempts ?? completedExamAttempts.filter((attempt) => !attempt.is_passed).length}
                     </p>
                     <p className="mt-1 text-[11px] text-rose-600">Di bawah batas kelulusan</p>
                 </div>
                 <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-xs">
                     <p className="text-xs font-medium text-blue-700">Tingkat Kelulusan</p>
                     <p className="mt-1 font-display text-2xl font-bold text-blue-900">
-                        {examAttempts && examAttempts.length > 0
-                            ? Math.round((examAttempts.filter(e => e.is_passed).length / examAttempts.length) * 100)
+                        {completedExamAttempts.length > 0
+                            ? Math.round((passedExamAttempts.length / completedExamAttempts.length) * 100)
                             : 0}%
                     </p>
-                    <p className="mt-1 text-[11px] text-blue-600">Rasio peserta lulus CBT</p>
+                    <p className="mt-1 text-[11px] text-blue-600">Dari ujian yang sudah selesai</p>
                 </div>
             </div>
 
@@ -301,16 +317,16 @@ export default function EventExamResultsTab() {
             {/* Table of CBT Exam Attempts */}
             <div className="rounded-xl border border-[#DCE7F3] bg-white shadow-xs overflow-hidden">
                 <TableSurface className="rounded-none border-0 shadow-none" ariaLabel="Hasil ujian CBT peserta">
-                    <table className="w-full text-left text-xs">
+                    <table className="min-w-[1180px] w-full table-auto text-left text-xs">
                         <thead className="border-b border-[#DCE7F3] bg-[#F8FBFF] font-semibold text-[#112743]">
                             <tr>
                                 <th className="py-3 px-4 w-12 text-center">No</th>
                                 <th className="py-3 px-4">Nama Kenshi & Asal</th>
                                 <th className="py-3 px-4">Paket Soal & Tipe</th>
                                 <th className="py-3 px-4 text-center">Percobaan</th>
-                                <th className="py-3 px-4 text-center">Nilai / Batas</th>
+                                <th className="py-3 px-4 text-center">Nilai Terhitung / Batas</th>
                                 <th className="py-3 px-4 text-center">Status Kelulusan</th>
-                                <th className="py-3 px-4">Waktu Selesai</th>
+                                <th className="py-3 px-4">Waktu & Jawaban</th>
                                 <th className="py-3 px-4 text-center">Aksi</th>
                             </tr>
                         </thead>
@@ -328,19 +344,19 @@ export default function EventExamResultsTab() {
                                     return (
                                         <tr key={att.id} className="hover:bg-[#F8FBFF] transition-colors">
                                             <td className="py-3 px-4 text-center font-mono text-[#6B7C93]">{globalIdx}</td>
-                                            <td className="py-3 px-4">
-                                                <div className="font-semibold text-[#0E2747] flex items-center gap-1.5 flex-wrap">
-                                                    <span>{att.participant_name}</span>
+                                            <td className="min-w-52 py-3 px-4 whitespace-normal [overflow-wrap:anywhere]">
+                                                <div className="min-w-0 font-semibold text-[#0E2747] flex items-center gap-1.5 flex-wrap">
+                                                    <span className="min-w-0 [overflow-wrap:anywhere]">{att.participant_name}</span>
                                                     {att.track_code && att.track_code !== '-' && (
                                                         <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
                                                             {att.track_code}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-2 font-mono text-[11px] text-[#6B7C93] mt-0.5">
-                                                    <span>{att.kenshi_id_number}</span>
+                                                <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-[#6B7C93] whitespace-normal [overflow-wrap:anywhere]">
+                                                    <span className="[overflow-wrap:anywhere]">{att.kenshi_id_number}</span>
                                                     <span>•</span>
-                                                    <span>{att.origin_dojo}</span>
+                                                    <span className="[overflow-wrap:anywhere]">{att.origin_dojo}</span>
                                                     {att.track_name && att.track_name !== '-' && (
                                                         <>
                                                             <span>•</span>
@@ -349,14 +365,14 @@ export default function EventExamResultsTab() {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="py-3 px-4">
-                                                <div className="font-semibold text-[#112743]">{att.package_title}</div>
-                                                <div className="text-[11px] text-[#6B7C93] mt-0.5">
+                                            <td className="min-w-52 py-3 px-4 whitespace-normal [overflow-wrap:anywhere]">
+                                                <div className="font-semibold text-[#112743] [overflow-wrap:anywhere]">{att.package_title}</div>
+                                                <div className="mt-0.5 text-[11px] text-[#6B7C93] [overflow-wrap:anywhere]">
                                                     {att.package_code} • {att.exam_type_label}
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4 text-center">
-                                                <span className="inline-block font-mono font-bold text-xs text-[#0E2747]">
+                                                <span className="inline-block font-mono font-bold text-xs tabular-nums text-[#0E2747]">
                                                     #{att.attempt_number}
                                                 </span>
                                                 {att.duration_minutes !== null && (
@@ -366,26 +382,34 @@ export default function EventExamResultsTab() {
                                                 )}
                                             </td>
                                             <td className="py-3 px-4 text-center">
-                                                {att.status === 'in_progress' ? (
-                                                    <div className="font-display text-base font-bold text-amber-600" title="Ujian sedang berlangsung, nilai dihitung otomatis setelah selesai">
-                                                        -
-                                                    </div>
-                                                ) : (
-                                                    <div className={`font-display text-base font-bold ${att.is_passed ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                                        {Number(att.score ?? 0).toFixed(1)}
-                                                    </div>
-                                                )}
-                                                <div className="text-[10px] text-[#6B7C93]">
-                                                    Min. {att.passing_score}
+                                                <div
+                                                    className={`font-display text-lg font-bold tabular-nums ${
+                                                        att.score_is_provisional
+                                                            ? 'text-blue-700'
+                                                            : att.is_passed
+                                                                ? 'text-emerald-700'
+                                                                : 'text-rose-700'
+                                                    }`}
+                                                    title={att.score_is_provisional
+                                                        ? 'Nilai sementara dihitung dari jawaban yang sudah tersimpan'
+                                                        : 'Nilai akhir ujian'}
+                                                >
+                                                    {Number(att.score ?? 0).toFixed(1)}
+                                                </div>
+                                                <div className="text-[10px] leading-4 text-[#6B7C93] whitespace-normal">
+                                                    {att.score_is_provisional ? 'Sementara' : 'Final'} · Min. {att.passing_score}
+                                                </div>
+                                                <div className="text-[10px] leading-4 text-[#6B7C93] tabular-nums whitespace-normal">
+                                                    {att.total_answered}/{att.total_questions} jawaban dinilai
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4 text-center">
-                                                {att.is_passed ? (
+                                                {att.is_terminal && att.is_passed ? (
                                                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 border border-emerald-200">
                                                         <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                                                         LULUS
                                                     </span>
-                                                ) : att.status === 'submitted' ? (
+                                                ) : att.is_terminal ? (
                                                     <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-800 border border-rose-200">
                                                         <X className="h-3 w-3 text-rose-600" />
                                                         BELUM LULUS
@@ -397,14 +421,14 @@ export default function EventExamResultsTab() {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="py-3 px-4 text-[#6B7C93]">
-                                                <div>{att.submitted_at || '-'}</div>
-                                                {att.total_answered > 0 && (
-                                                    <div className="text-[10px] text-[#6B7C93]">{att.total_answered} terjawab</div>
-                                                )}
+                                            <td className="min-w-36 py-3 px-4 text-[#6B7C93] whitespace-normal [overflow-wrap:anywhere]">
+                                                <div>{att.submitted_at || att.started_at || '-'}</div>
+                                                <div className="mt-0.5 text-[10px] leading-4 text-[#6B7C93]">
+                                                    {att.submitted_at ? 'Selesai' : 'Mulai'} · {att.total_answered}/{att.total_questions} terjawab
+                                                </div>
                                             </td>
-                                            <td className="py-3 px-4 text-center">
-                                                <div className="flex items-center justify-center gap-1.5">
+                                            <td className="min-w-80 py-3 px-4 text-center">
+                                                <div className="flex flex-wrap items-center justify-center gap-1.5">
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenAttemptDetail(att)}
@@ -414,7 +438,7 @@ export default function EventExamResultsTab() {
                                                         <Eye className="h-3.5 w-3.5" />
                                                         Lihat Jawaban
                                                     </button>
-                                                    {att.status !== 'submitted' && (
+                                                    {!att.is_terminal && (
                                                         <button
                                                             type="button"
                                                             onClick={() => setCompleteExamTarget(att)}

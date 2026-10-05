@@ -213,6 +213,7 @@ export default function RundownIndex({
             material_id: '',
             cbt_exam_package_id: '',
             requires_attendance_before_cbt: true,
+            is_hidden: false,
         });
         setSelectedSessionLinks(['master']);
         setIsSessionModalOpen(true);
@@ -255,6 +256,7 @@ export default function RundownIndex({
             material_id: session.material_id || '',
             cbt_exam_package_id: session.cbt_exam_package_id || '',
             requires_attendance_before_cbt: session.requires_attendance_before_cbt !== undefined ? Boolean(session.requires_attendance_before_cbt) : true,
+            is_hidden: Boolean(session.is_hidden),
         });
 
         const activeLinks = [];
@@ -263,6 +265,13 @@ export default function RundownIndex({
         setSelectedSessionLinks(activeLinks.length > 0 ? activeLinks : ['master']);
 
         setIsSessionModalOpen(true);
+    };
+
+    const handleToggleHidden = (session) => {
+        if (!event) return;
+        router.patch(`/admin/event/${event.id}/sesi/${session.id}/toggle-hidden`, {}, {
+            preserveScroll: true,
+        });
     };
 
     const handleSaveSession = (e) => {
@@ -481,6 +490,7 @@ export default function RundownIndex({
         handleDeleteSession,
         handleOpenAttendance,
         handleCloseAttendance,
+        handleToggleHidden,
         openRescheduleModal,
         handleQuickShift,
         handleSaveReschedule,

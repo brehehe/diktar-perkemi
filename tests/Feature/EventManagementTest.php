@@ -1,6 +1,9 @@
 <?php
 
 use App\Actions\Events\SaveEvent;
+use App\Models\CbtExamAttempt;
+use App\Models\CbtExamPackage;
+use App\Models\CbtQuestion;
 use App\Models\Event;
 use App\Models\EventParticipant;
 use App\Models\Participant;
@@ -151,6 +154,81 @@ test('admin can view 10-tab event detail page with complete relations', function
         ->has('tracks')
         ->has('legends')
         ->has('stats')
+    );
+});
+
+test('admin event results show a provisional score for an in-progress theory exam', function () {
+    $event = Event::firstOrFail();
+    $enrollment = $event->eventParticipants()->firstOrFail();
+    $participant = $enrollment->participant;
+    $package = CbtExamPackage::create([
+        'event_id' => $event->id,
+        'title' => 'Ujian Teori UKT Kyu 3',
+        'code' => 'CBT-UKT-KYU3-TEST',
+        'exam_type' => 'theory',
+        'total_questions' => 2,
+        'duration_minutes' => 60,
+        'passing_score' => 70,
+        'attempts_allowed' => 1,
+        'status' => 'open',
+    ]);
+    $correctQuestion = CbtQuestion::create([
+        'cbt_exam_package_id' => $package->id,
+        'question_text' => 'Soal benar',
+        'question_type' => 'single_choice',
+        'options' => ['A' => 'Benar', 'B' => 'Salah'],
+        'correct_answer' => ['A'],
+        'points' => 1,
+        'sort_order' => 1,
+        'is_active' => true,
+    ]);
+    $incorrectQuestion = CbtQuestion::create([
+        'cbt_exam_package_id' => $package->id,
+        'question_text' => 'Soal salah',
+        'question_type' => 'single_choice',
+        'options' => ['A' => 'Benar', 'B' => 'Salah'],
+        'correct_answer' => ['A'],
+        'points' => 1,
+        'sort_order' => 2,
+        'is_active' => true,
+    ]);
+    $attempt = CbtExamAttempt::create([
+        'cbt_exam_package_id' => $package->id,
+        'event_id' => $event->id,
+        'participant_id' => $participant->id,
+        'user_id' => $participant->user_id,
+        'attempt_number' => 1,
+        'started_at' => now()->subMinutes(10),
+        'status' => 'in_progress',
+        'answers' => [
+            (string) $correctQuestion->id => 'A',
+            (string) $incorrectQuestion->id => 'B',
+        ],
+        'question_order' => [$correctQuestion->id, $incorrectQuestion->id],
+    ]);
+
+    $response = $this->actingAs($this->admin)->get("/admin/event/{$event->id}?tab=hasil-ujian");
+
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->where('examAttempts', fn ($attempts) => collect($attempts)->contains(
+            fn ($item) => $item['id'] === $attempt->id
+                && (float) $item['score'] === 50.0
+                && (float) $item['calculated_score'] === 50.0
+                && $item['official_score'] === null
+                && $item['score_is_provisional'] === true
+                && $item['is_terminal'] === false
+                && $item['total_answered'] === 2
+                && $item['total_questions'] === 2,
+        ))
+        ->where('cbtCompletionMatrix', fn ($matrix) => collect($matrix)->contains(
+            fn ($item) => $item['participant_id'] === $participant->id
+                && $item['post_test']['has_attempted'] === true
+                && (float) $item['post_test']['score'] === 50.0
+                && $item['post_test']['score_is_provisional'] === true,
+        ))
+        ->where('stats.failed_exam_attempts', 0)
+        ->where('stats.in_progress_exam_attempts', 1)
     );
 });
 

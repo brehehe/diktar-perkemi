@@ -155,6 +155,9 @@ class SaveEventSession
             'requires_attendance_before_cbt' => array_key_exists('requires_attendance_before_cbt', $validated)
                 ? (bool) $validated['requires_attendance_before_cbt']
                 : (($isCbt || ! empty($cbtPackageId)) ? true : ($session?->requires_attendance_before_cbt ?? false)),
+            'is_hidden' => array_key_exists('is_hidden', $validated)
+                ? (bool) $validated['is_hidden']
+                : (bool) ($session?->is_hidden ?? false),
         ];
 
         if ($isDaily) {

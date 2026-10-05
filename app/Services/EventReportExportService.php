@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Actions\Events\CalculateCbtExamAttemptScore;
 use App\Models\CbtExamAttempt;
 use App\Models\Event;
 use App\Models\EventFinance;
@@ -20,6 +21,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class EventReportExportService
 {
+    public function __construct(private readonly CalculateCbtExamAttemptScore $calculateCbtExamAttemptScore) {}
+
     public function attendance(Event $event): BinaryFileResponse
     {
         $report = $this->attendanceData($event);
@@ -72,6 +75,21 @@ class EventReportExportService
         }
 
         return $this->download($spreadsheet, $event, 'rekap-kelengkapan-dan-cbt');
+    }
+
+    public function examAttempts(Event $event): BinaryFileResponse
+    {
+        $report = $this->examAttemptsData($event);
+        $reportSheet = $report['sheets'][0];
+        $sheet = $this->workbook($event, $report['title'], $reportSheet['name'])->getActiveSheet();
+        $this->headers($sheet, $reportSheet['headers']);
+
+        foreach ($reportSheet['rows'] as $index => $values) {
+            $this->writeRow($sheet, $index + 8, $values);
+            $sheet->setCellValueExplicit('C'.($index + 8), (string) $values[2], DataType::TYPE_STRING);
+        }
+
+        return $this->download($sheet->getParent(), $event, 'hasil-ujian-cbt');
     }
 
     public function finances(Event $event): BinaryFileResponse
@@ -217,25 +235,7 @@ class EventReportExportService
             ];
         }
 
-        $attemptRows = CbtExamAttempt::query()
-            ->where('event_id', $event->id)
-            ->with(['participant:id,name,kenshi_id_number', 'package:id,title,code'])
-            ->orderBy('participant_id')
-            ->orderBy('attempt_number')
-            ->get()
-            ->values()
-            ->map(fn (CbtExamAttempt $attempt, int $index) => [
-                $index + 1,
-                $attempt->participant?->name ?? '-',
-                $attempt->participant?->kenshi_id_number ?? '-',
-                $attempt->package?->title ?? '-',
-                $attempt->attempt_number,
-                $attempt->status,
-                $attempt->total_score ?? '-',
-                $attempt->is_passed ? 'Ya' : 'Tidak',
-                $attempt->started_at?->format('d/m/Y H:i') ?? '-',
-                $attempt->submitted_at?->format('d/m/Y H:i') ?? '-',
-            ])->all();
+        $attemptReportSheet = $this->examAttemptsData($event)['sheets'][0];
 
         return [
             'title' => 'REKAP KELENGKAPAN PESERTA & CBT',
@@ -245,13 +245,73 @@ class EventReportExportService
                     'headers' => ['No', 'Nama Peserta', 'NIK', 'Foto', 'Formulir', 'Pakta Integritas', 'Status Admin', 'Check-in', 'Sertifikat', 'Transkrip'],
                     'rows' => $completenessRows,
                 ],
-                [
-                    'name' => 'Riwayat CBT',
-                    'title' => 'RIWAYAT PERCOBAAN CBT',
-                    'headers' => ['No', 'Nama Peserta', 'NIK', 'Paket', 'Percobaan', 'Status', 'Nilai', 'Lulus', 'Mulai', 'Selesai'],
-                    'rows' => $attemptRows,
-                ],
+                $attemptReportSheet,
             ],
+        ];
+    }
+
+    /** @return array{title: string, sheets: array<int, array{name: string, title?: string, headers: array<int, string>, rows: array<int, array<int, mixed>>}>} */
+    private function examAttemptsData(Event $event): array
+    {
+        $enrollments = $event->eventParticipants()
+            ->with('track:id,code,name')
+            ->get()
+            ->keyBy('participant_id');
+
+        $attemptRows = CbtExamAttempt::query()
+            ->where('event_id', $event->id)
+            ->with([
+                'participant',
+                'package.questions',
+                'package.bankQuestions',
+            ])
+            ->orderBy('participant_id')
+            ->orderBy('attempt_number')
+            ->get()
+            ->values()
+            ->map(function (CbtExamAttempt $attempt, int $index) use ($enrollments): array {
+                $score = $this->calculateCbtExamAttemptScore->handle($attempt);
+                $enrollment = $enrollments->get($attempt->participant_id);
+                $statusLabel = match ($attempt->status) {
+                    'submitted', 'completed' => 'Selesai',
+                    'timed_out' => 'Waktu habis',
+                    'evaluated' => 'Sudah dinilai',
+                    default => 'Sedang ujian',
+                };
+                $resultLabel = $score['is_terminal']
+                    ? ($attempt->is_passed ? 'Lulus' : 'Belum lulus')
+                    : 'Sedang ujian';
+
+                return [
+                    $index + 1,
+                    $attempt->participant?->name ?? '-',
+                    $attempt->participant?->kenshi_id_number ?? '-',
+                    $attempt->participant?->origin_dojo ?? '-',
+                    $enrollment?->track_code ?? $enrollment?->track?->code ?? '-',
+                    $attempt->package?->title ?? '-',
+                    $attempt->package?->code ?? '-',
+                    $attempt->package?->exam_type_label ?? 'Ujian',
+                    $attempt->attempt_number,
+                    $statusLabel,
+                    $score['score_is_provisional'] ? 'Sementara' : 'Final',
+                    $score['score'],
+                    (float) ($attempt->package?->passing_score ?? 70),
+                    $resultLabel,
+                    $score['total_answered'],
+                    $score['total_questions'],
+                    $attempt->started_at?->format('d/m/Y H:i') ?? '-',
+                    $attempt->submitted_at?->format('d/m/Y H:i') ?? '-',
+                ];
+            })->all();
+
+        return [
+            'title' => 'HASIL UJIAN CBT',
+            'sheets' => [[
+                'name' => 'Riwayat CBT',
+                'title' => 'RIWAYAT PERCOBAAN CBT',
+                'headers' => ['No', 'Nama Peserta', 'NIK', 'Asal Dojo', 'Jalur', 'Paket', 'Kode Paket', 'Tipe', 'Percobaan', 'Status', 'Jenis Nilai', 'Nilai', 'Batas Lulus', 'Hasil', 'Jawaban Terisi', 'Jumlah Soal', 'Mulai', 'Selesai'],
+                'rows' => $attemptRows,
+            ]],
         ];
     }
 

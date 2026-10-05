@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -93,5 +94,28 @@ class CbtExamAttempt extends Model
     public function hasExpired(CbtExamPackage $package): bool
     {
         return $this->remainingSeconds($package) === 0;
+    }
+
+    /**
+     * Return only the questions assigned to this attempt in their locked order.
+     *
+     * @template TQuestion of Model
+     *
+     * @param  Collection<int, TQuestion>  $questions
+     * @return Collection<int, TQuestion>
+     */
+    public function orderedQuestions(Collection $questions): Collection
+    {
+        if (empty($this->question_order)) {
+            return $questions;
+        }
+
+        $questionOrder = array_map('strval', $this->question_order);
+        $questionOrderMap = array_flip($questionOrder);
+
+        return $questions
+            ->filter(fn (Model $question): bool => isset($questionOrderMap[(string) $question->getKey()]))
+            ->sortBy(fn (Model $question): int => $questionOrderMap[(string) $question->getKey()])
+            ->values();
     }
 }

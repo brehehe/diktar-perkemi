@@ -36,11 +36,7 @@ class AdminCbtExamAttemptController extends Controller
             $questions = $package->bankQuestions()->where('status', 'active')->get();
         }
 
-        // Sort by locked question_order if available
-        if (! empty($attempt->question_order) && is_array($attempt->question_order)) {
-            $orderMap = array_flip($attempt->question_order);
-            $questions = $questions->sortBy(fn ($q) => $orderMap[$q->id] ?? 999999)->values();
-        }
+        $questions = $attempt->orderedQuestions($questions);
 
         $userAnswers = is_array($attempt->answers) ? $attempt->answers : [];
         $optionOrder = is_array($attempt->option_order) ? $attempt->option_order : [];
@@ -291,12 +287,13 @@ class AdminCbtExamAttemptController extends Controller
             }
 
             $scorer = app(SubmitCbtExam::class);
-            $reflection = new \ReflectionClass($scorer);
-            $scoreMethod = $reflection->getMethod('score');
-            $scoreMethod->setAccessible(true);
 
             $answers = is_array($attempt->answers) ? $attempt->answers : [];
-            [$score, $isPassed, $finalAnswers] = $scoreMethod->invoke($scorer, $questions, $answers, (float) $pkg->passing_score);
+            [$score, $isPassed, $finalAnswers] = $scorer->score(
+                $attempt->orderedQuestions($questions),
+                $answers,
+                (float) $pkg->passing_score,
+            );
 
             $attempt->update([
                 'status' => 'submitted',
@@ -345,10 +342,6 @@ class AdminCbtExamAttemptController extends Controller
         }
 
         $scorer = app(SubmitCbtExam::class);
-        $reflection = new \ReflectionClass($scorer);
-        $scoreMethod = $reflection->getMethod('score');
-        $scoreMethod->setAccessible(true);
-
         $count = 0;
         foreach ($attempts as $attempt) {
             $pkg = $attempt->package;
@@ -362,7 +355,11 @@ class AdminCbtExamAttemptController extends Controller
             }
 
             $answers = is_array($attempt->answers) ? $attempt->answers : [];
-            [$score, $isPassed, $finalAnswers] = $scoreMethod->invoke($scorer, $questions, $answers, (float) $pkg->passing_score);
+            [$score, $isPassed, $finalAnswers] = $scorer->score(
+                $attempt->orderedQuestions($questions),
+                $answers,
+                (float) $pkg->passing_score,
+            );
 
             $attempt->update([
                 'status' => 'submitted',

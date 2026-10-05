@@ -1,6 +1,9 @@
 <?php
 
 use App\Jobs\GenerateEventDocuments;
+use App\Models\CbtExamAttempt;
+use App\Models\CbtExamPackage;
+use App\Models\CbtQuestion;
 use App\Models\Event;
 use App\Models\EventFinance;
 use App\Models\EventParticipant;
@@ -219,6 +222,88 @@ test('report previews use the same rows and labels as excel exports', function (
         ->toBe($financePreview->json('sheets.0.rows.0.3'));
 
     $workbook->disconnectWorksheets();
+});
+
+test('authorized user can export cbt exam results with provisional scores to excel', function () {
+    $participant = Participant::create([
+        'name' => 'Kenshi Nilai Sementara',
+        'kenshi_id_number' => '00.12.345',
+        'origin_dojo' => 'Dojo Pengujian',
+    ]);
+    EventParticipant::create([
+        'event_id' => $this->event->id,
+        'participant_id' => $participant->id,
+        'track_code' => 'PD',
+    ]);
+    $package = CbtExamPackage::create([
+        'event_id' => $this->event->id,
+        'title' => 'Ujian Teori UKT Kyu 3',
+        'code' => 'CBT-UKT-KYU3-EXPORT',
+        'exam_type' => 'theory',
+        'total_questions' => 2,
+        'duration_minutes' => 60,
+        'passing_score' => 70,
+        'attempts_allowed' => 1,
+        'status' => 'open',
+    ]);
+    $correctQuestion = CbtQuestion::create([
+        'cbt_exam_package_id' => $package->id,
+        'question_text' => 'Soal benar',
+        'question_type' => 'single_choice',
+        'options' => ['A' => 'Benar', 'B' => 'Salah'],
+        'correct_answer' => ['A'],
+        'points' => 1,
+        'sort_order' => 1,
+        'is_active' => true,
+    ]);
+    $incorrectQuestion = CbtQuestion::create([
+        'cbt_exam_package_id' => $package->id,
+        'question_text' => 'Soal salah',
+        'question_type' => 'single_choice',
+        'options' => ['A' => 'Benar', 'B' => 'Salah'],
+        'correct_answer' => ['A'],
+        'points' => 1,
+        'sort_order' => 2,
+        'is_active' => true,
+    ]);
+    CbtExamAttempt::create([
+        'cbt_exam_package_id' => $package->id,
+        'event_id' => $this->event->id,
+        'participant_id' => $participant->id,
+        'attempt_number' => 1,
+        'started_at' => now()->subMinutes(10),
+        'status' => 'in_progress',
+        'answers' => [
+            (string) $correctQuestion->id => 'A',
+            (string) $incorrectQuestion->id => 'B',
+        ],
+        'question_order' => [$correctQuestion->id, $incorrectQuestion->id],
+    ]);
+
+    $response = $this->actingAs($this->admin)
+        ->get(route('admin.event.reports.exam-attempts.export', $this->event))
+        ->assertOk()
+        ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    expect($response->headers->get('content-disposition'))->toContain('hasil-ujian-cbt-');
+
+    $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+    $sheet = $workbook->getSheetByName('Riwayat CBT');
+
+    expect($sheet)->not->toBeNull()
+        ->and($sheet->getCell('B8')->getValue())->toBe('Kenshi Nilai Sementara')
+        ->and($sheet->getCell('C8')->getValue())->toBe('00.12.345')
+        ->and($sheet->getCell('K8')->getValue())->toBe('Sementara')
+        ->and((float) $sheet->getCell('L8')->getValue())->toBe(50.0)
+        ->and((int) $sheet->getCell('O8')->getValue())->toBe(2)
+        ->and((int) $sheet->getCell('P8')->getValue())->toBe(2);
+
+    $workbook->disconnectWorksheets();
+
+    $participantUser = User::factory()->create(['role' => 'Peserta']);
+    $this->actingAs($participantUser)
+        ->get(route('admin.event.reports.exam-attempts.export', $this->event))
+        ->assertForbidden();
 });
 
 test('assigned reporting staff only manages the matching event duty', function () {

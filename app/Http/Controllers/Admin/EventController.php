@@ -348,6 +348,23 @@ class EventController extends Controller
     }
 
     /**
+     * Toggle session hidden visibility in participant rundown.
+     */
+    public function toggleSessionHidden(Event $event, EventSession $session): RedirectResponse
+    {
+        abort_unless($session->event_id === $event->id, 404);
+        abort_if($session->session_type_code === 'KEHADIRAN_AWAL', 403);
+
+        $session->update([
+            'is_hidden' => ! $session->is_hidden,
+        ]);
+
+        $statusText = $session->is_hidden ? 'disembunyikan dari peserta' : 'ditampilkan kembali ke peserta';
+
+        return back()->with('success', "Sesi \"{$session->topic}\" berhasil {$statusText}.");
+    }
+
+    /**
      * Reschedule session or adjust for delay (molor) and optionally shift subsequent sessions.
      */
     public function rescheduleSession(

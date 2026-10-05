@@ -1,7 +1,7 @@
 import Select from '../../../../Components/ui/Select';
 import Button from '../../../../Components/ui/Button';
 import TableSurface from '../../../../Components/admin/TableSurface';
-import { Clock, Edit3, BookOpen, Plus, Trash2, Filter, Sparkles, QrCode, Printer, PlayCircle, Lock, Unlock, FileSpreadsheet } from 'lucide-react';
+import { Clock, Edit3, BookOpen, Plus, Trash2, Filter, Sparkles, QrCode, Printer, PlayCircle, Lock, Unlock, FileSpreadsheet, Eye, EyeOff } from 'lucide-react';
 import { useEventShow } from './EventShowContext';
 
 export default function EventScheduleTab() {
@@ -23,6 +23,7 @@ export default function EventScheduleTab() {
         handleCloseAttendance,
         openEditSessionModal,
         openRescheduleModal,
+        handleToggleHidden,
         daysList,
         getDayDateInfo,
         getDayIsoDate,
@@ -253,11 +254,17 @@ export default function EventScheduleTab() {
                                         </tr>
                                     ) : (
                                         filteredDaySessions.map((s) => (
-                                            <tr key={s.id} className="hover:bg-[#F8FBFF] transition-colors">
+                                            <tr key={s.id} className={`transition-colors ${s.is_hidden ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-[#F8FBFF]'}`}>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     <div className="font-mono font-bold text-[#0B63CE]">{s.time_slot}</div>
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                                                         <span className="text-[11px] text-[#6B7C93]">{s.session_number} ({s.duration_jp} JP)</span>
+                                                        {s.is_hidden && (
+                                                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1">
+                                                                <EyeOff className="w-2.5 h-2.5" />
+                                                                Hidden
+                                                            </span>
+                                                        )}
                                                         {s.status === 'delayed' && (
                                                             <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                                                                 Molor
@@ -404,6 +411,19 @@ export default function EventScheduleTab() {
                                                         <QrCode className="w-3.5 h-3.5" />
                                                     </a>
                                                 )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleToggleHidden(s)}
+                                                    className={`p-1.5 rounded transition-colors ${
+                                                        s.is_hidden
+                                                            ? 'text-amber-700 bg-amber-100/80 hover:bg-amber-200 border border-amber-300'
+                                                            : 'text-[#6B7C93] hover:text-[#0B63CE] hover:bg-[#EAF5FF]'
+                                                    }`}
+                                                    title={s.is_hidden ? 'Sesi disembunyikan dari peserta (Klik untuk menampilkan)' : 'Sesi tampil ke peserta (Klik untuk menyembunyikan)'}
+                                                    aria-label={s.is_hidden ? `Tampilkan sesi ${s.topic}` : `Sembunyikan sesi ${s.topic}`}
+                                                >
+                                                    {s.is_hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => openRescheduleModal(s)}

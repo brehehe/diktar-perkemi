@@ -44,9 +44,13 @@ class SubmitCbtExam
             }
 
             $timedOut = $attempt->hasExpired($package);
+            $questions = $attempt->orderedQuestions($questions);
             $storedAnswers = is_array($attempt->answers) ? $attempt->answers : [];
             $incomingAnswers = is_array($submittedAnswers) ? $submittedAnswers : [];
-            $answers = array_merge($storedAnswers, $incomingAnswers);
+            $answers = $storedAnswers;
+            foreach ($incomingAnswers as $questionId => $answer) {
+                $answers[(string) $questionId] = $answer;
+            }
 
             [$score, $isPassed, $finalAnswers] = $this->score($questions, $answers, (float) $package->passing_score);
 
@@ -71,7 +75,7 @@ class SubmitCbtExam
      * @param  array<string, mixed>  $answers
      * @return array{0: float, 1: bool, 2: array<string, mixed>}
      */
-    private function score(Collection $questions, array $answers, float $passingScore): array
+    public function score(Collection $questions, array $answers, float $passingScore): array
     {
         $totalPoints = 0.0;
         $earnedPoints = 0.0;
@@ -95,6 +99,9 @@ class SubmitCbtExam
                 }
             }
         }
+
+        $questionMap = array_fill_keys($questions->modelKeys(), true);
+        $normalizedAnswers = array_intersect_key($normalizedAnswers, $questionMap);
 
         foreach ($questions as $question) {
             $points = (float) $question->points;

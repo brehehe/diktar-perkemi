@@ -110,6 +110,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         ->name('event.reports.preview');
     Route::get('/event/{event}/laporan/export/absensi', [EventReportController::class, 'exportAttendance'])->name('event.reports.attendance.export');
     Route::get('/event/{event}/laporan/export/capaian', [EventReportController::class, 'exportOutcomes'])->name('event.reports.outcomes.export');
+    Route::get('/event/{event}/laporan/export/hasil-ujian-cbt', [EventReportController::class, 'exportExamAttempts'])->name('event.reports.exam-attempts.export');
     Route::get('/event/{event}/laporan/export/kelengkapan-cbt', [EventReportController::class, 'exportCompleteness'])->name('event.reports.completeness.export');
     Route::get('/event/{event}/laporan/export/keuangan', [EventReportController::class, 'exportFinance'])->name('event.reports.finance.export');
 
@@ -186,6 +187,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::post('/event/{event}/sesi', [EventController::class, 'storeSession'])->name('event.session.store');
         Route::post('/event/{event}/kehadiran-awal', [EventController::class, 'storeArrivalSession'])->name('event.arrival.store');
         Route::put('/event/{event}/sesi/{session}', [EventController::class, 'updateSession'])->name('event.session.update');
+        Route::patch('/event/{event}/sesi/{session}/toggle-hidden', [EventController::class, 'toggleSessionHidden'])->name('event.session.toggle-hidden');
         Route::post('/event/{event}/sesi/{session}/reschedule', [EventController::class, 'rescheduleSession'])->name('event.session.reschedule');
         Route::delete('/event/{event}/sesi/{session}', [EventController::class, 'destroySession'])->name('event.session.destroy');
         Route::post('/event/{event}/ruang', [EventController::class, 'storeRoom'])->name('event.room.store');

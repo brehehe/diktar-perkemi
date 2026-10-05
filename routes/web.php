@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\CbtController;
 use App\Http\Controllers\Admin\CbtPackageController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EventAssessmentController;
+use App\Http\Controllers\Admin\EventBudgetController;
 use App\Http\Controllers\Admin\EventCertificateController;
 use App\Http\Controllers\Admin\EventCertificateSignatureSettingController;
 use App\Http\Controllers\Admin\EventController;
@@ -113,6 +114,13 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/event/{event}/laporan/export/hasil-ujian-cbt', [EventReportController::class, 'exportExamAttempts'])->name('event.reports.exam-attempts.export');
     Route::get('/event/{event}/laporan/export/kelengkapan-cbt', [EventReportController::class, 'exportCompleteness'])->name('event.reports.completeness.export');
     Route::get('/event/{event}/laporan/export/keuangan', [EventReportController::class, 'exportFinance'])->name('event.reports.finance.export');
+
+    // RAB (Rencana Anggaran Biaya) Event
+    Route::post('/event/{event}/rab', [EventBudgetController::class, 'store'])->name('event.rab.store');
+    Route::put('/event/{event}/rab/{budget}', [EventBudgetController::class, 'update'])->name('event.rab.update');
+    Route::delete('/event/{event}/rab/{budget}', [EventBudgetController::class, 'destroy'])->name('event.rab.destroy');
+    Route::get('/event/{event}/rab/export', [EventBudgetController::class, 'export'])->name('event.rab.export');
+    Route::get('/event/{event}/rab/cetak', [EventBudgetController::class, 'print'])->name('event.rab.print');
 
     Route::middleware(EnsureUserIsAdmin::class)->group(function () {
 

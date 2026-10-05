@@ -26,6 +26,7 @@ import EventExamRevisionsTab from './Partials/EventExamRevisionsTab';
 import EventLegendsTab from './Partials/EventLegendsTab';
 import EventDocumentsTab from './Partials/EventDocumentsTab';
 import EventMandateTab from './Partials/EventMandateTab';
+import EventRabTab from './Partials/EventRabTab';
 import EventSettingsTab from './Partials/EventSettingsTab';
 import EventShowDialogs from './Partials/EventShowDialogs';
 import { EventShowContext } from './Partials/EventShowContext';
@@ -41,6 +42,9 @@ export default function Show(props) {
         kenshiExamData = null,
         finances = [],
         financeAnalysis = null,
+        budgets = [],
+        rabAnalysis = null,
+        canManageBudget = false,
         financeCategories = [],
         activities = [],
         staff = [],
@@ -212,6 +216,16 @@ export default function Show(props) {
 
                     {/* TAB 10: PENGATURAN EVENT */}
                     {activeTab === 'pengaturan' && <EventSettingsTab />}
+
+                    {/* TAB: RAB ANGGARAN */}
+                    {activeTab === 'rab' && (
+                        <EventRabTab
+                            event={event}
+                            budgets={budgets}
+                            rabAnalysis={rabAnalysis}
+                            canManageBudget={canManageBudget}
+                        />
+                    )}
 
                     {/* TABS: LAPORAN (KEUANGAN, DOKUMENTASI, REALISASI, PETUGAS, REKAP & EKSPOR) */}
                     {['keuangan', 'dokumentasi', 'realisasi', 'petugas', 'rekap-laporan', 'laporan'].includes(activeTab) && (

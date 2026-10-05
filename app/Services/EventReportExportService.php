@@ -665,6 +665,231 @@ class EventReportExportService
         return "{$present}/{$stage->count()}";
     }
 
+    public function rab(Event $event): BinaryFileResponse
+    {
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getProperties()
+            ->setCreator('PB PERKEMI - Diktar')
+            ->setTitle('RAB Kegiatan '.$event->name);
+
+        $budgets = $event->budgets()
+            ->orderBy('type')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        $incomes = $budgets->where('type', 'income');
+        $expenses = $budgets->where('type', 'expense');
+
+        $totalIncome = (int) $incomes->sum('amount');
+        $totalExpense = (int) $expenses->sum('amount');
+        $plannedBalance = $totalIncome - $totalExpense;
+
+        $actualIncome = (int) $event->finances()->where('type', 'income')->sum('amount');
+        $actualExpense = (int) $event->finances()->where('type', 'expense')->sum('amount');
+
+        // Sheet 1: Rencana Anggaran Biaya (RAB)
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Rencana Anggaran (RAB)');
+
+        // Header Letterhead
+        $sheet->setCellValue('A1', 'PERSAUDARAAN SHORINJI KEMPO INDONESIA (PERKEMI)');
+        $sheet->setCellValue('A2', 'RENCANA ANGGARAN BIAYA (RAB) KEGIATAN');
+        $sheet->setCellValue('A3', 'Kegiatan: '.$event->name);
+        $sheet->setCellValue('A4', 'Waktu: '.$event->date_formatted.' | Tempat: '.$event->place.' | Penyelenggara: '.$event->organizer);
+
+        $sheet->getStyle('A1:A3')->getFont()->setBold(true)->getColor()->setRGB('0E2747');
+        $sheet->getStyle('A1')->getFont()->setSize(12);
+        $sheet->getStyle('A2')->getFont()->setSize(14)->getColor()->setRGB('0B63CE');
+        $sheet->getStyle('A4')->getFont()->getColor()->setRGB('6B7C93');
+
+        // Ringkasan
+        $sheet->setCellValue('A6', 'RINGKASAN ESTIMASI ANGGARAN');
+        $sheet->getStyle('A6')->getFont()->setBold(true)->getColor()->setRGB('0E2747');
+        $sheet->setCellValue('A7', 'Total Rencana Pemasukan:');
+        $sheet->setCellValue('B7', $totalIncome);
+        $sheet->setCellValue('A8', 'Total Rencana Pengeluaran:');
+        $sheet->setCellValue('B8', $totalExpense);
+        $sheet->setCellValue('A9', 'Rencana Saldo Kas (Surplus / Defisit):');
+        $sheet->setCellValue('B9', $plannedBalance);
+
+        $sheet->getStyle('A7:A9')->getFont()->setBold(true);
+        $sheet->getStyle('B7:B9')->getFont()->setBold(true);
+        $sheet->getStyle('B7:B9')->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+        $sheet->getStyle('B9')->getFont()->getColor()->setRGB($plannedBalance >= 0 ? '16785B' : 'B93664');
+
+        $row = 11;
+        // SECTION PEMASUKAN
+        $sheet->setCellValue("A{$row}", 'I. RENCANA PENERIMAAN / PEMASUKAN DANA');
+        $sheet->getStyle("A{$row}")->getFont()->setBold(true)->getColor()->setRGB('16785B');
+        $row++;
+
+        $headers = ['No', 'Kategori', 'Uraian Kebutuhan / Sumber Dana', 'Volume', 'Satuan', 'Tarif / Harga Satuan', 'Total Anggaran', 'Catatan'];
+        $cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        foreach ($headers as $idx => $h) {
+            $sheet->setCellValue("{$cols[$idx]}{$row}", $h);
+        }
+        $sheet->getStyle("A{$row}:H{$row}")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle("A{$row}:H{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('16785B');
+        $row++;
+
+        $incIndex = 1;
+        foreach ($incomes as $inc) {
+            $sheet->setCellValue("A{$row}", $incIndex++);
+            $sheet->setCellValue("B{$row}", AdminEventDetailService::budgetCategoryName($inc->category));
+            $sheet->setCellValue("C{$row}", $inc->item_name);
+            $sheet->setCellValue("D{$row}", (float) $inc->quantity);
+            $sheet->setCellValue("E{$row}", $inc->unit ?? 'paket');
+            $sheet->setCellValue("F{$row}", (int) $inc->unit_price);
+            $sheet->setCellValue("G{$row}", (int) $inc->amount);
+            $sheet->setCellValue("H{$row}", $inc->notes ?? '-');
+
+            $sheet->getStyle("F{$row}:G{$row}")->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("D{$row}:E{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        if ($incomes->isEmpty()) {
+            $sheet->setCellValue("A{$row}", 'Belum ada rencana pemasukan yang dicatat.');
+            $sheet->mergeCells("A{$row}:H{$row}");
+            $sheet->getStyle("A{$row}")->getFont()->setItalic(true)->getColor()->setRGB('6B7C93');
+            $row++;
+        }
+
+        $sheet->setCellValue("A{$row}", 'TOTAL RENCANA PEMASUKAN');
+        $sheet->mergeCells("A{$row}:F{$row}");
+        $sheet->setCellValue("G{$row}", $totalIncome);
+        $sheet->getStyle("A{$row}:H{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+        $sheet->getStyle("A{$row}:H{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('EAF5FF');
+        $row += 2;
+
+        // SECTION PENGELUARAN
+        $sheet->setCellValue("A{$row}", 'II. RENCANA PENGELUARAN / BELANJA KEGIATAN');
+        $sheet->getStyle("A{$row}")->getFont()->setBold(true)->getColor()->setRGB('B93664');
+        $row++;
+
+        foreach ($headers as $idx => $h) {
+            $sheet->setCellValue("{$cols[$idx]}{$row}", $h);
+        }
+        $sheet->getStyle("A{$row}:H{$row}")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle("A{$row}:H{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('B93664');
+        $row++;
+
+        $expIndex = 1;
+        foreach ($expenses as $exp) {
+            $sheet->setCellValue("A{$row}", $expIndex++);
+            $sheet->setCellValue("B{$row}", AdminEventDetailService::budgetCategoryName($exp->category));
+            $sheet->setCellValue("C{$row}", $exp->item_name);
+            $sheet->setCellValue("D{$row}", (float) $exp->quantity);
+            $sheet->setCellValue("E{$row}", $exp->unit ?? 'paket');
+            $sheet->setCellValue("F{$row}", (int) $exp->unit_price);
+            $sheet->setCellValue("G{$row}", (int) $exp->amount);
+            $sheet->setCellValue("H{$row}", $exp->notes ?? '-');
+
+            $sheet->getStyle("F{$row}:G{$row}")->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("D{$row}:E{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        if ($expenses->isEmpty()) {
+            $sheet->setCellValue("A{$row}", 'Belum ada rencana pengeluaran yang dicatat.');
+            $sheet->mergeCells("A{$row}:H{$row}");
+            $sheet->getStyle("A{$row}")->getFont()->setItalic(true)->getColor()->setRGB('6B7C93');
+            $row++;
+        }
+
+        $sheet->setCellValue("A{$row}", 'TOTAL RENCANA PENGELUARAN');
+        $sheet->mergeCells("A{$row}:F{$row}");
+        $sheet->setCellValue("G{$row}", $totalExpense);
+        $sheet->getStyle("A{$row}:H{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+        $sheet->getStyle("A{$row}:H{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF0F3');
+        $row += 2;
+
+        // GRAND SUMMARY ROW
+        $sheet->setCellValue("A{$row}", 'ESTIMASI SALDO BERSIH (SURPLUS / DEFISIT)');
+        $sheet->mergeCells("A{$row}:F{$row}");
+        $sheet->setCellValue("G{$row}", $plannedBalance);
+        $sheet->getStyle("A{$row}:H{$row}")->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+        $sheet->getStyle("G{$row}")->getFont()->getColor()->setRGB($plannedBalance >= 0 ? '16785B' : 'B93664');
+        $sheet->getStyle("A{$row}:H{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E8F1FC');
+
+        // Column widths
+        $sheet->getColumnDimension('A')->setWidth(6);
+        $sheet->getColumnDimension('B')->setWidth(26);
+        $sheet->getColumnDimension('C')->setWidth(38);
+        $sheet->getColumnDimension('D')->setWidth(10);
+        $sheet->getColumnDimension('E')->setWidth(12);
+        $sheet->getColumnDimension('F')->setWidth(20);
+        $sheet->getColumnDimension('G')->setWidth(22);
+        $sheet->getColumnDimension('H')->setWidth(30);
+
+        // Sheet 2: Komparasi Realisasi
+        $sheet2 = $spreadsheet->createSheet();
+        $sheet2->setTitle('Komparasi Realisasi');
+
+        $sheet2->setCellValue('A1', 'KOMPARASI RENCANA ANGGARAN (RAB) VS REALISASI KAS TERCATAT');
+        $sheet2->setCellValue('A2', 'Kegiatan: '.$event->name);
+        $sheet2->getStyle('A1:A2')->getFont()->setBold(true)->getColor()->setRGB('0E2747');
+        $sheet2->getStyle('A1')->getFont()->setSize(13);
+
+        $compHeaders = ['Kategori / Akun', 'Rencana Anggaran (RAB)', 'Realisasi Kas Riil', 'Selisih (Deviasi)', 'Penyerapan / Capaian (%)'];
+        $cCols = ['A', 'B', 'C', 'D', 'E'];
+        $sRow = 4;
+        foreach ($compHeaders as $cIdx => $cH) {
+            $sheet2->setCellValue("{$cCols[$cIdx]}{$sRow}", $cH);
+        }
+        $sheet2->getStyle("A{$sRow}:E{$sRow}")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet2->getStyle("A{$sRow}:E{$sRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('0A3F82');
+        $sRow++;
+
+        // Row Pemasukan
+        $incDiff = $actualIncome - $totalIncome;
+        $incPct = $totalIncome > 0 ? round(($actualIncome / $totalIncome) * 100, 1) : 0;
+        $sheet2->setCellValue("A{$sRow}", 'Total Penerimaan / Pemasukan');
+        $sheet2->setCellValue("B{$sRow}", $totalIncome);
+        $sheet2->setCellValue("C{$sRow}", $actualIncome);
+        $sheet2->setCellValue("D{$sRow}", $incDiff);
+        $sheet2->setCellValue("E{$sRow}", "{$incPct}%");
+        $sheet2->getStyle("B{$sRow}:D{$sRow}")->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+        $sRow++;
+
+        // Row Pengeluaran
+        $expDiff = $totalExpense - $actualExpense;
+        $expPct = $totalExpense > 0 ? round(($actualExpense / $totalExpense) * 100, 1) : 0;
+        $sheet2->setCellValue("A{$sRow}", 'Total Pengeluaran / Belanja');
+        $sheet2->setCellValue("B{$sRow}", $totalExpense);
+        $sheet2->setCellValue("C{$sRow}", $actualExpense);
+        $sheet2->setCellValue("D{$sRow}", $expDiff);
+        $sheet2->setCellValue("E{$sRow}", "{$expPct}%");
+        $sheet2->getStyle("B{$sRow}:D{$sRow}")->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+        $sRow++;
+
+        // Row Saldo
+        $actualBalance = $actualIncome - $actualExpense;
+        $balDiff = $actualBalance - $plannedBalance;
+        $sheet2->setCellValue("A{$sRow}", 'Saldo Bersih (Surplus / Defisit)');
+        $sheet2->setCellValue("B{$sRow}", $plannedBalance);
+        $sheet2->setCellValue("C{$sRow}", $actualBalance);
+        $sheet2->setCellValue("D{$sRow}", $balDiff);
+        $sheet2->setCellValue("E{$sRow}", '-');
+        $sheet2->getStyle("A{$sRow}:E{$sRow}")->getFont()->setBold(true);
+        $sheet2->getStyle("B{$sRow}:D{$sRow}")->getNumberFormat()->setFormatCode('[$Rp-id-ID] #,##0');
+        $sheet2->getStyle("A{$sRow}:E{$sRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('EAF5FF');
+
+        $sheet2->getColumnDimension('A')->setWidth(35);
+        $sheet2->getColumnDimension('B')->setWidth(25);
+        $sheet2->getColumnDimension('C')->setWidth(25);
+        $sheet2->getColumnDimension('D')->setWidth(25);
+        $sheet2->getColumnDimension('E')->setWidth(25);
+
+        return $this->download($spreadsheet, $event, 'rab');
+    }
+
     private function download(Spreadsheet $spreadsheet, Event $event, string $prefix): BinaryFileResponse
     {
         $path = tempnam(sys_get_temp_dir(), 'event_report_').'.xlsx';

@@ -11,6 +11,7 @@ use App\Models\CbtProctoringEvent;
 use App\Models\Event;
 use App\Models\EventActivityRecord;
 use App\Models\EventAttendance;
+use App\Models\EventBudget;
 use App\Models\EventFinance;
 use App\Models\EventIntegrityPact;
 use App\Models\EventLegend;
@@ -824,6 +825,7 @@ class AdminEventDetailService
             ? $this->kenshiExamService->eventData($event)
             : null;
         $stats['total_finances'] = $event->finances()->count();
+        $stats['total_budgets'] = $event->budgets()->count();
         $stats['total_realisations'] = $event->activityRecords()->where('kind', 'realisation')->count();
         $stats['total_documentations'] = $event->activityRecords()->where('kind', 'documentation')->count();
         $stats['total_staff'] = $event->staff()->count();
@@ -837,6 +839,57 @@ class AdminEventDetailService
         $canManageFinance = $user ? $user->can('manageFinance', $event) : false;
         $canManageRealisation = $user ? $user->can('manageActivity', [$event, 'realisation']) : false;
         $canManageDocumentation = $user ? $user->can('manageActivity', [$event, 'documentation']) : false;
+        $canManageBudget = $user ? ($canManageFinance || $user->isAdmin() || in_array($user->role, ['Diktar', 'Penyelenggara', 'Bendahara'])) : false;
+
+        $budgets = $event->budgets()
+            ->with(['creator:id,name', 'categoryMaster:id,code,name'])
+            ->orderBy('type')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        $budgetIncome = (int) $budgets->where('type', 'income')->sum('amount');
+        $budgetExpense = (int) $budgets->where('type', 'expense')->sum('amount');
+        $budgetBalance = $budgetIncome - $budgetExpense;
+
+        $actualIncome = (int) $event->finances()->where('type', 'income')->sum('amount');
+        $actualExpense = (int) $event->finances()->where('type', 'expense')->sum('amount');
+        $actualBalance = $actualIncome - $actualExpense;
+
+        $incomeAchievementRate = $budgetIncome > 0 ? round(($actualIncome / $budgetIncome) * 100, 1) : 0;
+        $expenseAbsorptionRate = $budgetExpense > 0 ? round(($actualExpense / $budgetExpense) * 100, 1) : 0;
+        $remainingBudget = max(0, $budgetExpense - $actualExpense);
+
+        $budgetsPayload = $budgets->map(fn (EventBudget $entry) => [
+            'id' => $entry->id,
+            'type' => $entry->type,
+            'category' => $entry->category,
+            'category_name' => self::budgetCategoryName($entry->category),
+            'item_name' => $entry->item_name,
+            'quantity' => (float) $entry->quantity,
+            'unit' => $entry->unit ?? 'paket',
+            'unit_price' => (int) $entry->unit_price,
+            'amount' => (int) $entry->amount,
+            'notes' => $entry->notes,
+            'sort_order' => (int) $entry->sort_order,
+            'creator_name' => $entry->creator?->name,
+        ])->values()->all();
+
+        $rabAnalysis = [
+            'total_income' => $budgetIncome,
+            'total_expense' => $budgetExpense,
+            'planned_balance' => $budgetBalance,
+            'income_items_count' => $budgets->where('type', 'income')->count(),
+            'expense_items_count' => $budgets->where('type', 'expense')->count(),
+            'total_items_count' => $budgets->count(),
+            'actual_income' => $actualIncome,
+            'actual_expense' => $actualExpense,
+            'actual_balance' => $actualBalance,
+            'income_achievement_rate' => $incomeAchievementRate,
+            'expense_absorption_rate' => $expenseAbsorptionRate,
+            'remaining_budget' => $remainingBudget,
+            'is_surplus' => $budgetBalance >= 0,
+        ];
 
         $finances = $canViewFinance ? $event->finances()->with(['creator:id,name', 'categoryMaster:id,code,name'])->latest('occurred_on')->latest('id')->get()->map(fn (EventFinance $entry) => [
             'id' => $entry->id,
@@ -1065,11 +1118,36 @@ class AdminEventDetailService
                 'id' => $session->id,
                 'label' => $session->topic.' · '.($session->date?->format('d M Y') ?? 'Tanggal belum diatur'),
             ]),
+            'budgets' => $budgetsPayload,
+            'rabAnalysis' => $rabAnalysis,
+            'canManageBudget' => $canManageBudget,
             'outcomesSummary' => $outcomesSummary,
             'mandate' => $mandatePayload,
             'stats' => $stats,
         ];
 
+    }
+
+    public static function budgetCategoryName(?string $code): string
+    {
+        $names = [
+            'registration' => 'Pendaftaran Peserta',
+            'grant' => 'Bantuan / Subsidi Organisasi',
+            'sponsorship' => 'Sponsorship & Donatur',
+            'accommodation' => 'Akomodasi & Penginapan',
+            'consumption' => 'Konsumsi & Snack',
+            'honorarium' => 'Honorarium Pemateri & Penguji',
+            'transport' => 'Transportasi & Tiket',
+            'venue' => 'Tempat & Sewa Fasilitas',
+            'printing' => 'Cetak & ATK',
+            'equipment' => 'Perlengkapan, Medali & Plakat',
+            'documentation' => 'Dokumentasi & Publikasi',
+            'medical' => 'Kesehatan & P3K',
+            'contingency' => 'Biaya Tak Terduga',
+            'other' => 'Lain-lain',
+        ];
+
+        return $names[$code] ?? ucfirst(str_replace('_', ' ', (string) $code));
     }
 
     /** @return array<int, array<string, mixed>> */

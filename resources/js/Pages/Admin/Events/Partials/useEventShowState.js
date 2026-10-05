@@ -46,6 +46,9 @@ export default function useEventShowState({
     kenshiExamData = null,
     finances = [],
     financeAnalysis = null,
+    budgets = [],
+    rabAnalysis = null,
+    canManageBudget = false,
     activities = [],
     staff = [],
     staffCandidates = [],
@@ -64,6 +67,7 @@ export default function useEventShowState({
         if (requested === 'finance') return 'keuangan';
         if (requested === 'documentation') return 'dokumentasi';
         if (requested === 'staff') return 'petugas';
+        if (requested === 'rab' || requested === 'anggaran') return 'rab';
         const availableTabs = [
             'ringkasan',
             'rundown',
@@ -78,6 +82,7 @@ export default function useEventShowState({
             'kenshi-hasil',
             'kenshi-laporan',
             'absensi',
+            'rab',
             'keuangan',
             'dokumentasi',
             'realisasi',
@@ -192,6 +197,7 @@ export default function useEventShowState({
             { id: 'kenshi-laporan', label: 'Laporan Kyu–Dan', count: kenshiExamData?.stats?.total_participants || 0 },
         ] : []),
         { id: 'absensi', label: 'Absensi', count: stats.total_attendances || attendances.length },
+        { id: 'rab', label: 'RAB Anggaran', count: stats.total_budgets ?? budgets?.length },
         { id: 'keuangan', label: 'Keuangan', count: stats.total_finances ?? finances?.length },
         { id: 'dokumentasi', label: 'Event Dokumentasi', count: stats.total_documentations },
         { id: 'realisasi', label: isProdas ? 'Realisasi Acara Gashuku & UKT' : 'Realisasi Acara', count: stats.total_realisations },
